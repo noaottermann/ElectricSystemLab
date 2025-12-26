@@ -34,7 +34,7 @@ class TestDCSolver(unittest.TestCase):
 
     def test_voltage_divider(self):
         """
-         12V + 2 Résistances de 1kOhm en série
+        12V + 2 Résistances de 1kOhm en série
         Attendu : 6V au point milieu
         """
         # GND --(Src)-- N_Top --(R1)-- N_Mid --(R2)-- GND
@@ -80,8 +80,8 @@ class TestDCSolver(unittest.TestCase):
         n1 = self.circuit.create_node(0, 0, is_ground=False) # Pas de masse explicite
         n2 = self.circuit.create_node(10, 0, is_ground=False)
         src = VoltageSourceDC(self.circuit.get_next_dipole_id(), n1, n2, dc_voltage=10.0)
-        res = Resistor(self.circuit.get_next_dipole_id(), n1, n2, resistance=100.0)
         self.circuit.add_dipole(src)
+        res = Resistor(self.circuit.get_next_dipole_id(), n1, n2, resistance=100.0)
         self.circuit.add_dipole(res)
         
         try:
