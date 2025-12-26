@@ -1,8 +1,6 @@
 import json
-from .node import Node
+from .node import Node, Wire
 from .dipole import Dipole
-from .wire import Wire
-
 class Circuit:
     """
     Classe principale représentant le circuit électrique complet
