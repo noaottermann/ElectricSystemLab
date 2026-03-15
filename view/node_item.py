@@ -81,8 +81,13 @@ class NodeItem(QGraphicsEllipseItem):
             if scene is None:
                 return
             target_pos = event.scenePos() + self._drag_offset
-            x, y = scene.snap_to_grid(target_pos)
-            snapped = QPointF(x, y)
+            if hasattr(scene, "get_wire_snap_position"):
+                snapped = scene.get_wire_snap_position(
+                    self.node, target_pos.x(), target_pos.y()
+                )
+            else:
+                x, y = scene.snap_to_grid(target_pos)
+                snapped = QPointF(x, y)
 
             if not self._undo_snapshot_taken and self.pos() != snapped:
                 if hasattr(scene, "_push_undo_snapshot"):

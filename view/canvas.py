@@ -875,11 +875,37 @@ class CircuitScene(QGraphicsScene):
             x, y = node.position
             item.setPos(QPointF(x, y))
 
+            highlight_node = False
+            for wire_item in self.items():
+                if isinstance(wire_item, WireItem):
+                    wire = wire_item.wire
+                    if (wire.node_a is node or wire.node_b is node) and getattr(
+                        wire_item, "_is_selected", False
+                    ):
+                        highlight_node = True
+                        break
+            if highlight_node:
+                item.setBrush(QColor("#0078d7"))
+            else:
+                item.setBrush(QColor(Qt.black))
+
         for node in self.model.nodes.values():
             if self._is_node_attached_to_dipole(node):
                 continue
             if node.id not in existing_items:
-                self.addItem(NodeItem(node))
+                new_item = NodeItem(node)
+                highlight_node = False
+                for wire_item in self.items():
+                    if isinstance(wire_item, WireItem):
+                        wire = wire_item.wire
+                        if (wire.node_a is node or wire.node_b is node) and getattr(
+                            wire_item, "_is_selected", False
+                        ):
+                            highlight_node = True
+                            break
+                if highlight_node:
+                    new_item.setBrush(QColor("#0078d7"))
+                self.addItem(new_item)
 
     def preview_node_move(self, node_model, snapped_pos):
         if node_model is None:
@@ -893,8 +919,63 @@ class CircuitScene(QGraphicsScene):
         node = node_item.node
         x, y = self.snap_to_grid(node_item.pos())
         node.position = (x, y)
+        snapped_node = self._find_nearest_connectable_node_for_wire(node, x, y, 15)
+        if snapped_node is not None:
+            self._reattach_wire_node(node, snapped_node)
+            node = snapped_node
+            x, y = node.position
         node_item.setPos(QPointF(x, y))
         self._refresh_wires_for_node(node)
+        self._sync_free_node_items_from_model()
+
+    def _find_nearest_connectable_node_for_wire(self, source_node, x, y, threshold):
+        """Retourne le noeud connectable le plus proche d'un bout de fil."""
+        nearest_node = None
+        nearest_dist = None
+
+        for dipole in self.model.dipoles.values():
+            for node in (dipole.node_a, dipole.node_b):
+                if node is None or node is source_node:
+                    continue
+                nx, ny = node.position
+                dist = ((x - nx) ** 2 + (y - ny) ** 2) ** 0.5
+                if dist > threshold:
+                    continue
+                if nearest_dist is None or dist < nearest_dist:
+                    nearest_node = node
+                    nearest_dist = dist
+
+        for node in self.model.nodes.values():
+            if node is source_node or not self._is_free_wire_endpoint(node):
+                continue
+            nx, ny = node.position
+            dist = ((x - nx) ** 2 + (y - ny) ** 2) ** 0.5
+            if dist > threshold:
+                continue
+            if nearest_dist is None or dist < nearest_dist:
+                nearest_node = node
+                nearest_dist = dist
+
+        return nearest_node
+
+    def get_wire_snap_position(self, source_node, x, y, threshold=15):
+        """Retourne la position d'aimantation pour un bout de fil pendant le drag."""
+        target_node = self._find_nearest_connectable_node_for_wire(source_node, x, y, threshold)
+        if target_node is not None:
+            tx, ty = target_node.position
+            return QPointF(tx, ty)
+        snapped_x, snapped_y = self.snap_to_grid(QPointF(x, y))
+        return QPointF(snapped_x, snapped_y)
+
+    def _reattach_wire_node(self, old_node, target_node):
+        if old_node is None or target_node is None or old_node is target_node:
+            return
+        for wire in self.model.wires.values():
+            if wire.node_a is old_node:
+                wire.node_a = target_node
+            if wire.node_b is old_node:
+                wire.node_b = target_node
+        self._remove_node_if_unused(old_node)
 
     def start_wire_drawing(self, x, y):
         """Demarre le dessin interactif d'un fil"""
