@@ -126,11 +126,7 @@ class NodeItem(QGraphicsEllipseItem):
         super().hoverLeaveEvent(event)
 
     def itemChange(self, change, value):
-        if change == QGraphicsItem.ItemPositionChange and self.scene():
-            if self._drag_active:
-                return value
-            scene = self.scene()
-            x, y = scene.snap_to_grid(value)
-            return QPointF(x, y)
-
+        # La position est deja geree par le flux de drag (mouseMoveEvent/finalize_node_move).
+        # Evite un re-snapping implicite a la grille qui peut decaler un noeud connecte
+        # a une borne de dipole hors grille.
         return super().itemChange(change, value)

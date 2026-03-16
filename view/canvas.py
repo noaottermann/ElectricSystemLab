@@ -930,12 +930,17 @@ class CircuitScene(QGraphicsScene):
         if node_item is None or node_item.node is None:
             return
         node = node_item.node
-        x, y = self.snap_to_grid(node_item.pos())
-        node.position = (x, y)
-        snapped_node = self._find_nearest_connectable_node_for_wire(node, x, y, 15)
+        current_x = node_item.pos().x()
+        current_y = node_item.pos().y()
+
+        # Priorite : conserver un rattachement exact a un noeud connectable proche
+        snapped_node = self._find_nearest_connectable_node_for_wire(node, current_x, current_y, 15)
         if snapped_node is not None:
             node = self._reattach_wire_node(node, snapped_node)
             x, y = node.position
+        else:
+            x, y = self.snap_to_grid(node_item.pos())
+            node.position = (x, y)
         node_item.setPos(QPointF(x, y))
         self._merge_overlaps_and_refresh()
         self._refresh_wires_for_node(node)
