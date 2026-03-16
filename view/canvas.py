@@ -860,8 +860,9 @@ class CircuitScene(QGraphicsScene):
         if self.model is None:
             return False
 
-        changed = self.model.merge_overlapping_nodes()
-        if not changed:
+        nodes_changed = self.model.merge_overlapping_nodes()
+        wires_changed = self._prune_invalid_and_duplicate_wires()
+        if not nodes_changed and not wires_changed:
             return False
 
         for item in self.items():
@@ -869,6 +870,60 @@ class CircuitScene(QGraphicsScene):
                 item.refresh_geometry()
 
         self._sync_free_node_items_from_model()
+        return True
+
+    def _prune_invalid_and_duplicate_wires(self):
+        """Supprime les fils degeneres et les doublons exacts entre memes noeuds."""
+        if self.model is None or not self.model.wires:
+            return False
+
+        removed_wire_ids = set()
+        seen_pairs = {}
+
+        # Deterministe : conserve le fil avec le plus petit id et supprime les suivants.
+        for wire in sorted(self.model.wires.values(), key=lambda w: w.id):
+            node_a = wire.node_a
+            node_b = wire.node_b
+
+            # Fil invalide ou reduit a un seul noeud.
+            if node_a is None or node_b is None or node_a is node_b:
+                removed_wire_ids.add(wire.id)
+                continue
+
+            # Fil trop court : supprime si la longueur tient sur une seule case de grille.
+            ax, ay = node_a.position
+            bx, by = node_b.position
+            if (ax - bx) ** 2 + (ay - by) ** 2 <= self.GRID_SIZE ** 2:
+                removed_wire_ids.add(wire.id)
+                continue
+
+            pair = (min(node_a.id, node_b.id), max(node_a.id, node_b.id))
+            if pair in seen_pairs:
+                removed_wire_ids.add(wire.id)
+            else:
+                seen_pairs[pair] = wire.id
+
+        if not removed_wire_ids:
+            return False
+
+        candidate_unused_nodes = []
+        for wire_id in removed_wire_ids:
+            wire = self.model.wires.get(wire_id)
+            if wire is None:
+                continue
+            if wire.node_a is not None:
+                candidate_unused_nodes.append(wire.node_a)
+            if wire.node_b is not None:
+                candidate_unused_nodes.append(wire.node_b)
+            self.model.remove_wire(wire_id)
+
+        for item in list(self.items()):
+            if isinstance(item, WireItem) and item.wire.id in removed_wire_ids:
+                self.removeItem(item)
+
+        for node in candidate_unused_nodes:
+            self._remove_node_if_unused(node)
+
         return True
 
     def _sync_free_node_items_from_model(self):
