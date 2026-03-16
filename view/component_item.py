@@ -24,6 +24,8 @@ class ComponentItem(QGraphicsItem):
             QGraphicsItem.ItemIsSelectable
             | QGraphicsItem.ItemSendsGeometryChanges
         )
+        # Les dipoles (et donc leurs bornes colorees) doivent rester au-dessus des fils.
+        self.setZValue(2)
         
         # Position et rotation initiales
         x, y = self.component.position

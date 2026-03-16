@@ -579,7 +579,7 @@ class CircuitScene(QGraphicsScene):
                         grid_delta,
                         detach_shared_nodes=detach,
                         moved_node_ids=moved_wire_node_ids,
-                        snap_endpoints=False,
+                        snap_endpoints=True,
                     )
 
             self._sync_free_node_items_from_model()
@@ -649,6 +649,7 @@ class CircuitScene(QGraphicsScene):
                 if wire.node_a.id in node_ids or wire.node_b.id in node_ids:
                     item.refresh_geometry()
 
+        self._merge_overlaps_and_refresh()
         self._refresh_free_node_items()
 
     def _smart_connect_component_to_nearby_dipole_nodes(self, component_item):
@@ -792,19 +793,16 @@ class CircuitScene(QGraphicsScene):
             return
 
         if old_node is not None:
+            old_node.position = target_node.position
+
+        if old_node is not None:
             old_node.remove_connection(component_model)
 
         setattr(component_model, attr_name, target_node)
         target_node.add_connection(component_model)
 
-        # Conserve les fils deja connectes a cette borne en migrant les references de l'ancien noeud
-        for wire in self.model.wires.values():
-            if wire.node_a is old_node:
-                wire.node_a = target_node
-            if wire.node_b is old_node:
-                wire.node_b = target_node
-
-        self._remove_node_if_unused(old_node)
+        merged_node = self.model.merge_nodes(old_node, target_node)
+        setattr(component_model, attr_name, merged_node)
 
     def _remove_node_if_unused(self, node):
         if node is None:
@@ -857,6 +855,21 @@ class CircuitScene(QGraphicsScene):
             if self._is_node_attached_to_dipole(node):
                 continue
             self.addItem(NodeItem(node))
+
+    def _merge_overlaps_and_refresh(self):
+        if self.model is None:
+            return False
+
+        changed = self.model.merge_overlapping_nodes()
+        if not changed:
+            return False
+
+        for item in self.items():
+            if isinstance(item, WireItem):
+                item.refresh_geometry()
+
+        self._sync_free_node_items_from_model()
+        return True
 
     def _sync_free_node_items_from_model(self):
         # Synchronise les node_item existants avec les positions du modele
@@ -921,10 +934,10 @@ class CircuitScene(QGraphicsScene):
         node.position = (x, y)
         snapped_node = self._find_nearest_connectable_node_for_wire(node, x, y, 15)
         if snapped_node is not None:
-            self._reattach_wire_node(node, snapped_node)
-            node = snapped_node
+            node = self._reattach_wire_node(node, snapped_node)
             x, y = node.position
         node_item.setPos(QPointF(x, y))
+        self._merge_overlaps_and_refresh()
         self._refresh_wires_for_node(node)
         self._sync_free_node_items_from_model()
 
@@ -969,13 +982,11 @@ class CircuitScene(QGraphicsScene):
 
     def _reattach_wire_node(self, old_node, target_node):
         if old_node is None or target_node is None or old_node is target_node:
-            return
-        for wire in self.model.wires.values():
-            if wire.node_a is old_node:
-                wire.node_a = target_node
-            if wire.node_b is old_node:
-                wire.node_b = target_node
-        self._remove_node_if_unused(old_node)
+            return target_node
+
+        old_node.position = target_node.position
+
+        return self.model.merge_nodes(old_node, target_node)
 
     def start_wire_drawing(self, x, y):
         """Demarre le dessin interactif d'un fil"""
@@ -1022,6 +1033,7 @@ class CircuitScene(QGraphicsScene):
             # Cree l'element graphique final du fil
             wire_item = WireItem(wire)
             self.addItem(wire_item)
+            self._merge_overlaps_and_refresh()
             self._refresh_free_node_items()
             
         except Exception as e:
@@ -1072,6 +1084,7 @@ class CircuitScene(QGraphicsScene):
         else:
             wire_item.refresh_geometry()
 
+        self._merge_overlaps_and_refresh()
         self._sync_free_node_items_from_model()
 
     def rotate_selected_components(self, angle_degrees):

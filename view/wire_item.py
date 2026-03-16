@@ -50,6 +50,22 @@ class WireItem(QGraphicsLineItem):
                 return True
         return False
 
+    def _wire_count_for_node(self, node, model):
+        if node is None:
+            return 0
+        count = 0
+        for wire in model.wires.values():
+            if wire.node_a is node or wire.node_b is node:
+                count += 1
+        return count
+
+    def _endpoint_is_shared(self, node, model):
+        if node is None:
+            return False
+        if self._node_shared_with_dipole(node, model):
+            return True
+        return self._wire_count_for_node(node, model) > 1
+
     def apply_scene_delta(self, delta, detach_shared_nodes=False, moved_node_ids=None, snap_endpoints=True):
         """Deplace un fil via ses noeuds avec aimantation optionnelle des extremites"""
         scene = self.scene()
@@ -62,8 +78,8 @@ class WireItem(QGraphicsLineItem):
             return
 
 
-        shared_a = self._node_shared_with_dipole(self.wire.node_a, model)
-        shared_b = self._node_shared_with_dipole(self.wire.node_b, model)
+        shared_a = self._endpoint_is_shared(self.wire.node_a, model)
+        shared_b = self._endpoint_is_shared(self.wire.node_b, model)
 
         if detach_shared_nodes:
             if shared_a:
