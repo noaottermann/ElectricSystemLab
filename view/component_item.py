@@ -224,12 +224,13 @@ class VoltageSourceItem(ComponentItem):
         painter.drawEllipse(QPointF(0, 0), 15, 15)
         
         # Symboles +/- ou ~
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.black, 1.5))
         
         if isinstance(self.component, VoltageSourceDC):
-            # Trait vertical pour +
-            painter.drawLine(-8, -5, -8, 5)
-            painter.drawLine(-11, 0, -5, 0)
+            painter.drawLine(-10, 0, -4, 0)
+            painter.drawLine(-7, -3, -7, 3)
+            
+            painter.drawLine(4, 0, 10, 0)
         elif isinstance(self.component, VoltageSourceAC):
             # Tilde (~)
             path = QPainterPath()
