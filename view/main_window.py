@@ -2,7 +2,7 @@ import sys
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QAction, QToolBar, QStatusBar, QMessageBox, QApplication, QShortcut
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QKeySequence
+from PyQt5.QtGui import QIcon, QKeySequence, QCursor
 from utils.translator import Translator
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
@@ -136,6 +136,15 @@ class MainWindow(QMainWindow):
 
         has_dipole = any(hasattr(item, "component") for item in selected_items)
 
+        paste_enabled = False
+        if hasattr(self.scene, "has_clipboard_content"):
+            paste_enabled = self.scene.has_clipboard_content()
+
+        if "action_paste" in self.custom_actions:
+            self.custom_actions["action_paste"].setEnabled(paste_enabled)
+        if hasattr(self, "toolbar_paste_action") and self.toolbar_paste_action is not None:
+            self.toolbar_paste_action.setEnabled(paste_enabled)
+
         if "action_rotate" in self.custom_actions:
             self.custom_actions["action_rotate"].setVisible(has_dipole)
         if "action_flip" in self.custom_actions:
@@ -174,6 +183,9 @@ class MainWindow(QMainWindow):
     def _create_edit_actions(self):
         self._make_action("action_undo", QKeySequence.Undo, self.undo_last_action)
         self._make_action("action_redo", QKeySequence.Redo, self.redo_last_action)
+        self._make_action("action_cut", QKeySequence.Cut, self.on_cut)
+        self._make_action("action_copy", QKeySequence.Copy, self.on_copy)
+        self._make_action("action_paste", None, self.on_paste)
         self._make_action("action_rotate", None, self.rotate_selected_components)
         self._make_action("action_flip", None, self.flip_selected_components)
 
@@ -276,6 +288,10 @@ class MainWindow(QMainWindow):
         # Touche de suppression
         self.shortcut_delete = QShortcut(QKeySequence("Del"), self)
         self.shortcut_delete.activated.connect(self.delete_selected_items)
+
+        # Collage près du curseur uniquement via Ctrl+V
+        self.shortcut_paste_near_cursor = QShortcut(QKeySequence.Paste, self)
+        self.shortcut_paste_near_cursor.activated.connect(self.on_paste_near_cursor)
         
         # Raccourcis de test
         self.shortcut_tool_pointer = QShortcut(QKeySequence("V"), self)
@@ -360,6 +376,9 @@ class MainWindow(QMainWindow):
     def _setup_edit_menu(self):
         self.menu_edit.addAction(self.custom_actions["action_undo"])
         self.menu_edit.addAction(self.custom_actions["action_redo"])
+        self.menu_edit.addAction(self.custom_actions["action_cut"])
+        self.menu_edit.addAction(self.custom_actions["action_copy"])
+        self.menu_edit.addAction(self.custom_actions["action_paste"])
         self.menu_edit.addSeparator()
 
         self.menu_edit.addAction(self.custom_actions["action_select_all"])
@@ -494,11 +513,26 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(self.custom_actions["action_zoom_in"])
         self.toolbar.addAction(self.custom_actions["action_zoom_out"])
         self.toolbar.addAction(self.custom_actions["action_reset_zoom"])
+        self.toolbar_clipboard_separator = self.toolbar.addSeparator()
+
+        self.toolbar_cut_action = QAction('', self)
+        self.toolbar_cut_action.triggered.connect(self.on_cut)
+        self.toolbar.addAction(self.toolbar_cut_action)
+
+        self.toolbar_copy_action = QAction('', self)
+        self.toolbar_copy_action.triggered.connect(self.on_copy)
+        self.toolbar.addAction(self.toolbar_copy_action)
+
+        self.toolbar_paste_action = QAction('', self)
+        self.toolbar_paste_action.triggered.connect(self.on_paste)
+        self.toolbar.addAction(self.toolbar_paste_action)
 
         self.toolbar_transform_separator = self.toolbar.addSeparator()
         self.toolbar.addAction(self.custom_actions["action_rotate"])
         self.toolbar.addAction(self.custom_actions["action_flip"])
 
+        self.custom_actions["action_paste"].setEnabled(False)
+        self.toolbar_paste_action.setEnabled(False)
         self.custom_actions["action_rotate"].setVisible(False)
         self.custom_actions["action_flip"].setVisible(False)
         self.toolbar_transform_separator.setVisible(False)
@@ -530,6 +564,13 @@ class MainWindow(QMainWindow):
         # Le dictionnaire self.custom_actions contient {"cle_traduction": QAction}
         for key, action in self.custom_actions.items():
             action.setText(Translator.tr(key))
+
+        if hasattr(self, "toolbar_cut_action") and self.toolbar_cut_action is not None:
+            self.toolbar_cut_action.setText(Translator.tr("action_cut"))
+        if hasattr(self, "toolbar_copy_action") and self.toolbar_copy_action is not None:
+            self.toolbar_copy_action.setText(Translator.tr("action_copy"))
+        if hasattr(self, "toolbar_paste_action") and self.toolbar_paste_action is not None:
+            self.toolbar_paste_action.setText(Translator.tr("action_paste"))
 
     def change_language(self, lang):
         """Change la langue et rafraîchit l'interface"""
@@ -565,6 +606,36 @@ class MainWindow(QMainWindow):
 
     def on_select_all(self):
         print("Select All")
+
+    def on_cut(self):
+        if hasattr(self, "scene"):
+            self.scene.cut_selection()
+        self._update_transform_actions_visibility()
+
+    def on_copy(self):
+        if hasattr(self, "scene"):
+            self.scene.copy_selection()
+        self._update_transform_actions_visibility()
+
+    def on_paste(self):
+        if hasattr(self, "scene"):
+            self.scene.paste_selection()
+        self._update_transform_actions_visibility()
+
+    def on_paste_near_cursor(self):
+        if hasattr(self, "scene") and hasattr(self.scene, "has_clipboard_content"):
+            if not self.scene.has_clipboard_content():
+                self._update_transform_actions_visibility()
+                return
+
+        if hasattr(self, "scene") and hasattr(self, "view"):
+            cursor_global_pos = QCursor.pos()
+            cursor_view_pos = self.view.mapFromGlobal(cursor_global_pos)
+            cursor_scene_pos = self.view.mapToScene(cursor_view_pos)
+            self.scene.paste_selection(cursor_scene_pos)
+        elif hasattr(self, "scene"):
+            self.scene.paste_selection()
+        self._update_transform_actions_visibility()
 
     def on_select_none(self):
         print("Select None")

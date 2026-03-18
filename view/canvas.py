@@ -241,6 +241,8 @@ class CircuitScene(QGraphicsScene):
             "Capacitor": Capacitor,
             "Inductor": Inductor,
         }
+        self._clipboard_payload = None
+        self._clipboard_paste_count = 0
 
     def set_tool(self, tool_name):
         """Definit le nom de l'outil actif"""
@@ -310,6 +312,256 @@ class CircuitScene(QGraphicsScene):
         self._reset_press_state()
         self.clearSelection()
         self._group_move_active = False
+        return True
+
+    def _clipboard_key(self, x, y):
+        return (round(float(x), 6), round(float(y), 6))
+
+    def _component_terminal_positions(self, center_x, center_y, rotation):
+        offset = 30
+        rad = math.radians(rotation)
+        dx = offset * math.cos(rad)
+        dy = offset * math.sin(rad)
+        return (
+            (float(center_x - dx), float(center_y - dy)),
+            (float(center_x + dx), float(center_y + dy)),
+        )
+
+    def _serialize_component_for_clipboard(self, component_model):
+        params = {}
+        if hasattr(component_model, "get_params"):
+            params = dict(component_model.get_params())
+
+        cx, cy = component_model.position
+        return {
+            "type": component_model.__class__.__name__,
+            "name": component_model.name,
+            "position": [float(cx), float(cy)],
+            "rotation": float(component_model.rotation),
+            "params": params,
+        }
+
+    def copy_selection(self):
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return False
+
+        components = []
+        wires = []
+        free_nodes = []
+
+        seen_component_ids = set()
+        seen_wire_ids = set()
+        seen_node_ids = set()
+
+        for item in selected_items:
+            if isinstance(item, ComponentItem):
+                component = getattr(item, "component", None)
+                if component is None or component.id in seen_component_ids:
+                    continue
+                components.append(self._serialize_component_for_clipboard(component))
+                seen_component_ids.add(component.id)
+                continue
+
+            if isinstance(item, WireItem):
+                wire = getattr(item, "wire", None)
+                if wire is None or wire.id in seen_wire_ids:
+                    continue
+                if wire.node_a is None or wire.node_b is None:
+                    continue
+                ax, ay = wire.node_a.position
+                bx, by = wire.node_b.position
+                wires.append(
+                    {
+                        "node_a": [float(ax), float(ay)],
+                        "node_b": [float(bx), float(by)],
+                    }
+                )
+                seen_wire_ids.add(wire.id)
+                continue
+
+            if isinstance(item, NodeItem):
+                node = getattr(item, "node", None)
+                if node is None or node.id in seen_node_ids:
+                    continue
+                if self._is_node_attached_to_dipole(node):
+                    continue
+                nx, ny = node.position
+                free_nodes.append(
+                    {
+                        "position": [float(nx), float(ny)],
+                        "is_ground": bool(node.is_ground),
+                    }
+                )
+                seen_node_ids.add(node.id)
+
+        if not components and not wires and not free_nodes:
+            return False
+
+        self._clipboard_payload = {
+            "components": components,
+            "wires": wires,
+            "nodes": free_nodes,
+        }
+        self._clipboard_paste_count = 0
+        return True
+
+    def cut_selection(self):
+        if not self.copy_selection():
+            return False
+        self.delete_selection()
+        return True
+
+    def has_clipboard_content(self):
+        if not self._clipboard_payload:
+            return False
+        return bool(
+            self._clipboard_payload.get("components")
+            or self._clipboard_payload.get("wires")
+            or self._clipboard_payload.get("nodes")
+        )
+
+    def _clipboard_payload_bounds(self, components, wires, free_nodes):
+        xs = []
+        ys = []
+
+        for component_data in components:
+            cx, cy = component_data.get("position", [0.0, 0.0])
+            xs.append(float(cx))
+            ys.append(float(cy))
+
+        for wire_data in wires:
+            ax, ay = wire_data.get("node_a", [0.0, 0.0])
+            bx, by = wire_data.get("node_b", [0.0, 0.0])
+            xs.extend([float(ax), float(bx)])
+            ys.extend([float(ay), float(by)])
+
+        for node_data in free_nodes:
+            nx, ny = node_data.get("position", [0.0, 0.0])
+            xs.append(float(nx))
+            ys.append(float(ny))
+
+        if not xs or not ys:
+            return None
+        return min(xs), min(ys), max(xs), max(ys)
+
+    def _paste_create_or_get_node(self, node_cache, x, y, is_ground=False):
+        key = self._clipboard_key(x, y)
+        existing = node_cache.get(key)
+        if existing is not None:
+            if is_ground:
+                existing.is_ground = True
+                existing._potential = 0.0
+            return existing
+
+        node = self.model.create_node(float(x), float(y), is_ground=is_ground)
+        node_cache[key] = node
+        return node
+
+    def _paste_component(self, component_data, offset_x, offset_y, node_cache):
+        component_type = component_data.get("type")
+        component_cls = self._component_classes.get(component_type)
+        if component_cls is None:
+            return None
+
+        position = component_data.get("position", [0.0, 0.0])
+        center_x = float(position[0]) + float(offset_x)
+        center_y = float(position[1]) + float(offset_y)
+        rotation = float(component_data.get("rotation", 0.0))
+
+        node_a = self.model.create_node(0.0, 0.0)
+        node_b = self.model.create_node(0.0, 0.0)
+
+        dipole_id = self.model.get_next_dipole_id()
+        name = component_data.get("name", component_type)
+        dipole = component_cls(
+            dipole_id,
+            node_a,
+            node_b,
+            x=center_x,
+            y=center_y,
+            rotation=rotation,
+            name=name,
+        )
+
+        params = dict(component_data.get("params", {}))
+        if hasattr(dipole, "set_params"):
+            dipole.set_params(params)
+
+        (ax, ay), (bx, by) = self._component_terminal_positions(center_x, center_y, rotation)
+        node_a.position = (ax, ay)
+        node_b.position = (bx, by)
+
+        self.model.add_dipole(dipole)
+        item = create_component_item(dipole)
+        self.addItem(item)
+        item.setSelected(True)
+
+        node_cache[self._clipboard_key(ax, ay)] = node_a
+        node_cache[self._clipboard_key(bx, by)] = node_b
+        return item
+
+    def paste_selection(self, target_scene_pos=None):
+        if not self._clipboard_payload:
+            return False
+
+        components = self._clipboard_payload.get("components", [])
+        wires = self._clipboard_payload.get("wires", [])
+        free_nodes = self._clipboard_payload.get("nodes", [])
+        if not components and not wires and not free_nodes:
+            return False
+
+        self._push_undo_snapshot()
+        self.clearSelection()
+
+        bounds = self._clipboard_payload_bounds(components, wires, free_nodes)
+        if bounds is None:
+            return False
+        min_x, min_y, max_x, max_y = bounds
+        payload_center_x = (min_x + max_x) / 2.0
+        payload_center_y = (min_y + max_y) / 2.0
+
+        if target_scene_pos is not None:
+            target_x, target_y = self.snap_to_grid(target_scene_pos)
+            offset_x = float(target_x) - payload_center_x
+            offset_y = float(target_y) - payload_center_y
+        else:
+            offset_value = float(self.GRID_SIZE * (self._clipboard_paste_count + 1))
+            offset_x = offset_value
+            offset_y = offset_value
+
+        node_cache = {}
+
+        for component_data in components:
+            self._paste_component(component_data, offset_x, offset_y, node_cache)
+
+        for node_data in free_nodes:
+            nx, ny = node_data.get("position", [0.0, 0.0])
+            self._paste_create_or_get_node(
+                node_cache,
+                float(nx) + offset_x,
+                float(ny) + offset_y,
+                is_ground=bool(node_data.get("is_ground", False)),
+            )
+
+        for wire_data in wires:
+            ax, ay = wire_data.get("node_a", [0.0, 0.0])
+            bx, by = wire_data.get("node_b", [0.0, 0.0])
+            node_a = self._paste_create_or_get_node(node_cache, float(ax) + offset_x, float(ay) + offset_y)
+            node_b = self._paste_create_or_get_node(node_cache, float(bx) + offset_x, float(by) + offset_y)
+            if node_a is node_b:
+                continue
+            try:
+                wire = self.model.create_wire(node_a, node_b)
+            except ValueError:
+                continue
+            wire_item = WireItem(wire)
+            self.addItem(wire_item)
+            wire_item.setSelected(True)
+
+        self._clipboard_paste_count += 1
+        self._merge_overlaps_and_refresh()
+        self._sync_free_node_items_from_model()
         return True
 
     def drawBackground(self, painter, rect):
@@ -873,24 +1125,24 @@ class CircuitScene(QGraphicsScene):
         return True
 
     def _prune_invalid_and_duplicate_wires(self):
-        """Supprime les fils degeneres et les doublons exacts entre memes noeuds."""
+        """Supprime les fils invalides et les doublons"""
         if self.model is None or not self.model.wires:
             return False
 
         removed_wire_ids = set()
         seen_pairs = {}
 
-        # Deterministe : conserve le fil avec le plus petit id et supprime les suivants.
+        # Conserve le fil avec le plus petit id et supprime les autres
         for wire in sorted(self.model.wires.values(), key=lambda w: w.id):
             node_a = wire.node_a
             node_b = wire.node_b
 
-            # Fil invalide ou reduit a un seul noeud.
+            # Fil invalide ou reduit a un seul noeud
             if node_a is None or node_b is None or node_a is node_b:
                 removed_wire_ids.add(wire.id)
                 continue
 
-            # Fil trop court : supprime si la longueur tient sur une seule case de grille.
+            # Fil trop court
             ax, ay = node_a.position
             bx, by = node_b.position
             if (ax - bx) ** 2 + (ay - by) ** 2 <= self.GRID_SIZE ** 2:
@@ -1172,18 +1424,34 @@ class CircuitScene(QGraphicsScene):
             return
 
         self._push_undo_snapshot()
+        candidate_nodes = []
 
         for item in selected:
             # Supprime du modele
             if hasattr(item, 'component'):
+                if item.component.node_a is not None:
+                    candidate_nodes.append(item.component.node_a)
+                if item.component.node_b is not None:
+                    candidate_nodes.append(item.component.node_b)
                 dipole_id = item.component.id
                 self.model.remove_dipole(dipole_id)
             elif isinstance(item, WireItem):
+                if item.wire.node_a is not None:
+                    candidate_nodes.append(item.wire.node_a)
+                if item.wire.node_b is not None:
+                    candidate_nodes.append(item.wire.node_b)
                 wire_id = item.wire.id
                 self.model.remove_wire(wire_id)
             
             # Supprime de la scene
             self.removeItem(item)
+
+        seen_node_ids = set()
+        for node in candidate_nodes:
+            if node is None or node.id in seen_node_ids:
+                continue
+            seen_node_ids.add(node.id)
+            self._remove_node_if_unused(node)
 
         self._refresh_free_node_items()
 
