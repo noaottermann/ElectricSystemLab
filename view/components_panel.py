@@ -1,27 +1,31 @@
 from pathlib import Path
+from typing import Optional
 
-from PyQt5.QtCore import Qt, QSize, QPointF, QMimeData, pyqtSignal, QEvent
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QDrag
+from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, QMimeData, pyqtSignal
+from PyQt5.QtGui import QColor, QDrag, QFont, QIcon, QPainter, QPixmap
 from PyQt5.QtWidgets import (
-	QWidget,
-	QHBoxLayout,
-	QVBoxLayout,
-	QAbstractItemView,
-	QListWidget,
-	QListWidgetItem,
-	QLabel,
-	QLineEdit,
-	QSizePolicy,
-	QFrame,
-	QApplication,
+    QApplication,
+    QAbstractItemView,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
 
 class ComponentsPanel(QWidget):
+	"""Panneau lateral listant les composants disponibles."""
+
 	# Signal emis lorsqu'un composant est double-clique (pour la selection d'outil)
 	tool_selected = pyqtSignal(str)
 
-	def __init__(self, parent=None):
+	def __init__(self, parent=None) -> None:
+		"""Initialise l'interface et les listes de composants."""
 		super().__init__(parent)
 		self.assets_root = Path(__file__).resolve().parents[1] / "assets"
 
@@ -84,16 +88,19 @@ class ComponentsPanel(QWidget):
 		if self.category_list.count() > 0:
 			self.category_list.setCurrentRow(0)
 
-	def resizeEvent(self, event):
+	def resizeEvent(self, event: object) -> None:
+		"""Reagit aux redimensionnements pour ajuster la liste des categories."""
 		super().resizeEvent(event)
 		self._sync_category_item_widths()
 
-	def closeEvent(self, event):
+	def closeEvent(self, event: object) -> None:
+		"""Nettoie les filtres d'evenements Qt."""
 		if self._app is not None:
 			self._app.removeEventFilter(self)
 		super().closeEvent(event)
 
-	def eventFilter(self, watched, event):
+	def eventFilter(self, watched: object, event: object) -> bool:
+		"""Efface la selection lorsque l'utilisateur clique hors du panneau."""
 		if event.type() == QEvent.MouseButtonPress:
 			target = None
 			if hasattr(event, "globalPos"):
@@ -104,11 +111,13 @@ class ComponentsPanel(QWidget):
 
 		return super().eventFilter(watched, event)
 
-	def _clear_component_selection(self):
+	def _clear_component_selection(self) -> None:
+		"""Reinitialise la selection des composants."""
 		self.components_list.clearSelection()
 		self.components_list.setCurrentRow(-1)
 
-	def _wrap_category_list(self):
+	def _wrap_category_list(self) -> QFrame:
+		"""Construit la colonne des categories."""
 		frame = QFrame()
 		frame.setObjectName("categoryPane")
 		layout = QVBoxLayout(frame)
@@ -116,25 +125,27 @@ class ComponentsPanel(QWidget):
 		layout.addWidget(self.category_list)
 		return frame
 
-	def _wrap_components_list(self):
+	def _wrap_components_list(self) -> QFrame:
+		"""Construit la colonne des composants."""
 		frame = QFrame()
 		frame.setObjectName("componentsPane")
 		layout = QVBoxLayout(frame)
 		layout.setContentsMargins(10, 8, 10, 8)
 
-		title = QLabel("Components")
+		title = QLabel("Composants")
 		title.setObjectName("componentsTitle")
 		layout.addWidget(title)
 
 		self.search_input = QLineEdit()
-		self.search_input.setPlaceholderText("Search components")
+		self.search_input.setPlaceholderText("Rechercher des composants")
 		self.search_input.textChanged.connect(self._apply_search_filter)
 		layout.addWidget(self.search_input)
 
 		layout.addWidget(self.components_list, 1)
 		return frame
 
-	def _apply_styles(self):
+	def _apply_styles(self) -> None:
+		"""Applique le style visuel du panneau."""
 		self.setStyleSheet(
 			"""
 			QFrame#categoryPane {
@@ -176,7 +187,8 @@ class ComponentsPanel(QWidget):
 		base_font = QFont("Segoe UI", 10)
 		self.setFont(base_font)
 
-	def _build_default_categories(self):
+	def _build_default_categories(self) -> list[dict]:
+		"""Construit la liste des categories par defaut."""
 		return [
 			{
 				"key": "sources",
@@ -186,19 +198,20 @@ class ComponentsPanel(QWidget):
 			},
 			{
 				"key": "passive",
-				"label": "Passive",
+				"label": "Passif",
 				"icon": "categories/passive.png",
 				"color": "#247ba0",
 			},
 			{
 				"key": "measurement",
-				"label": "Measurement",
+				"label": "Mesure",
 				"icon": "categories/measurement.png",
 				"color": "#70c1b3",
 			},
 		]
 
-	def _build_default_components(self):
+	def _build_default_components(self) -> dict[str, list[dict]]:
+		"""Construit les composants par defaut affiches dans la liste."""
 		fake_sources = [
 			{
 				"id": f"source_fake_{i}",
@@ -210,7 +223,7 @@ class ComponentsPanel(QWidget):
 		fake_passive = [
 			{
 				"id": f"passive_fake_{i}",
-				"label": f"Passive {i}",
+				"label": f"Passif {i}",
 				"icon": "components/placeholder.png",
 			}
 			for i in range(1, 11)
@@ -218,7 +231,7 @@ class ComponentsPanel(QWidget):
 		fake_measurement = [
 			{
 				"id": f"measurement_fake_{i}",
-				"label": f"Measurement {i}",
+				"label": f"Mesure {i}",
 				"icon": "components/placeholder.png",
 			}
 			for i in range(1, 11)
@@ -227,12 +240,12 @@ class ComponentsPanel(QWidget):
 			"sources": [
 				{
 					"id": "source_dc",
-					"label": "DC Source",
+					"label": "Source DC",
 					"icon": "components/source_dc.png",
 				},
 				{
 					"id": "source_ac",
-					"label": "AC Source",
+					"label": "Source AC",
 					"icon": "components/source_ac.png",
 				},
 			]
@@ -240,17 +253,17 @@ class ComponentsPanel(QWidget):
 			"passive": [
 				{
 					"id": "resistor",
-					"label": "Resistor",
+					"label": "Resistance",
 					"icon": "components/resistor.png",
 				},
 				{
 					"id": "capacitor",
-					"label": "Capacitor",
+					"label": "Condensateur",
 					"icon": "components/capacitor.png",
 				},
 				{
 					"id": "inductor",
-					"label": "Inductor",
+					"label": "Inductance",
 					"icon": "components/inductor.png",
 				},
 			]
@@ -258,7 +271,8 @@ class ComponentsPanel(QWidget):
 			"measurement": fake_measurement,
 		}
 
-	def _populate_categories(self):
+	def _populate_categories(self) -> None:
+		"""Remplit la liste des categories disponibles."""
 		self.category_list.clear()
 		for category in self._category_data:
 			icon = self._load_icon(category["icon"], category["color"], QSize(24, 24))
@@ -273,19 +287,21 @@ class ComponentsPanel(QWidget):
 
 		self._sync_category_item_widths()
 
-	def _on_category_changed(self, current, _previous):
+	def _on_category_changed(self, current: Optional[QListWidgetItem], _previous: Optional[QListWidgetItem]) -> None:
+		"""Fait defiler la liste des composants selon la categorie active."""
 		if current is None:
 			return
 		category_key = current.data(Qt.UserRole)
 		self._scroll_to_category(category_key)
 
-	def _on_category_clicked(self, item):
+	def _on_category_clicked(self, item: Optional[QListWidgetItem]) -> None:
+		"""Reagit au clic sur une categorie."""
 		if item is None:
 			return
 		category_key = item.data(Qt.UserRole)
 		self._scroll_to_category(category_key)
 
-	def _on_component_double_clicked(self, item):
+	def _on_component_double_clicked(self, item: Optional[QListWidgetItem]) -> None:
 		"""Emet le signal tool_selected lorsqu'un composant est double-clique"""
 		if item is None:
 			return
@@ -294,12 +310,14 @@ class ComponentsPanel(QWidget):
 			return
 		self.tool_selected.emit(component_id)
 
-	def _populate_components_all(self):
+	def _populate_components_all(self) -> None:
+		"""Remplit la liste des composants pour toutes les categories."""
 		self.components_list.clear()
 		for category in self._category_data:
 			self._add_category_section(category)
 
-	def _add_category_section(self, category):
+	def _add_category_section(self, category: dict) -> None:
+		"""Ajoute une section complete (en-tete + composants)."""
 		self._add_category_header(category)
 		components = self._component_data.get(category["key"], [])
 		if not components:
@@ -308,20 +326,23 @@ class ComponentsPanel(QWidget):
 		for component in components:
 			self._add_component_row(component, category["key"])
 
-	def _add_category_header(self, category):
+	def _add_category_header(self, category: dict) -> None:
+		"""Ajoute un en-tete de categorie dans la liste."""
 		header_item = QListWidgetItem(category["label"])
 		header_item.setData(Qt.UserRole, f"header:{category['key']}")
 		header_item.setFlags(Qt.NoItemFlags)
 		header_item.setSizeHint(QSize(160, 26))
 		self.components_list.addItem(header_item)
 
-	def _add_empty_category(self):
-		empty_item = QListWidgetItem("No components")
+	def _add_empty_category(self) -> None:
+		"""Ajoute une ligne vide lorsqu'une categorie n'a pas de composants."""
+		empty_item = QListWidgetItem("Aucun composant")
 		empty_item.setFlags(Qt.NoItemFlags)
 		empty_item.setSizeHint(QSize(160, 22))
 		self.components_list.addItem(empty_item)
 
-	def _add_component_row(self, component, category_key):
+	def _add_component_row(self, component: dict, category_key: str) -> None:
+		"""Ajoute une ligne pour un composant."""
 		icon = self._load_icon(component["icon"], "#d7d7d7", QSize(28, 28))
 		item = QListWidgetItem(icon, component["label"])
 		item.setData(Qt.UserRole, component["id"])
@@ -330,7 +351,8 @@ class ComponentsPanel(QWidget):
 		item.setSizeHint(QSize(160, 38))
 		self.components_list.addItem(item)
 
-	def _scroll_to_category(self, category_key):
+	def _scroll_to_category(self, category_key: str) -> None:
+		"""Fait defiler jusqu'a l'en-tete de la categorie cible."""
 		if self._suppress_category_highlight or self._updating_category_highlight:
 			return
 		target_data = f"header:{category_key}"
@@ -340,7 +362,8 @@ class ComponentsPanel(QWidget):
 				self.components_list.scrollToItem(item, QListWidget.PositionAtTop)
 				return
 
-	def _apply_search_filter(self, text):
+	def _apply_search_filter(self, text: str) -> None:
+		"""Filtre la liste de composants selon le texte de recherche."""
 		filter_text = text.strip().lower()
 		self._set_filter_state(filter_text)
 		visible_by_category = self._apply_component_filter(filter_text)
@@ -348,12 +371,14 @@ class ComponentsPanel(QWidget):
 		if not self._suppress_category_highlight:
 			self._update_highlight_from_scroll()
 
-	def _set_filter_state(self, filter_text):
+	def _set_filter_state(self, filter_text: str) -> None:
+		"""Ajuste l'etat d'affichage lie au filtrage."""
 		self._suppress_category_highlight = bool(filter_text)
 		if self._suppress_category_highlight:
 			self.category_list.setCurrentRow(-1)
 
-	def _apply_component_filter(self, filter_text):
+	def _apply_component_filter(self, filter_text: str) -> dict[str, bool]:
+		"""Applique le filtre et retourne les categories visibles."""
 		visible_by_category = {}
 		for row in range(self.components_list.count()):
 			item = self.components_list.item(row)
@@ -372,7 +397,8 @@ class ComponentsPanel(QWidget):
 				visible_by_category[category_key] = True
 		return visible_by_category
 
-	def _apply_header_visibility(self, visible_by_category):
+	def _apply_header_visibility(self, visible_by_category: dict[str, bool]) -> None:
+		"""Met a jour la visibilite des en-tetes de categorie."""
 		for row in range(self.components_list.count()):
 			item = self.components_list.item(row)
 			data = item.data(Qt.UserRole)
@@ -380,7 +406,8 @@ class ComponentsPanel(QWidget):
 				category_key = data.split(":", 1)[1]
 				item.setHidden(not visible_by_category.get(category_key, False))
 
-	def _update_highlight_from_scroll(self):
+	def _update_highlight_from_scroll(self) -> None:
+		"""Selectionne la categorie correspondant a la zone visible."""
 		if self._suppress_category_highlight:
 			return
 
@@ -407,7 +434,8 @@ class ComponentsPanel(QWidget):
 					self._updating_category_highlight = False
 				return
 
-	def _find_top_visible_item(self):
+	def _find_top_visible_item(self) -> Optional[QListWidgetItem]:
+		"""Retourne le premier item visible dans la liste des composants."""
 		viewport_rect = self.components_list.viewport().rect()
 		for row in range(self.components_list.count()):
 			item = self.components_list.item(row)
@@ -418,7 +446,8 @@ class ComponentsPanel(QWidget):
 				return item
 		return None
 
-	def _build_category_widget(self, icon, label):
+	def _build_category_widget(self, icon: QIcon, label: str) -> QWidget:
+		"""Construit le widget visuel d'une categorie."""
 		widget = QWidget()
 		widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 		layout = QVBoxLayout(widget)
@@ -441,7 +470,8 @@ class ComponentsPanel(QWidget):
 		layout.addWidget(text_label)
 		return widget
 
-	def _sync_category_item_widths(self):
+	def _sync_category_item_widths(self) -> None:
+		"""Ajuste la largeur des items de categorie a la colonne."""
 		viewport_width = self.category_list.viewport().width()
 		if viewport_width <= 0:
 			return
@@ -455,7 +485,8 @@ class ComponentsPanel(QWidget):
 				if text_label is not None:
 					text_label.setFixedWidth(max(1, viewport_width))
 
-	def _load_icon(self, relative_path, fallback_color, size):
+	def _load_icon(self, relative_path: str, fallback_color: str, size: QSize) -> QIcon:
+		"""Charge un icone ou genere un substitut si manquant."""
 		icon_path = self.assets_root / relative_path
 		if icon_path.exists():
 			pixmap = QPixmap(str(icon_path))
@@ -481,7 +512,8 @@ class ComponentsPanel(QWidget):
 class ComponentsListWidget(QListWidget):
 	MIME_TYPE = "application/x-component-id"
 
-	def startDrag(self, supportedActions):
+	def startDrag(self, supported_actions: Qt.DropActions) -> None:
+		"""Demarre le glisser-deposer d'un composant."""
 		item = self.currentItem()
 		if item is None:
 			return
@@ -497,4 +529,4 @@ class ComponentsListWidget(QListWidget):
 		drag.setMimeData(mime)
 		if not item.icon().isNull():
 			drag.setPixmap(item.icon().pixmap(32, 32))
-		drag.exec_(supportedActions)
+		drag.exec_(supported_actions)

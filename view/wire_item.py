@@ -1,9 +1,12 @@
-from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsItem
-from PyQt5.QtGui import QPen, QColor, QPainterPath, QPainterPathStroker
-from PyQt5.QtCore import Qt, QPointF, QLineF
+from PyQt5.QtCore import QLineF, QPointF, Qt
+from PyQt5.QtGui import QColor, QPainterPath, QPainterPathStroker, QPen
+from PyQt5.QtWidgets import QGraphicsItem, QGraphicsLineItem
 
 class WireItem(QGraphicsLineItem):
-    def __init__(self, wire_model):
+    """Element graphique representant un fil."""
+
+    def __init__(self, wire_model) -> None:
+        """Initialise le fil graphique a partir du modele."""
         super().__init__()
         self.wire = wire_model
         self._is_selected = False
@@ -17,8 +20,8 @@ class WireItem(QGraphicsLineItem):
         
         self.refresh_geometry()
 
-    def refresh_geometry(self):
-        """Reinitialise le fil a partir des coordonnees du modele"""
+    def refresh_geometry(self) -> None:
+        """Reinitialise le fil a partir des coordonnees du modele."""
         if not self.wire.node_a or not self.wire.node_b:
             return
 
@@ -33,8 +36,8 @@ class WireItem(QGraphicsLineItem):
         # Place la ligne a ces coordonnees
         self.setLine(QLineF(p1, p2))
 
-    def shape(self):
-        """Retourne une zone de clic plus epaisse pour faciliter la selection du fil"""
+    def shape(self) -> QPainterPath:
+        """Retourne une zone de clic plus epaisse pour faciliter la selection."""
         path = QPainterPath()
         path.moveTo(self.line().p1())
         path.lineTo(self.line().p2())
@@ -42,8 +45,8 @@ class WireItem(QGraphicsLineItem):
         stroker.setWidth(12)
         return stroker.createStroke(path)
 
-    def _node_shared_with_dipole(self, node, model):
-        """Retourne True si le noeud est reference par un dipole"""
+    def _node_shared_with_dipole(self, node, model) -> bool:
+        """Indique si le noeud est reference par un dipole."""
         if node is None:
             return False
         for dipole in model.dipoles.values():
@@ -51,7 +54,8 @@ class WireItem(QGraphicsLineItem):
                 return True
         return False
 
-    def _wire_count_for_node(self, node, model):
+    def _wire_count_for_node(self, node, model) -> int:
+        """Compte le nombre de fils rattaches au noeud."""
         if node is None:
             return 0
         count = 0
@@ -60,22 +64,42 @@ class WireItem(QGraphicsLineItem):
                 count += 1
         return count
 
-    def _endpoint_is_shared(self, node, model):
+    def _endpoint_is_shared(self, node, model) -> bool:
+        """Indique si l'extremite est partagee par plusieurs elements."""
         if node is None:
             return False
         if self._node_shared_with_dipole(node, model):
             return True
         return self._wire_count_for_node(node, model) > 1
 
+    def _move_node_endpoint(
+        self,
+        node,
+        delta: QPointF,
+        scene,
+        should_snap: bool,
+    ) -> None:
+        """Deplace un noeud et applique l'aimantation si demandee."""
+        if node is None:
+            return
+        x_pos, y_pos = node.position
+        x_pos += delta.x()
+        y_pos += delta.y()
+        if should_snap:
+            snapped = scene.get_snapped_position(QPointF(x_pos, y_pos))
+            node.position = (snapped[0], snapped[1])
+        else:
+            node.position = (x_pos, y_pos)
+
     def apply_scene_delta(
         self,
-        delta,
-        detach_shared_nodes=False,
-        moved_node_ids=None,
-        snap_endpoints=True,
-        preserve_node_model_ids=None,
-    ):
-        """Deplace un fil via ses noeuds avec aimantation optionnelle des extremites"""
+        delta: QPointF,
+        detach_shared_nodes: bool = False,
+        moved_node_ids: Optional[set[int]] = None,
+        snap_endpoints: bool = True,
+        preserve_node_model_ids: Optional[set[int]] = None,
+    ) -> None:
+        """Deplace un fil via ses noeuds avec aimantation optionnelle des extremites."""
         scene = self.scene()
         if scene is None:
             return
@@ -92,10 +116,8 @@ class WireItem(QGraphicsLineItem):
         ax, ay = self.wire.node_a.position
         bx, by = self.wire.node_b.position
 
-        if moved_node_ids is None:
-            moved_node_ids = set()
-        if preserve_node_model_ids is None:
-            preserve_node_model_ids = set()
+        moved_node_ids = moved_node_ids or set()
+        preserve_node_model_ids = preserve_node_model_ids or set()
 
         preserve_a_internal = self.wire.node_a.id in preserve_node_model_ids
         preserve_b_internal = self.wire.node_b.id in preserve_node_model_ids
@@ -122,13 +144,7 @@ class WireItem(QGraphicsLineItem):
                 # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_a_id)
             else:
-                ax += delta.x()
-                ay += delta.y()
-                if should_snap_endpoints:
-                    snapped_a = scene.get_snapped_position(QPointF(ax, ay))
-                    self.wire.node_a.position = (snapped_a[0], snapped_a[1])
-                else:
-                    self.wire.node_a.position = (ax, ay)
+                self._move_node_endpoint(self.wire.node_a, delta, scene, should_snap_endpoints)
                 moved_node_ids.add(node_a_id)
 
         node_b_id = id(self.wire.node_b)
@@ -137,13 +153,7 @@ class WireItem(QGraphicsLineItem):
                 # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_b_id)
             else:
-                bx += delta.x()
-                by += delta.y()
-                if should_snap_endpoints:
-                    snapped_b = scene.get_snapped_position(QPointF(bx, by))
-                    self.wire.node_b.position = (snapped_b[0], snapped_b[1])
-                else:
-                    self.wire.node_b.position = (bx, by)
+                self._move_node_endpoint(self.wire.node_b, delta, scene, should_snap_endpoints)
                 moved_node_ids.add(node_b_id)
 
         self.refresh_geometry()
@@ -153,6 +163,7 @@ class WireItem(QGraphicsLineItem):
 
 
     def itemChange(self, change, value):
+        """Gere l'aimantation et les visuels de selection du fil."""
         # Aimantation de position
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             if self._locked:
@@ -183,15 +194,17 @@ class WireItem(QGraphicsLineItem):
 
         return super().itemChange(change, value)
 
-    def set_locked(self, locked):
+    def set_locked(self, locked: bool) -> None:
+        """Verrouille ou deverrouille le fil."""
         self._locked = bool(locked)
         self.setFlag(QGraphicsItem.ItemIsMovable, not self._locked)
 
-    def is_locked(self):
+    def is_locked(self) -> bool:
+        """Indique si le fil est verrouille."""
         return self._locked
 
-    def mouseReleaseEvent(self, event):
-        """Finalise le glisser d'un fil entier"""
+    def mouseReleaseEvent(self, event) -> None:
+        """Finalise le glisser d'un fil entier."""
         super().mouseReleaseEvent(event)
         
         # Si le fil entier a ete deplace

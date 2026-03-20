@@ -1,15 +1,20 @@
 import math
 
-from PyQt5.QtWidgets import QGraphicsItem, QStyle, QApplication
-from PyQt5.QtCore import QRectF, Qt, QPointF
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPainterPath
+from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
 
-from model.components import Resistor, VoltageSourceDC, VoltageSourceAC, Capacitor, Inductor
+from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
 
 class ComponentItem(QGraphicsItem):
     """Element graphique de base pour tous les dipoles"""
 
-    def __init__(self, component_model):
+    WIDTH = 60
+    HEIGHT = 40
+    TERMINAL_OFFSET = 30
+
+    def __init__(self, component_model) -> None:
+        """Initialise l'item graphique associe au composant."""
         super().__init__()
         self.component = component_model
 
@@ -34,24 +39,30 @@ class ComponentItem(QGraphicsItem):
         self.setRotation(self.component.rotation)
 
         # Dimensions standard
-        self.width = 60
-        self.height = 40
+        self.width = self.WIDTH
+        self.height = self.HEIGHT
         
         # Infobulle
         self.setToolTip(f"{self.component.name} (ID: {self.component.id})")
 
-    def boundingRect(self):
-        """Definit la zone rectangulaire interactive du composant"""
+    def boundingRect(self) -> QRectF:
+        """Definit la zone rectangulaire interactive du composant."""
         margin = 5
-        return QRectF(-self.width/2 - margin, -self.height/2 - margin, self.width + 2*margin, self.height + 2*margin)
+        return QRectF(
+            -self.width / 2 - margin,
+            -self.height / 2 - margin,
+            self.width + 2 * margin,
+            self.height + 2 * margin,
+        )
 
-    def shape(self):
-        """Utilise une forme plus serree pour eviter de selectionner l'item dans le vide"""
+    def shape(self) -> QPainterPath:
+        """Utilise une forme plus serree pour eviter de selectionner l'item dans le vide."""
         path = QPainterPath()
         path.addRect(QRectF(-self.width / 2, -self.height / 2, self.width, self.height))
         return path
 
     def itemChange(self, change, value):
+        """Gere les effets de la scene lors des changements de position."""
         # Aimantation
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             if self._locked:
@@ -75,8 +86,8 @@ class ComponentItem(QGraphicsItem):
 
         return super().itemChange(change, value)
 
-    def mouseReleaseEvent(self, event):
-        """Appelee quand le composant est relache apres un deplacement"""
+    def mouseReleaseEvent(self, event) -> None:
+        """Finalise les deplacements et rotations du composant."""
         if self._is_rotating and event.button() == Qt.RightButton:
             self._is_rotating = False
             if self.scene():
@@ -92,7 +103,8 @@ class ComponentItem(QGraphicsItem):
         if self.scene():
             self.scene().handle_component_move(self)
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event) -> None:
+        """Prepare un glisser ou une rotation selon le bouton."""
         if self._locked:
             event.ignore()
             return
@@ -111,12 +123,10 @@ class ComponentItem(QGraphicsItem):
         self._drag_started = False
         super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event) -> None:
+        """Met a jour la rotation ou le glisser en cours."""
         if self._is_rotating:
-            center = self.mapToScene(QPointF(0, 0))
-            dx = event.scenePos().x() - center.x()
-            dy = event.scenePos().y() - center.y()
-            current_angle = math.degrees(math.atan2(dy, dx))
+            current_angle = self._compute_rotation_angle(event.scenePos())
             delta = current_angle - self._rotate_start_angle
             new_rotation = (self._rotate_start_rotation + delta) % 360
             self.setRotation(new_rotation)
@@ -134,36 +144,40 @@ class ComponentItem(QGraphicsItem):
 
         super().mouseMoveEvent(event)
 
-    def update_model_nodes(self):
-        """Recalcule les positions des noeuds A et B depuis le centre et la rotation du composant"""
-        # Centre du composant
-        cx, cy = self.pos().x(), self.pos().y()
-        rotation = self.rotation()
-        
-        # Decalage standard des bornes depuis le centre
-        offset = 30
-        
-        # Calcul trigonometrique
-        rad = math.radians(rotation)
-        dx = offset * math.cos(rad)
-        dy = offset * math.sin(rad)
-        
-        # Met a jour les coordonnees des noeuds
-        self.component.node_a.position = (cx - dx, cy - dy)
-        
-        self.component.node_b.position = (cx + dx, cy + dy)
-        
-        # Met a jour la position du dipole
-        self.component.position = (cx, cy)
+    def update_model_nodes(self) -> None:
+        """Recalcule les positions des noeuds a partir du centre et de la rotation."""
+        center_x, center_y = self.pos().x(), self.pos().y()
+        delta_x, delta_y = self._terminal_offset_from_rotation(self.rotation())
 
-    def set_locked(self, locked):
+        # Calcul trigonometrie pour placer les bornes a distance fixe du centre.
+        self.component.node_a.position = (center_x - delta_x, center_y - delta_y)
+        self.component.node_b.position = (center_x + delta_x, center_y + delta_y)
+        self.component.position = (center_x, center_y)
+
+    def _compute_rotation_angle(self, scene_pos: QPointF) -> float:
+        """Calcule l'angle de rotation en degres depuis le centre."""
+        center = self.mapToScene(QPointF(0, 0))
+        delta_x = scene_pos.x() - center.x()
+        delta_y = scene_pos.y() - center.y()
+        return math.degrees(math.atan2(delta_y, delta_x))
+
+    def _terminal_offset_from_rotation(self, rotation_degrees: float) -> tuple[float, float]:
+        """Retourne le decalage (dx, dy) des bornes pour une rotation."""
+        radians = math.radians(rotation_degrees)
+        delta_x = self.TERMINAL_OFFSET * math.cos(radians)
+        delta_y = self.TERMINAL_OFFSET * math.sin(radians)
+        return delta_x, delta_y
+
+    def set_locked(self, locked: bool) -> None:
+        """Verrouille ou deverrouille l'item graphique."""
         self._locked = bool(locked)
 
-    def is_locked(self):
+    def is_locked(self) -> bool:
+        """Indique si l'item est verrouille."""
         return self._locked
 
-    def paint(self, painter, option, widget=None):
-        """Dessine les limites de selection et le symbole specifique"""
+    def paint(self, painter, option, widget=None) -> None:
+        """Dessine les limites de selection et le symbole specifique."""
         painter.setRenderHint(QPainter.Antialiasing)
         is_selected = option.state & QStyle.State_Selected
         if is_selected:
@@ -180,8 +194,8 @@ class ComponentItem(QGraphicsItem):
         painter.drawEllipse(QPointF(30, 0), 2, 2)
 
 
-    def draw_labels(self, painter):
-        """Dessine le nom et la valeur principale"""
+    def draw_labels(self, painter: QPainter) -> None:
+        """Dessine le nom et la valeur principale."""
         painter.setPen(QColor("black"))
         font = QFont("Arial", 8)
         painter.setFont(font)
@@ -193,18 +207,21 @@ class ComponentItem(QGraphicsItem):
         val_rect = QRectF(-30, 20, 60, 15)
         painter.drawText(val_rect, Qt.AlignCenter, value_text)
 
-    def draw_symbol(self, painter):
-        """A surcharger dans les sous-classes pour dessiner le symbole"""
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole du composant (a surcharger)."""
         pass
 
-    def get_value_text(self):
-        """A surcharger pour fournir l'unite ou la valeur affichee"""
+    def get_value_text(self) -> str:
+        """Retourne la valeur affichee pour l'item."""
         return ""
 
     # Dessin des symboles
 
 class ResistorItem(ComponentItem):
-    def draw_symbol(self, painter):
+    """Item graphique pour une resistance."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de la resistance."""
         pen = QPen(QColor("black"), 2)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
@@ -218,14 +235,17 @@ class ResistorItem(ComponentItem):
         rect = QRectF(-15, -8, 30, 16)
         painter.drawRect(rect)
     
-    def get_value_text(self):
-        # Accede aux proprietes specifiques du modele
-        if hasattr(self.component, 'resistance'):
-            return f"{self.component.resistance} Ω"
+    def get_value_text(self) -> str:
+        """Retourne la valeur de resistance a afficher."""
+        if hasattr(self.component, "resistance"):
+            return f"{self.component.resistance} "
         return ""
 
 class VoltageSourceItem(ComponentItem):
-    def draw_symbol(self, painter):
+    """Item graphique pour les sources de tension."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de la source de tension."""
         pen = QPen(Qt.black, 2)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
@@ -252,7 +272,8 @@ class VoltageSourceItem(ComponentItem):
             path.cubicTo(-2, -5, 2, 5, 7, -2)
             painter.drawPath(path)
 
-    def get_value_text(self):
+    def get_value_text(self) -> str:
+        """Retourne la valeur de tension a afficher."""
         if isinstance(self.component, VoltageSourceDC):
             return f"{self.component.dc_voltage} V"
         elif isinstance(self.component, VoltageSourceAC):
@@ -260,7 +281,10 @@ class VoltageSourceItem(ComponentItem):
         return ""
 
 class CapacitorItem(ComponentItem):
-    def draw_symbol(self, painter):
+    """Item graphique pour un condensateur."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole du condensateur."""
         pen = QPen(Qt.black, 2)
         painter.setPen(pen)
         
@@ -272,11 +296,15 @@ class CapacitorItem(ComponentItem):
         painter.drawLine(-5, -12, -5, 12)
         painter.drawLine(5, -12, 5, 12)
 
-    def get_value_text(self):
+    def get_value_text(self) -> str:
+        """Retourne la valeur de capacite a afficher."""
         return f"{self.component.capacitance} F"
 
 class InductorItem(ComponentItem):
-    def draw_symbol(self, painter):
+    """Item graphique pour une inductance."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de l'inductance."""
         pen = QPen(Qt.black, 2)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
@@ -290,11 +318,12 @@ class InductorItem(ComponentItem):
         painter.drawArc(-5, -5, 10, 10, 0, 180 * 16)
         painter.drawArc(5, -5, 10, 10, 0, 180 * 16)
 
-    def get_value_text(self):
+    def get_value_text(self) -> str:
+        """Retourne la valeur d'inductance a afficher."""
         return f"{self.component.inductance} H"
 
-def create_component_item(component_model):
-    """Fonction utilitaire qui retourne l'element graphique adapte a un objet modele"""
+def create_component_item(component_model) -> ComponentItem:
+    """Retourne l'element graphique adapte a un objet modele."""
     if isinstance(component_model, Resistor):
         return ResistorItem(component_model)
     elif isinstance(component_model, (VoltageSourceDC, VoltageSourceAC)):
