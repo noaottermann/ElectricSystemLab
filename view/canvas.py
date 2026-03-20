@@ -1179,10 +1179,10 @@ class CircuitScene(QGraphicsScene):
                 removed_wire_ids.add(wire.id)
                 continue
 
-            # Fil trop court
+            # Fil trop court (strictement inferieur a une maille de grille)
             ax, ay = node_a.position
             bx, by = node_b.position
-            if (ax - bx) ** 2 + (ay - by) ** 2 <= self.GRID_SIZE ** 2:
+            if (ax - bx) ** 2 + (ay - by) ** 2 < self.GRID_SIZE ** 2:
                 removed_wire_ids.add(wire.id)
                 continue
 
