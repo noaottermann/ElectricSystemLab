@@ -743,6 +743,12 @@ class CircuitScene(QGraphicsScene):
             self._suppress_move_until_release = False
             return False
         if isinstance(item, NodeItem):
+            if item.isSelected() and len(self.selectedItems()) > 1:
+                self._selection_snapshot = list(self.selectedItems())
+                self._drag_started_on_item = True
+                self._suppress_move_until_release = False
+                event.accept()
+                return True
             if not item.isSelected() and not (event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier)):
                 self.clearSelection()
             item.setSelected(True)
@@ -805,10 +811,28 @@ class CircuitScene(QGraphicsScene):
                 return False
 
         selected_component_nodes = set()
+        selected_wire_endpoint_counts = {}
+        selected_free_nodes = set()
         for selected_item in self.selectedItems():
             if isinstance(selected_item, ComponentItem):
                 selected_component_nodes.add(selected_item.component.node_a)
                 selected_component_nodes.add(selected_item.component.node_b)
+            elif isinstance(selected_item, WireItem):
+                node_a = selected_item.wire.node_a
+                node_b = selected_item.wire.node_b
+                if node_a is not None:
+                    selected_wire_endpoint_counts[node_a] = selected_wire_endpoint_counts.get(node_a, 0) + 1
+                if node_b is not None:
+                    selected_wire_endpoint_counts[node_b] = selected_wire_endpoint_counts.get(node_b, 0) + 1
+            elif isinstance(selected_item, NodeItem):
+                selected_free_nodes.add(selected_item.node)
+
+        preserve_internal_nodes = set(selected_component_nodes)
+        preserve_internal_nodes.update(selected_free_nodes)
+        for node, count in selected_wire_endpoint_counts.items():
+            if count > 1:
+                preserve_internal_nodes.add(node)
+        preserve_node_model_ids = {node.id for node in preserve_internal_nodes if node is not None}
 
         current_grid_x, current_grid_y = self.snap_to_grid(event.scenePos())
         current_grid_pos = QPointF(current_grid_x, current_grid_y)
@@ -819,6 +843,15 @@ class CircuitScene(QGraphicsScene):
                 self._push_undo_snapshot()
             self._group_move_active = True
             moved_wire_node_ids = set()
+
+            # Deplace d'abord les noeuds libres selectionnes et marque-les comme deja deplaces.
+            # Cela evite de deplacer deux fois le meme noeud quand son fil est aussi selectionne.
+            for item in self.selectedItems():
+                if isinstance(item, NodeItem):
+                    item.setPos(item.pos() + grid_delta)
+                    item.node.position = (item.pos().x(), item.pos().y())
+                    moved_wire_node_ids.add(id(item.node))
+
             for item in self.selectedItems():
                 if isinstance(item, ComponentItem):
                     item.setPos(item.pos() + grid_delta)
@@ -831,7 +864,8 @@ class CircuitScene(QGraphicsScene):
                         grid_delta,
                         detach_shared_nodes=detach,
                         moved_node_ids=moved_wire_node_ids,
-                        snap_endpoints=True,
+                        snap_endpoints=False,
+                        preserve_node_model_ids=preserve_node_model_ids,
                     )
 
             self._sync_free_node_items_from_model()
@@ -851,6 +885,9 @@ class CircuitScene(QGraphicsScene):
                 self.handle_component_move(item)
             elif isinstance(item, WireItem):
                 self.handle_wire_move(item, record_undo=False)
+
+        self._sync_free_node_items_from_model()
+
         self._group_move_active = False
         event.accept()
         return True
@@ -902,7 +939,7 @@ class CircuitScene(QGraphicsScene):
                     item.refresh_geometry()
 
         self._merge_overlaps_and_refresh()
-        self._refresh_free_node_items()
+        self._sync_free_node_items_from_model()
 
     def _smart_connect_component_to_nearby_dipole_nodes(self, component_item):
         """Aimante et connecte un dipole deplace vers des noeuds proches ou des extremites libres"""

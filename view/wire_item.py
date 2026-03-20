@@ -66,7 +66,14 @@ class WireItem(QGraphicsLineItem):
             return True
         return self._wire_count_for_node(node, model) > 1
 
-    def apply_scene_delta(self, delta, detach_shared_nodes=False, moved_node_ids=None, snap_endpoints=True):
+    def apply_scene_delta(
+        self,
+        delta,
+        detach_shared_nodes=False,
+        moved_node_ids=None,
+        snap_endpoints=True,
+        preserve_node_model_ids=None,
+    ):
         """Deplace un fil via ses noeuds avec aimantation optionnelle des extremites"""
         scene = self.scene()
         if scene is None:
@@ -81,30 +88,37 @@ class WireItem(QGraphicsLineItem):
         shared_a = self._endpoint_is_shared(self.wire.node_a, model)
         shared_b = self._endpoint_is_shared(self.wire.node_b, model)
 
-        if detach_shared_nodes:
-            if shared_a:
-                ax, ay = self.wire.node_a.position
-                self.wire.node_a = model.create_node(ax, ay)
-                shared_a = False
-            if shared_b:
-                bx, by = self.wire.node_b.position
-                self.wire.node_b = model.create_node(bx, by)
-                shared_b = False
-
         ax, ay = self.wire.node_a.position
         bx, by = self.wire.node_b.position
 
         if moved_node_ids is None:
             moved_node_ids = set()
+        if preserve_node_model_ids is None:
+            preserve_node_model_ids = set()
 
-        # Si les noeuds ont ete detaches, les extremites peuvent s'aimanter independamment
-        # Sinon les extremites attachees doivent etre pilotees par les dipoles deplaces
+        preserve_a_internal = self.wire.node_a.id in preserve_node_model_ids
+        preserve_b_internal = self.wire.node_b.id in preserve_node_model_ids
+
+        # Si les noeuds ont ete detaches, les extremites peuvent s'aimanter independamment.
+        # Sinon seules les bornes partagees avec des dipoles restent pilotees par les dipoles deplaces.
         should_snap_endpoints = detach_shared_nodes and snap_endpoints
+        preserve_a_with_dipole = (not detach_shared_nodes) and self._node_shared_with_dipole(self.wire.node_a, model)
+        preserve_b_with_dipole = (not detach_shared_nodes) and self._node_shared_with_dipole(self.wire.node_b, model)
+
+        if detach_shared_nodes:
+            if shared_a and not preserve_a_internal:
+                ax, ay = self.wire.node_a.position
+                self.wire.node_a = model.create_node(ax, ay)
+                shared_a = False
+            if shared_b and not preserve_b_internal:
+                bx, by = self.wire.node_b.position
+                self.wire.node_b = model.create_node(bx, by)
+                shared_b = False
 
         node_a_id = id(self.wire.node_a)
         if node_a_id not in moved_node_ids:
-            if shared_a and not detach_shared_nodes:
-                # Conserve l'attache : le dipole selectionne met a jour ce noeud
+            if preserve_a_with_dipole:
+                # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_a_id)
             else:
                 ax += delta.x()
@@ -118,8 +132,8 @@ class WireItem(QGraphicsLineItem):
 
         node_b_id = id(self.wire.node_b)
         if node_b_id not in moved_node_ids:
-            if shared_b and not detach_shared_nodes:
-                # Conserve l'attache : le dipole selectionne met a jour ce noeud
+            if preserve_b_with_dipole:
+                # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_b_id)
             else:
                 bx += delta.x()

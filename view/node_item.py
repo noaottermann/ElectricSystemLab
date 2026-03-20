@@ -17,7 +17,8 @@ class NodeItem(QGraphicsEllipseItem):
         self._drag_offset = QPointF(0, 0)
 
         self.setFlags(
-            QGraphicsItem.ItemSendsGeometryChanges
+            QGraphicsItem.ItemIsSelectable
+            | QGraphicsItem.ItemSendsGeometryChanges
         )
         self.setZValue(3)
         self.setAcceptedMouseButtons(Qt.LeftButton)
@@ -42,6 +43,12 @@ class NodeItem(QGraphicsEllipseItem):
         path = QPainterPath()
         path.addEllipse(QPointF(0, 0), self.HIT_RADIUS, self.HIT_RADIUS)
         return path
+
+    def paint(self, painter, option, widget=None):
+        # Keep node selection behavior without the default square selection marker.
+        painter.setPen(self.pen())
+        painter.setBrush(self.brush())
+        painter.drawEllipse(self.rect())
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
