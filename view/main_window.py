@@ -157,6 +157,10 @@ class MainWindow(QMainWindow):
             self.custom_actions["action_flip"].setVisible(has_dipole)
         if hasattr(self, "toolbar_transform_separator") and self.toolbar_transform_separator is not None:
             self.toolbar_transform_separator.setVisible(has_dipole)
+        if hasattr(self, "toolbar_delete_separator") and self.toolbar_delete_separator is not None:
+            self.toolbar_delete_separator.setVisible(has_selection)
+        if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
+            self.toolbar_delete_action.setVisible(has_selection)
 
     def create_actions(self):
         """Crée toutes les actions de la fenêtre principale"""
@@ -193,6 +197,7 @@ class MainWindow(QMainWindow):
         self._make_action("action_copy", QKeySequence.Copy, self.on_copy)
         self._make_action("action_paste", None, self.on_paste)
         self._make_action("action_duplicate", None, self.on_duplicate)
+        self._make_action("action_delete", QKeySequence.Delete, self.delete_selected_items)
         self._make_action("action_rotate", None, self.rotate_selected_components)
         self._make_action("action_flip", None, self.flip_selected_components)
 
@@ -542,6 +547,11 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(self.custom_actions["action_rotate"])
         self.toolbar.addAction(self.custom_actions["action_flip"])
 
+        self.toolbar_delete_separator = self.toolbar.addSeparator()
+        self.toolbar_delete_action = QAction('', self)
+        self.toolbar_delete_action.triggered.connect(self.delete_selected_items)
+        self.toolbar.addAction(self.toolbar_delete_action)
+
         self.custom_actions["action_paste"].setEnabled(False)
         self.toolbar_paste_action.setEnabled(False)
         self.custom_actions["action_duplicate"].setVisible(False)
@@ -549,6 +559,8 @@ class MainWindow(QMainWindow):
         self.custom_actions["action_rotate"].setVisible(False)
         self.custom_actions["action_flip"].setVisible(False)
         self.toolbar_transform_separator.setVisible(False)
+        self.toolbar_delete_separator.setVisible(False)
+        self.toolbar_delete_action.setVisible(False)
 
     def retranslateUi(self):
         """Met à jour tous les textes"""
@@ -586,6 +598,8 @@ class MainWindow(QMainWindow):
             self.toolbar_paste_action.setText(Translator.tr("action_paste"))
         if hasattr(self, "toolbar_duplicate_action") and self.toolbar_duplicate_action is not None:
             self.toolbar_duplicate_action.setText(Translator.tr("action_duplicate"))
+        if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
+            self.toolbar_delete_action.setText(Translator.tr("action_delete"))
 
     def change_language(self, lang):
         """Change la langue et rafraîchit l'interface"""

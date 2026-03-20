@@ -20,6 +20,7 @@
     "action_copy": "Copier",
     "action_paste": "Coller",
     "action_duplicate": "Dupliquer",
+    "action_delete": "Supprimer",
     "action_quit": "Quitter",
     "action_select_all": "Tout sélectionner",
     "action_select_none": "Tout désélectionner",

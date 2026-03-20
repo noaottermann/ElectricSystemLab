@@ -242,7 +242,6 @@ class CircuitScene(QGraphicsScene):
             "Inductor": Inductor,
         }
         self._clipboard_payload = None
-        self._clipboard_paste_count = 0
 
     def set_tool(self, tool_name):
         """Definit le nom de l'outil actif"""
@@ -403,7 +402,6 @@ class CircuitScene(QGraphicsScene):
             "wires": wires,
             "nodes": free_nodes,
         }
-        self._clipboard_paste_count = 0
         return True
 
     def cut_selection(self):
@@ -622,7 +620,6 @@ class CircuitScene(QGraphicsScene):
             self.addItem(wire_item)
             wire_item.setSelected(True)
 
-        self._clipboard_paste_count += 1
         self._merge_overlaps_and_refresh()
         self._sync_free_node_items_from_model()
         return True
