@@ -1,19 +1,22 @@
+from __future__ import annotations
+
+from typing import Any, Optional
+
+
 class Dipole:
-    """Classe de base pour un composant electrique generique"""
+    """Classe de base pour un composant electrique generique."""
 
-    def __init__(self, dipole_id, name, node_a, node_b, x=0.0, y=0.0, rotation=0.0):
-        """
-        Initialise un dipole generique
-
-        Args:
-            dipole_id (int): Identifiant unique du composant
-            name (str): Nom affiche
-            node_a (Node): Premier noeud de connexion (conventionnel +)
-            node_b (Node): Second noeud de connexion (conventionnel -)
-            x (float): Coordonnee X du centre du composant
-            y (float): Coordonnee Y du centre du composant
-            rotation (float): Angle de rotation en degres
-        """
+    def __init__(
+        self,
+        dipole_id: int,
+        name: str,
+        node_a: Optional[Any],
+        node_b: Optional[Any],
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+    ) -> None:
+        """Initialise un dipole generique."""
         self.id = int(dipole_id)
         self.name = name
         self.node_a = node_a
@@ -27,24 +30,29 @@ class Dipole:
         self._current = 0.0
 
     @property
-    def voltage(self):
+    def voltage(self) -> float:
+        """Retourne la tension entre les bornes du dipole."""
         va = self.node_a.potential if self.node_a else 0.0
         vb = self.node_b.potential if self.node_b else 0.0
         return va - vb
 
     @property
-    def current(self):
+    def current(self) -> float:
+        """Retourne le courant traversant le dipole."""
         return self._current
 
     @current.setter
-    def current(self, value):
+    def current(self, value: float) -> None:
+        """Met a jour le courant du dipole."""
         self._current = float(value)
 
     @property
-    def power(self):
+    def power(self) -> float:
+        """Retourne la puissance instantanee du dipole."""
         return self.voltage * self.current
 
-    def disconnect(self):
+    def disconnect(self) -> None:
+        """Detache le dipole de ses noeuds."""
         if self.node_a:
             self.node_a.remove_connection(self)
         if self.node_b:
@@ -52,7 +60,8 @@ class Dipole:
         self.node_a = None
         self.node_b = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, object]:
+        """Retourne une representation serialisable du dipole."""
         return {
             "type": self.__class__.__name__,
             "id": self.id,
@@ -64,11 +73,13 @@ class Dipole:
             "params": self.get_params()
         }
 
-    def get_params(self):
+    def get_params(self) -> dict[str, object]:
+        """Retourne les parametres specifiques du dipole."""
         return {}
 
     @classmethod
-    def from_dict(cls, data, nodes_dict):
+    def from_dict(cls, data: dict, nodes_dict: dict) -> "Dipole":
+        """Reconstruit un dipole a partir d'un dictionnaire."""
         node_a_id = data.get("node_a_id")
         node_b_id = data.get("node_b_id")
         node_a = nodes_dict.get(node_a_id) if node_a_id is not None else None
@@ -86,10 +97,12 @@ class Dipole:
         instance.set_params(data.get("params", {}))
         return instance
 
-    def set_params(self, params):
-        pass
+    def set_params(self, params: dict) -> None:
+        """Applique des parametres specifiques au dipole."""
+        return None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Retourne une representation textuelle du dipole."""
         return (f"<{self.__class__.__name__} {self.name} (ID={self.id}) | "
                 f"Nodes: {self.node_a.id if self.node_a else 'None'}-{self.node_b.id if self.node_b else 'None'} | "
                 f"U={self.voltage:.2f}V I={self.current:.2f}A>")

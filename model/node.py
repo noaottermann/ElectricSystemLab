@@ -1,42 +1,44 @@
+from __future__ import annotations
+
+from typing import Any
+
+
 class Node:
-    """Represente un noeud electrique dans le circuit"""
+    """Represente un noeud electrique dans le circuit."""
 
-    def __init__(self, node_id, x=0.0, y=0.0, is_ground=False):
-        """
-        Initialise un nouveau noeud
-
-        Args:
-            node_id (int): Identifiant unique du noeud
-            x (float): Coordonnee X sur la grille
-            y (float): Coordonnee Y sur la grille
-            is_ground (bool): True si ce noeud est la reference de masse (0V)
-        """
+    def __init__(self, node_id: int, x: float = 0.0, y: float = 0.0, is_ground: bool = False) -> None:
+        """Initialise un nouveau noeud."""
         self.id = int(node_id)
         self.position = (float(x), float(y))
-        self.is_ground = is_ground
+        self.is_ground = bool(is_ground)
         self._potential = 0.0
-        self.connected_dipoles = []
+        self.connected_dipoles: list[Any] = []
 
     @property
-    def potential(self):
+    def potential(self) -> float:
+        """Retourne le potentiel electrique du noeud."""
         return self._potential
 
     @potential.setter
-    def potential(self, value):
+    def potential(self, value: float) -> None:
+        """Met a jour le potentiel electrique en respectant la masse."""
         if self.is_ground:
             self._potential = 0.0
         else:
             self._potential = float(value)
 
-    def add_connection(self, dipole):
+    def add_connection(self, dipole: Any) -> None:
+        """Ajoute un dipole aux connexions de ce noeud."""
         if dipole not in self.connected_dipoles:
             self.connected_dipoles.append(dipole)
 
-    def remove_connection(self, dipole):
+    def remove_connection(self, dipole: Any) -> None:
+        """Supprime un dipole des connexions de ce noeud."""
         if dipole in self.connected_dipoles:
             self.connected_dipoles.remove(dipole)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, object]:
+        """Retourne une representation serialisable du noeud."""
         return {
             "id": self.id,
             "position": self.position,
@@ -45,7 +47,8 @@ class Node:
         }
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict) -> "Node":
+        """Reconstruit un noeud a partir d'un dictionnaire."""
         x, y = data.get("position", (0.0, 0.0))
         node = cls(
             node_id=data["id"],
@@ -54,9 +57,10 @@ class Node:
             is_ground=data.get("is_ground", False)
         )
         if "potential" in data:
-            node._potential = data["potential"]
+            node._potential = float(data["potential"])
         return node
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Retourne une representation textuelle du noeud."""
         state = "GND" if self.is_ground else f"{self._potential:.2f}V"
         return f"<Node {self.id} | Pos={self.position} | {state}>"

@@ -1,33 +1,42 @@
+from __future__ import annotations
+
 import json
+from typing import Optional
+
 from .node import Node
 from .wire import Wire
-class Circuit:
-    """Classe principale representant le circuit electrique complet"""
 
-    def __init__(self):
-        """Initialise un circuit vide"""
-        self.nodes = {} 
-        self.dipoles = {}
-        self.wires = {}
+
+class Circuit:
+    """Classe principale representant le circuit electrique complet."""
+
+    def __init__(self) -> None:
+        """Initialise un circuit vide."""
+        self.nodes: dict[int, Node] = {}
+        self.dipoles: dict[int, object] = {}
+        self.wires: dict[int, Wire] = {}
         self._next_node_id = 1
         self._next_dipole_id = 1
         self._next_wire_id = 1
 
     # Gestion des noeuds
 
-    def create_node(self, x, y, is_ground=False):
+    def create_node(self, x: float, y: float, is_ground: bool = False) -> Node:
+        """Cree un noeud et l'ajoute au circuit."""
         node_id = self._next_node_id
         self._next_node_id += 1
         node = Node(node_id, x, y, is_ground)
         self.nodes[node_id] = node
         return node
 
-    def remove_node(self, node_id):
+    def remove_node(self, node_id: int) -> None:
+        """Supprime un noeud du circuit par identifiant."""
         node_id = int(node_id)
         if node_id in self.nodes:
             del self.nodes[node_id]
 
-    def _rebuild_node_connections(self):
+    def _rebuild_node_connections(self) -> None:
+        """Reconstruit les listes de connexions pour chaque noeud."""
         for node in self.nodes.values():
             node.connected_dipoles = []
 
@@ -37,12 +46,14 @@ class Circuit:
             if dipole.node_b is not None and dipole.node_b.id in self.nodes:
                 dipole.node_b.add_connection(dipole)
 
-    def _merge_node_into_keeper(self, keeper, node_to_merge):
+    def _merge_node_into_keeper(self, keeper: Optional[Node], node_to_merge: Optional[Node]) -> bool:
+        """Fusionne un noeud dans un noeud gardien et met a jour les references."""
         if keeper is None or node_to_merge is None or keeper is node_to_merge:
             return False
 
         changed = False
 
+        # Met a jour les references sur les dipoles.
         for dipole in self.dipoles.values():
             if dipole.node_a is node_to_merge:
                 dipole.node_a = keeper
@@ -51,6 +62,7 @@ class Circuit:
                 dipole.node_b = keeper
                 changed = True
 
+        # Met a jour les references sur les fils.
         for wire in self.wires.values():
             if wire.node_a is node_to_merge:
                 wire.node_a = keeper
@@ -69,7 +81,8 @@ class Circuit:
 
         return changed
 
-    def merge_nodes(self, node_a, node_b):
+    def merge_nodes(self, node_a: Optional[Node], node_b: Optional[Node]) -> Optional[Node]:
+        """Fusionne deux noeuds en gardant l'identifiant le plus petit."""
         if node_a is None:
             return node_b
         if node_b is None:
@@ -88,11 +101,12 @@ class Circuit:
 
         return keeper
 
-    def merge_overlapping_nodes(self, decimals=6):
+    def merge_overlapping_nodes(self, decimals: int = 6) -> bool:
+        """Fusionne les noeuds superposes selon un arrondi de position."""
         if len(self.nodes) < 2:
             return False
 
-        groups = {}
+        groups: dict[tuple[float, float], list[Node]] = {}
         for node in self.nodes.values():
             x, y = node.position
             key = (round(float(x), decimals), round(float(y), decimals))
@@ -116,7 +130,8 @@ class Circuit:
 
         return changed
 
-    def get_node_at(self, x, y, tolerance=10.0):
+    def get_node_at(self, x: float, y: float, tolerance: float = 10.0) -> Optional[Node]:
+        """Retourne le noeud le plus proche dans le rayon de tolerance."""
         # Priorité aux noeuds des dipôles
         dipole_nodes = set()
         for dipole in self.dipoles.values():
@@ -128,7 +143,7 @@ class Circuit:
         # Noeuds de dipôles
         for node in dipole_nodes:
             nx, ny = node.position
-            if (nx - x)**2 + (ny - y)**2 <= tolerance**2:
+            if (nx - x) ** 2 + (ny - y) ** 2 <= tolerance ** 2:
                 return node
 
         # Autres noeuds
@@ -136,13 +151,14 @@ class Circuit:
             if node in dipole_nodes:
                 continue
             nx, ny = node.position
-            if (nx - x)**2 + (ny - y)**2 <= tolerance**2:
+            if (nx - x) ** 2 + (ny - y) ** 2 <= tolerance ** 2:
                 return node
         return None
     
     # Gestion des fils
 
-    def create_wire(self, node_a, node_b):
+    def create_wire(self, node_a: Node, node_b: Node) -> Wire:
+        """Cree un fil entre deux noeuds existants."""
         if node_a.id not in self.nodes or node_b.id not in self.nodes:
             raise ValueError("Impossible de créer un fil : noeuds inconnus.")
         wire_id = self._next_wire_id
@@ -151,7 +167,8 @@ class Circuit:
         self.wires[wire_id] = wire
         return wire
     
-    def remove_wire(self, wire_id):
+    def remove_wire(self, wire_id: int) -> None:
+        """Supprime un fil du circuit par identifiant."""
         wire_id = int(wire_id)
         if wire_id in self.wires:
             self.wires[wire_id].disconnect()
@@ -159,7 +176,8 @@ class Circuit:
 
     # Gestion des dipoles
 
-    def add_dipole(self, dipole):
+    def add_dipole(self, dipole: object) -> None:
+        """Ajoute un dipole au circuit en verifiant ses noeuds."""
         if dipole.node_a and dipole.node_a.id not in self.nodes:
             raise ValueError(f"Le Node A ({dipole.node_a.id}) n'existe pas dans ce circuit.")
         if dipole.node_b and dipole.node_b.id not in self.nodes:
@@ -168,30 +186,35 @@ class Circuit:
         if dipole.id >= self._next_dipole_id:
             self._next_dipole_id = dipole.id + 1
 
-    def remove_dipole(self, dipole_id):
+    def remove_dipole(self, dipole_id: int) -> None:
+        """Supprime un dipole du circuit par identifiant."""
         dipole_id = int(dipole_id)
         if dipole_id in self.dipoles:
             self.dipoles[dipole_id].disconnect()
             del self.dipoles[dipole_id]
 
-    def get_next_dipole_id(self):
+    def get_next_dipole_id(self) -> int:
+        """Retourne le prochain identifiant de dipole disponible."""
         return self._next_dipole_id
 
     # Aides pour le solveur
 
-    def get_ground_node(self):
+    def get_ground_node(self) -> Optional[Node]:
+        """Retourne le noeud de masse s'il existe."""
         for node in self.nodes.values():
             if node.is_ground:
                 return node
         return None
 
-    def reset_simulation(self):
+    def reset_simulation(self) -> None:
+        """Reinitialise les potentiels et courants de simulation."""
         for node in self.nodes.values():
             node.potential = 0.0
         for dipole in self.dipoles.values():
             dipole.current = 0.0
 
-    def clear(self):
+    def clear(self) -> None:
+        """Vide le circuit et reinitialise les compteurs."""
         self.nodes.clear()
         self.dipoles.clear()
         self.wires.clear()
@@ -201,7 +224,8 @@ class Circuit:
 
     # Sauvegarde / Chargement (JSON)
 
-    def to_json(self):
+    def to_json(self) -> str:
+        """Serialise le circuit au format JSON."""
         data = {
             "version": "1.0",
             "next_node_id": self._next_node_id,
@@ -213,7 +237,8 @@ class Circuit:
         }
         return json.dumps(data, indent=4)
 
-    def load_from_json(self, json_str, component_classes):
+    def load_from_json(self, json_str: str, component_classes: dict[str, object]) -> None:
+        """Charge un circuit depuis une chaine JSON."""
         self.clear()
         data = json.loads(json_str)
         self._next_node_id = data.get("next_node_id", 1)
@@ -236,6 +261,7 @@ class Circuit:
             else:
                 print(f"Attention: Type de composant inconnu '{dtype}', ignoré.")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Retourne une representation textuelle du circuit."""
         return (f"<Circuit: {len(self.nodes)} nodes, "
                 f"{len(self.wires)} wires, {len(self.dipoles)} dipoles>")

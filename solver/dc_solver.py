@@ -1,15 +1,25 @@
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
+
 from model.components import Resistor, VoltageSourceDC
 
 class DCSolver:
-    def solve(self, circuit):
-        """Resout un circuit continu par analyse nodale avec sources de tension"""
+    """Solveur DC base sur l'analyse nodale."""
+
+    def solve(self, circuit) -> None:
+        """Resout un circuit continu par analyse nodale avec sources de tension."""
+        if circuit is None:
+            print("Circuit invalide")
+            return
         # Regroupe les noeuds connectes par des fils
         node_groups = self._group_connected_nodes(circuit)
         
         # Gestion de la masse
         ground_node = circuit.get_ground_node()
-        ground_group_id = None
+        ground_group_id: Optional[int] = None
         if ground_node:
             ground_group_id = node_groups[ground_node.id]
         else:
@@ -23,20 +33,11 @@ class DCSolver:
                 return
 
         # Correspondance groupe vers indice de matrice
-        next_index = 0
-        group_to_idx = {}
-        unique_groups = set(node_groups.values())
-        for gid in unique_groups:
-            if gid != ground_group_id:
-            group_to_idx[gid] = next_index
-            next_index += 1
-        num_v_vars = next_index
+        group_to_idx = self._build_group_index(node_groups, ground_group_id)
+        num_v_vars = len(group_to_idx)
 
         # Variables de courant des sources de tension
-        voltage_sources = []
-        for dipole in circuit.dipoles.values():
-            if isinstance(dipole, VoltageSourceDC):
-                voltage_sources.append(dipole)
+        voltage_sources = self._collect_voltage_sources(circuit)
         num_i_vars = len(voltage_sources)
         total_vars = num_v_vars + num_i_vars
         if total_vars == 0:
@@ -76,7 +77,11 @@ class DCSolver:
             Z[idx_src] = v_src.dc_voltage
 
         # Resolution
-        x = np.linalg.solve(A, Z)
+        try:
+            x = np.linalg.solve(A, Z)
+        except np.linalg.LinAlgError:
+            print("Erreur de resolution: matrice singuliere")
+            return
 
         # Repartit les resultats
         for node_id, node in circuit.nodes.items():
@@ -97,17 +102,40 @@ class DCSolver:
             idx_src = current_var_offset + i
             v_src.current = -float(x[idx_src])
 
-    def _group_connected_nodes(self, circuit):
-        """Utilise Union-Find pour regrouper les noeuds relies par des fils"""
+    def _collect_voltage_sources(self, circuit) -> list[VoltageSourceDC]:
+        """Retourne les sources de tension continues du circuit."""
+        voltage_sources = []
+        for dipole in circuit.dipoles.values():
+            if isinstance(dipole, VoltageSourceDC):
+                voltage_sources.append(dipole)
+        return voltage_sources
+
+    def _build_group_index(self, node_groups: dict[int, int], ground_group_id: Optional[int]) -> dict[int, int]:
+        """Associe chaque groupe de noeuds a un indice de matrice."""
+        group_to_idx: dict[int, int] = {}
+        next_index = 0
+        for gid in set(node_groups.values()):
+            if gid == ground_group_id:
+                continue
+            group_to_idx[gid] = next_index
+            next_index += 1
+        return group_to_idx
+
+    def _group_connected_nodes(self, circuit) -> dict[int, int]:
+        """Utilise Union-Find pour regrouper les noeuds relies par des fils."""
         parent = {node_id: node_id for node_id in circuit.nodes}
-        def find(i):
-            if parent[i] == i:
-                return i
-            parent[i] = find(parent[i])
-            return parent[i]
-        def union(i, j):
-            root_i = find(i)
-            root_j = find(j)
+
+        def find(node_id: int) -> int:
+            """Retourne la racine d'un noeud avec compression de chemin."""
+            if parent[node_id] == node_id:
+                return node_id
+            parent[node_id] = find(parent[node_id])
+            return parent[node_id]
+
+        def union(left_id: int, right_id: int) -> None:
+            """Fusionne deux ensembles de noeuds."""
+            root_i = find(left_id)
+            root_j = find(right_id)
             if root_i != root_j:
                 parent[root_i] = root_j
 
@@ -117,8 +145,14 @@ class DCSolver:
 
         return {node_id: find(node_id) for node_id in circuit.nodes}
 
-    def _get_matrix_index(self, node, node_groups, group_to_idx, ground_group_id):
-        """Associe un noeud a son indice de matrice en ignorant le groupe de masse"""
+    def _get_matrix_index(
+        self,
+        node,
+        node_groups: dict[int, int],
+        group_to_idx: dict[int, int],
+        ground_group_id: Optional[int],
+    ) -> Optional[int]:
+        """Associe un noeud a son indice de matrice en ignorant le groupe de masse."""
         if node is None:
             return None
         gid = node_groups[node.id]

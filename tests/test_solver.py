@@ -6,8 +6,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC
-from model.node import Node
-from model.wire import Wire
 from solver.dc_solver import DCSolver
 
 class TestDCSolver(unittest.TestCase):

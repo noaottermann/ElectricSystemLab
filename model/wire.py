@@ -1,26 +1,25 @@
+from __future__ import annotations
+
+from typing import Optional
+
+
 class Wire:
-    """Represente un fil electrique ideal"""
+    """Represente un fil electrique ideal."""
 
-    def __init__(self, wire_id, node_a, node_b, color="#000000"):
-        """
-        Initialise un fil
-
-        Args:
-            wire_id (int): Identifiant unique du fil
-            node_a (Node): Noeud de depart
-            node_b (Node): Noeud d'arrivee
-            color (str): Couleur du fil (code hex)
-        """
+    def __init__(self, wire_id: int, node_a, node_b, color: str = "#000000") -> None:
+        """Initialise un fil."""
         self.id = int(wire_id)
         self.node_a = node_a
         self.node_b = node_b
         self.color = color
 
-    def disconnect(self):
+    def disconnect(self) -> None:
+        """Detache le fil de ses noeuds."""
         self.node_a = None
         self.node_b = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, object]:
+        """Retourne une representation serialisable du fil."""
         return {
             "id": self.id,
             "node_a_id": self.node_a.id if self.node_a else None,
@@ -29,7 +28,8 @@ class Wire:
         }
 
     @classmethod
-    def from_dict(cls, data, nodes_dict):
+    def from_dict(cls, data: dict, nodes_dict: dict) -> Optional["Wire"]:
+        """Reconstruit un fil a partir d'un dictionnaire."""
         node_a_id = data.get("node_a_id")
         node_b_id = data.get("node_b_id")
         node_a = nodes_dict.get(node_a_id)
@@ -43,7 +43,8 @@ class Wire:
             color=data.get("color", "#000000")
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Retourne une representation textuelle du fil."""
         id_a = self.node_a.id if self.node_a is not None else None
         id_b = self.node_b.id if self.node_b is not None else None
         return f"<Wire {self.id} | Nodes: {id_a}-{id_b}>"

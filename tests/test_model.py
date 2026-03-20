@@ -1,5 +1,4 @@
 import unittest
-import json
 import sys
 import os
 
@@ -7,8 +6,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC, Capacitor
-from model.node import Node
-from model.wire import Wire
 
 class TestCircuitModel(unittest.TestCase):
     
@@ -100,6 +97,30 @@ class TestCircuitModel(unittest.TestCase):
         
         has_ground = any(n.is_ground for n in new_circuit.nodes.values())
         self.assertTrue(has_ground)
+
+    def test_merge_overlapping_nodes_keeps_ground(self):
+        """Teste la fusion des noeuds superposes en conservant la masse."""
+        n1 = self.circuit.create_node(10, 10, is_ground=True)
+        n2 = self.circuit.create_node(10, 10, is_ground=False)
+
+        merged = self.circuit.merge_overlapping_nodes()
+
+        self.assertTrue(merged)
+        self.assertEqual(len(self.circuit.nodes), 1)
+        remaining_node = next(iter(self.circuit.nodes.values()))
+        self.assertTrue(remaining_node.is_ground)
+        self.assertEqual(remaining_node.id, n1.id)
+
+    def test_merge_nodes_returns_keeper(self):
+        """Teste la fusion explicite de deux noeuds."""
+        n1 = self.circuit.create_node(0, 0)
+        n2 = self.circuit.create_node(0, 0)
+
+        keeper = self.circuit.merge_nodes(n1, n2)
+
+        self.assertIsNotNone(keeper)
+        self.assertEqual(keeper.id, n1.id)
+        self.assertEqual(len(self.circuit.nodes), 1)
 
 if __name__ == '__main__':
     unittest.main()
