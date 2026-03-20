@@ -135,7 +135,20 @@ class MainWindow(QMainWindow):
             return
 
         has_dipole = any(hasattr(item, "component") for item in selected_items)
+        has_unlocked_dipole = any(
+            hasattr(item, "component") and not getattr(item, "is_locked", lambda: False)()
+            for item in selected_items
+        )
         has_selection = bool(selected_items)
+        has_deletable = any(
+            not getattr(item, "is_locked", lambda: False)() for item in selected_items
+        )
+        has_locked = any(
+            getattr(item, "is_locked", lambda: False)() for item in selected_items
+        )
+        has_unlocked = any(
+            not getattr(item, "is_locked", lambda: False)() for item in selected_items
+        )
 
         paste_enabled = False
         if hasattr(self.scene, "has_clipboard_content"):
@@ -151,16 +164,31 @@ class MainWindow(QMainWindow):
         if hasattr(self, "toolbar_duplicate_action") and self.toolbar_duplicate_action is not None:
             self.toolbar_duplicate_action.setVisible(has_selection)
 
+        if "action_lock" in self.custom_actions:
+            self.custom_actions["action_lock"].setVisible(has_selection)
+            self.custom_actions["action_lock"].setEnabled(has_unlocked)
+        if hasattr(self, "toolbar_lock_action") and self.toolbar_lock_action is not None:
+            self.toolbar_lock_action.setVisible(has_selection)
+            self.toolbar_lock_action.setEnabled(has_unlocked)
+        if "action_unlock" in self.custom_actions:
+            self.custom_actions["action_unlock"].setVisible(has_selection)
+            self.custom_actions["action_unlock"].setEnabled(has_locked)
+        if hasattr(self, "toolbar_unlock_action") and self.toolbar_unlock_action is not None:
+            self.toolbar_unlock_action.setVisible(has_selection)
+            self.toolbar_unlock_action.setEnabled(has_locked)
+        if hasattr(self, "toolbar_lock_separator") and self.toolbar_lock_separator is not None:
+            self.toolbar_lock_separator.setVisible(has_selection)
+
         if "action_rotate" in self.custom_actions:
-            self.custom_actions["action_rotate"].setVisible(has_dipole)
+            self.custom_actions["action_rotate"].setVisible(has_unlocked_dipole)
         if "action_flip" in self.custom_actions:
-            self.custom_actions["action_flip"].setVisible(has_dipole)
+            self.custom_actions["action_flip"].setVisible(has_unlocked_dipole)
         if hasattr(self, "toolbar_transform_separator") and self.toolbar_transform_separator is not None:
-            self.toolbar_transform_separator.setVisible(has_dipole)
+            self.toolbar_transform_separator.setVisible(has_unlocked_dipole)
         if hasattr(self, "toolbar_delete_separator") and self.toolbar_delete_separator is not None:
-            self.toolbar_delete_separator.setVisible(has_selection)
+            self.toolbar_delete_separator.setVisible(has_deletable)
         if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
-            self.toolbar_delete_action.setVisible(has_selection)
+            self.toolbar_delete_action.setVisible(has_deletable)
 
     def create_actions(self):
         """Crée toutes les actions de la fenêtre principale"""
@@ -197,6 +225,8 @@ class MainWindow(QMainWindow):
         self._make_action("action_copy", QKeySequence.Copy, self.on_copy)
         self._make_action("action_paste", None, self.on_paste)
         self._make_action("action_duplicate", None, self.on_duplicate)
+        self._make_action("action_lock", None, self.on_lock)
+        self._make_action("action_unlock", None, self.on_unlock)
         self._make_action("action_delete", QKeySequence.Delete, self.delete_selected_items)
         self._make_action("action_rotate", None, self.rotate_selected_components)
         self._make_action("action_flip", None, self.flip_selected_components)
@@ -543,6 +573,15 @@ class MainWindow(QMainWindow):
         self.toolbar_duplicate_action.triggered.connect(self.on_duplicate)
         self.toolbar.addAction(self.toolbar_duplicate_action)
 
+        self.toolbar_lock_separator = self.toolbar.addSeparator()
+        self.toolbar_lock_action = QAction('', self)
+        self.toolbar_lock_action.triggered.connect(self.on_lock)
+        self.toolbar.addAction(self.toolbar_lock_action)
+
+        self.toolbar_unlock_action = QAction('', self)
+        self.toolbar_unlock_action.triggered.connect(self.on_unlock)
+        self.toolbar.addAction(self.toolbar_unlock_action)
+
         self.toolbar_transform_separator = self.toolbar.addSeparator()
         self.toolbar.addAction(self.custom_actions["action_rotate"])
         self.toolbar.addAction(self.custom_actions["action_flip"])
@@ -556,6 +595,11 @@ class MainWindow(QMainWindow):
         self.toolbar_paste_action.setEnabled(False)
         self.custom_actions["action_duplicate"].setVisible(False)
         self.toolbar_duplicate_action.setVisible(False)
+        self.custom_actions["action_lock"].setVisible(False)
+        self.custom_actions["action_unlock"].setVisible(False)
+        self.toolbar_lock_separator.setVisible(False)
+        self.toolbar_lock_action.setVisible(False)
+        self.toolbar_unlock_action.setVisible(False)
         self.custom_actions["action_rotate"].setVisible(False)
         self.custom_actions["action_flip"].setVisible(False)
         self.toolbar_transform_separator.setVisible(False)
@@ -598,6 +642,10 @@ class MainWindow(QMainWindow):
             self.toolbar_paste_action.setText(Translator.tr("action_paste"))
         if hasattr(self, "toolbar_duplicate_action") and self.toolbar_duplicate_action is not None:
             self.toolbar_duplicate_action.setText(Translator.tr("action_duplicate"))
+        if hasattr(self, "toolbar_lock_action") and self.toolbar_lock_action is not None:
+            self.toolbar_lock_action.setText(Translator.tr("action_lock"))
+        if hasattr(self, "toolbar_unlock_action") and self.toolbar_unlock_action is not None:
+            self.toolbar_unlock_action.setText(Translator.tr("action_unlock"))
         if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
             self.toolbar_delete_action.setText(Translator.tr("action_delete"))
 
@@ -665,6 +713,16 @@ class MainWindow(QMainWindow):
                 self.scene.paste_selection(view_rect=view_rect)
             else:
                 self.scene.paste_selection()
+        self._update_transform_actions_visibility()
+
+    def on_lock(self):
+        if hasattr(self, "scene"):
+            self.scene.lock_selection()
+        self._update_transform_actions_visibility()
+
+    def on_unlock(self):
+        if hasattr(self, "scene"):
+            self.scene.unlock_selection()
         self._update_transform_actions_visibility()
 
     def on_paste_near_cursor(self):

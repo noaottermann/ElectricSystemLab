@@ -18,6 +18,7 @@ class ComponentItem(QGraphicsItem):
         self._is_rotating = False
         self._rotate_start_angle = 0.0
         self._rotate_start_rotation = 0.0
+        self._locked = False
         
         # Reglages d'interaction
         self.setFlags(
@@ -53,6 +54,8 @@ class ComponentItem(QGraphicsItem):
     def itemChange(self, change, value):
         # Aimantation
         if change == QGraphicsItem.ItemPositionChange and self.scene():
+            if self._locked:
+                return self.pos()
             scene = self.scene()
             new_pos = value
             grid_size = scene.GRID_SIZE
@@ -90,6 +93,9 @@ class ComponentItem(QGraphicsItem):
             self.scene().handle_component_move(self)
 
     def mousePressEvent(self, event):
+        if self._locked:
+            event.ignore()
+            return
         if event.button() == Qt.RightButton:
             center = self.mapToScene(QPointF(0, 0))
             dx = event.scenePos().x() - center.x()
@@ -149,6 +155,12 @@ class ComponentItem(QGraphicsItem):
         
         # Met a jour la position du dipole
         self.component.position = (cx, cy)
+
+    def set_locked(self, locked):
+        self._locked = bool(locked)
+
+    def is_locked(self):
+        return self._locked
 
     def paint(self, painter, option, widget=None):
         """Dessine les limites de selection et le symbole specifique"""

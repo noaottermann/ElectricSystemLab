@@ -7,6 +7,7 @@ class WireItem(QGraphicsLineItem):
         super().__init__()
         self.wire = wire_model
         self._is_selected = False
+        self._locked = False
         
         self.setPen(QPen(Qt.black, 2))
         self.setFlags(QGraphicsItem.ItemIsSelectable | 
@@ -154,6 +155,8 @@ class WireItem(QGraphicsLineItem):
     def itemChange(self, change, value):
         # Aimantation de position
         if change == QGraphicsItem.ItemPositionChange and self.scene():
+            if self._locked:
+                return self.pos()
             new_pos = value
             grid_size = self.scene().GRID_SIZE
             x = round(new_pos.x() / grid_size) * grid_size
@@ -179,6 +182,13 @@ class WireItem(QGraphicsLineItem):
                 self.scene()._refresh_wires_for_node(self.wire.node_b)
 
         return super().itemChange(change, value)
+
+    def set_locked(self, locked):
+        self._locked = bool(locked)
+        self.setFlag(QGraphicsItem.ItemIsMovable, not self._locked)
+
+    def is_locked(self):
+        return self._locked
 
     def mouseReleaseEvent(self, event):
         """Finalise le glisser d'un fil entier"""

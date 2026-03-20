@@ -15,6 +15,7 @@ class NodeItem(QGraphicsEllipseItem):
         self._drag_active = False
         self._undo_snapshot_taken = False
         self._drag_offset = QPointF(0, 0)
+        self._locked = False
 
         self.setFlags(
             QGraphicsItem.ItemIsSelectable
@@ -52,6 +53,9 @@ class NodeItem(QGraphicsEllipseItem):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            if self._locked:
+                event.ignore()
+                return
             self._drag_active = True
             self._undo_snapshot_taken = False
             self.setCursor(Qt.ClosedHandCursor)
@@ -137,3 +141,9 @@ class NodeItem(QGraphicsEllipseItem):
         # Evite un re-snapping implicite a la grille qui peut decaler un noeud connecte
         # a une borne de dipole hors grille.
         return super().itemChange(change, value)
+
+    def set_locked(self, locked):
+        self._locked = bool(locked)
+
+    def is_locked(self):
+        return self._locked

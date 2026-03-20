@@ -917,6 +917,8 @@ class CircuitScene(QGraphicsScene):
         selected_wire_endpoint_counts = {}
         selected_free_nodes = set()
         for selected_item in self.selectedItems():
+            if hasattr(selected_item, "is_locked") and selected_item.is_locked():
+                continue
             if isinstance(selected_item, ComponentItem):
                 selected_component_nodes.add(selected_item.component.node_a)
                 selected_component_nodes.add(selected_item.component.node_b)
@@ -951,14 +953,20 @@ class CircuitScene(QGraphicsScene):
             # Cela evite de deplacer deux fois le meme noeud quand son fil est aussi selectionne.
             for item in self.selectedItems():
                 if isinstance(item, NodeItem):
+                    if hasattr(item, "is_locked") and item.is_locked():
+                        continue
                     item.setPos(item.pos() + grid_delta)
                     item.node.position = (item.pos().x(), item.pos().y())
                     moved_wire_node_ids.add(id(item.node))
 
             for item in self.selectedItems():
                 if isinstance(item, ComponentItem):
+                    if hasattr(item, "is_locked") and item.is_locked():
+                        continue
                     item.setPos(item.pos() + grid_delta)
                 elif isinstance(item, WireItem):
+                    if hasattr(item, "is_locked") and item.is_locked():
+                        continue
                     detach = True
                     if selected_component_nodes:
                         if item.wire.node_a in selected_component_nodes or item.wire.node_b in selected_component_nodes:
@@ -1550,12 +1558,24 @@ class CircuitScene(QGraphicsScene):
         self._push_undo_snapshot()
 
         for item in selected_components:
+            if hasattr(item, "is_locked") and item.is_locked():
+                continue
             new_rotation = (item.rotation() + angle_degrees) % 360
             item.setRotation(new_rotation)
             item.component.rotation = float(new_rotation)
             self.update_wires_connected_to(item.component, item.pos(), new_rotation)
 
         return True
+
+    def lock_selection(self):
+        for item in self.selectedItems():
+            if hasattr(item, "set_locked"):
+                item.set_locked(True)
+
+    def unlock_selection(self):
+        for item in self.selectedItems():
+            if hasattr(item, "set_locked"):
+                item.set_locked(False)
 
     def delete_selection(self):
         """Supprime tous les elements selectionnes"""
@@ -1567,6 +1587,8 @@ class CircuitScene(QGraphicsScene):
         candidate_nodes = []
 
         for item in selected:
+            if hasattr(item, "is_locked") and item.is_locked():
+                continue
             # Supprime du modele
             if hasattr(item, 'component'):
                 if item.component.node_a is not None:
