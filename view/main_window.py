@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
             return
 
         has_dipole = any(hasattr(item, "component") for item in selected_items)
+        has_selection = bool(selected_items)
 
         paste_enabled = False
         if hasattr(self.scene, "has_clipboard_content"):
@@ -144,6 +145,11 @@ class MainWindow(QMainWindow):
             self.custom_actions["action_paste"].setEnabled(paste_enabled)
         if hasattr(self, "toolbar_paste_action") and self.toolbar_paste_action is not None:
             self.toolbar_paste_action.setEnabled(paste_enabled)
+
+        if "action_duplicate" in self.custom_actions:
+            self.custom_actions["action_duplicate"].setVisible(has_selection)
+        if hasattr(self, "toolbar_duplicate_action") and self.toolbar_duplicate_action is not None:
+            self.toolbar_duplicate_action.setVisible(has_selection)
 
         if "action_rotate" in self.custom_actions:
             self.custom_actions["action_rotate"].setVisible(has_dipole)
@@ -186,6 +192,7 @@ class MainWindow(QMainWindow):
         self._make_action("action_cut", QKeySequence.Cut, self.on_cut)
         self._make_action("action_copy", QKeySequence.Copy, self.on_copy)
         self._make_action("action_paste", None, self.on_paste)
+        self._make_action("action_duplicate", None, self.on_duplicate)
         self._make_action("action_rotate", None, self.rotate_selected_components)
         self._make_action("action_flip", None, self.flip_selected_components)
 
@@ -527,12 +534,18 @@ class MainWindow(QMainWindow):
         self.toolbar_paste_action.triggered.connect(self.on_paste)
         self.toolbar.addAction(self.toolbar_paste_action)
 
+        self.toolbar_duplicate_action = QAction('', self)
+        self.toolbar_duplicate_action.triggered.connect(self.on_duplicate)
+        self.toolbar.addAction(self.toolbar_duplicate_action)
+
         self.toolbar_transform_separator = self.toolbar.addSeparator()
         self.toolbar.addAction(self.custom_actions["action_rotate"])
         self.toolbar.addAction(self.custom_actions["action_flip"])
 
         self.custom_actions["action_paste"].setEnabled(False)
         self.toolbar_paste_action.setEnabled(False)
+        self.custom_actions["action_duplicate"].setVisible(False)
+        self.toolbar_duplicate_action.setVisible(False)
         self.custom_actions["action_rotate"].setVisible(False)
         self.custom_actions["action_flip"].setVisible(False)
         self.toolbar_transform_separator.setVisible(False)
@@ -571,6 +584,8 @@ class MainWindow(QMainWindow):
             self.toolbar_copy_action.setText(Translator.tr("action_copy"))
         if hasattr(self, "toolbar_paste_action") and self.toolbar_paste_action is not None:
             self.toolbar_paste_action.setText(Translator.tr("action_paste"))
+        if hasattr(self, "toolbar_duplicate_action") and self.toolbar_duplicate_action is not None:
+            self.toolbar_duplicate_action.setText(Translator.tr("action_duplicate"))
 
     def change_language(self, lang):
         """Change la langue et rafraîchit l'interface"""
@@ -619,7 +634,23 @@ class MainWindow(QMainWindow):
 
     def on_paste(self):
         if hasattr(self, "scene"):
-            self.scene.paste_selection()
+            if hasattr(self, "view"):
+                view_rect = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
+                self.scene.paste_selection(view_rect=view_rect)
+            else:
+                self.scene.paste_selection()
+        self._update_transform_actions_visibility()
+
+    def on_duplicate(self):
+        if hasattr(self, "scene"):
+            if not self.scene.copy_selection():
+                self._update_transform_actions_visibility()
+                return
+            if hasattr(self, "view"):
+                view_rect = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
+                self.scene.paste_selection(view_rect=view_rect)
+            else:
+                self.scene.paste_selection()
         self._update_transform_actions_visibility()
 
     def on_paste_near_cursor(self):
@@ -632,7 +663,7 @@ class MainWindow(QMainWindow):
             cursor_global_pos = QCursor.pos()
             cursor_view_pos = self.view.mapFromGlobal(cursor_global_pos)
             cursor_scene_pos = self.view.mapToScene(cursor_view_pos)
-            self.scene.paste_selection(cursor_scene_pos)
+            self.scene.paste_selection(target_scene_pos=cursor_scene_pos)
         elif hasattr(self, "scene"):
             self.scene.paste_selection()
         self._update_transform_actions_visibility()

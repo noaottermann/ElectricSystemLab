@@ -445,6 +445,64 @@ class CircuitScene(QGraphicsScene):
             return None
         return min(xs), min(ys), max(xs), max(ys)
 
+    def _payload_overlaps_existing(self, min_x, min_y, max_x, max_y, margin=0.0):
+        if self.model is None:
+            return False
+        min_x -= margin
+        min_y -= margin
+        max_x += margin
+        max_y += margin
+
+        for dipole in self.model.dipoles.values():
+            cx, cy = dipole.position
+            if min_x <= cx <= max_x and min_y <= cy <= max_y:
+                return True
+
+        for node in self.model.nodes.values():
+            nx, ny = node.position
+            if min_x <= nx <= max_x and min_y <= ny <= max_y:
+                return True
+
+        return False
+
+    def _find_free_paste_offset(self, bounds, margin):
+        if bounds is None:
+            return 0.0, 0.0
+        min_x, min_y, max_x, max_y = bounds
+        width = max_x - min_x
+        height = max_y - min_y
+        step = max(width, height) + margin
+        if step <= 0:
+            step = float(self.GRID_SIZE)
+
+        candidates = [(0.0, 0.0)]
+        for i in range(1, 21):
+            shift = float(step * i)
+            candidates.extend(
+                [
+                    (shift, 0.0),
+                    (0.0, shift),
+                    (-shift, 0.0),
+                    (0.0, -shift),
+                    (shift, shift),
+                    (-shift, shift),
+                    (shift, -shift),
+                    (-shift, -shift),
+                ]
+            )
+
+        for offset_x, offset_y in candidates:
+            if not self._payload_overlaps_existing(
+                min_x + offset_x,
+                min_y + offset_y,
+                max_x + offset_x,
+                max_y + offset_y,
+                margin=margin,
+            ):
+                return offset_x, offset_y
+
+        return float(step), 0.0
+
     def _paste_create_or_get_node(self, node_cache, x, y, is_ground=False):
         key = self._clipboard_key(x, y)
         existing = node_cache.get(key)
@@ -501,7 +559,7 @@ class CircuitScene(QGraphicsScene):
         node_cache[self._clipboard_key(bx, by)] = node_b
         return item
 
-    def paste_selection(self, target_scene_pos=None):
+    def paste_selection(self, target_scene_pos=None, view_rect=None):
         if not self._clipboard_payload:
             return False
 
@@ -526,9 +584,14 @@ class CircuitScene(QGraphicsScene):
             offset_x = float(target_x) - payload_center_x
             offset_y = float(target_y) - payload_center_y
         else:
-            offset_value = float(self.GRID_SIZE * (self._clipboard_paste_count + 1))
-            offset_x = offset_value
-            offset_y = offset_value
+            margin = float(self.GRID_SIZE * 2)
+            offset = None
+            if view_rect is not None:
+                offset = self._find_free_paste_offset_in_rect(bounds, view_rect, margin)
+            if offset is None:
+                offset_x, offset_y = self._find_free_paste_offset(bounds, margin)
+            else:
+                offset_x, offset_y = offset
 
         node_cache = {}
 
@@ -563,6 +626,49 @@ class CircuitScene(QGraphicsScene):
         self._merge_overlaps_and_refresh()
         self._sync_free_node_items_from_model()
         return True
+
+    def _find_free_paste_offset_in_rect(self, bounds, view_rect, margin):
+        if bounds is None or view_rect is None:
+            return None
+        min_x, min_y, max_x, max_y = bounds
+
+        view_left = view_rect.left() + margin
+        view_right = view_rect.right() - margin
+        view_top = view_rect.top() + margin
+        view_bottom = view_rect.bottom() - margin
+
+        min_offset_x = view_left - min_x
+        max_offset_x = view_right - max_x
+        min_offset_y = view_top - min_y
+        max_offset_y = view_bottom - max_y
+
+        if min_offset_x > max_offset_x or min_offset_y > max_offset_y:
+            return None
+
+        step = max(1, int(self.GRID_SIZE))
+        offsets = []
+        start_x = int(min_offset_x // step) * step
+        end_x = int(max_offset_x // step) * step
+        start_y = int(min_offset_y // step) * step
+        end_y = int(max_offset_y // step) * step
+
+        for dx in range(start_x, end_x + step, step):
+            for dy in range(start_y, end_y + step, step):
+                offsets.append((float(dx), float(dy)))
+
+        offsets.sort(key=lambda v: abs(v[0]) + abs(v[1]))
+
+        for offset_x, offset_y in offsets:
+            if not self._payload_overlaps_existing(
+                min_x + offset_x,
+                min_y + offset_y,
+                max_x + offset_x,
+                max_y + offset_y,
+                margin=margin,
+            ):
+                return offset_x, offset_y
+
+        return None
 
     def drawBackground(self, painter, rect):
         """Dessine la grille de points de fond pour l'alignement"""
