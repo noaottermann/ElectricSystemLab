@@ -358,6 +358,10 @@ class MainWindow(QMainWindow):
         # Collage près du curseur uniquement via Ctrl+V
         self.shortcut_paste_near_cursor = QShortcut(QKeySequence.Paste, self)
         self.shortcut_paste_near_cursor.activated.connect(self.on_paste_near_cursor)
+
+        # Retour rapide a l'outil de selection
+        self.shortcut_tool_pointer = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.shortcut_tool_pointer.activated.connect(lambda: self.set_tool("pointer"))
         
         # Les raccourcis d'outils sont supprimes pour privilegier la liste des composants.
 

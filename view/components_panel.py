@@ -79,7 +79,7 @@ class ComponentsPanel(QWidget):
 		self._sync_category_item_widths()
 		self.category_list.currentItemChanged.connect(self._on_category_changed)
 		self.category_list.itemClicked.connect(self._on_category_clicked)
-		self.components_list.itemDoubleClicked.connect(self._on_component_double_clicked)
+		self.components_list.itemClicked.connect(self._on_component_clicked)
 
 		self._app = QApplication.instance()
 		if self._app is not None:
@@ -100,15 +100,7 @@ class ComponentsPanel(QWidget):
 		super().closeEvent(event)
 
 	def eventFilter(self, watched: object, event: object) -> bool:
-		"""Efface la selection lorsque l'utilisateur clique hors du panneau."""
-		if event.type() == QEvent.MouseButtonPress:
-			target = None
-			if hasattr(event, "globalPos"):
-				target = QApplication.widgetAt(event.globalPos())
-
-			if target is None or (target is not self and not self.isAncestorOf(target)):
-				self._clear_component_selection()
-
+		"""Laisse la selection active meme si l'utilisateur clique hors du panneau."""
 		return super().eventFilter(watched, event)
 
 	def _clear_component_selection(self) -> None:
@@ -281,8 +273,8 @@ class ComponentsPanel(QWidget):
 		category_key = item.data(Qt.UserRole)
 		self._scroll_to_category(category_key)
 
-	def _on_component_double_clicked(self, item: Optional[QListWidgetItem]) -> None:
-		"""Emet le signal tool_selected lorsqu'un composant est double-clique"""
+	def _on_component_clicked(self, item: Optional[QListWidgetItem]) -> None:
+		"""Emet le signal tool_selected lorsqu'un composant est clique."""
 		if item is None:
 			return
 		component_id = item.data(Qt.UserRole)
