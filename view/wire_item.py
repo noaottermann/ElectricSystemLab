@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QLineF, QPointF, Qt
 from PyQt5.QtGui import QColor, QPainterPath, QPainterPathStroker, QPen
 from PyQt5.QtWidgets import QGraphicsItem, QGraphicsLineItem
+from typing import Optional
 
 class WireItem(QGraphicsLineItem):
     """Element graphique representant un fil."""

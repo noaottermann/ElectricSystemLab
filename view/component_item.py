@@ -106,7 +106,11 @@ class ComponentItem(QGraphicsItem):
     def mousePressEvent(self, event) -> None:
         """Prepare un glisser ou une rotation selon le bouton."""
         if self._locked:
-            event.ignore()
+            # Autorise la selection mais bloque les interactions de deplacement/rotation.
+            if event.button() == Qt.RightButton:
+                event.ignore()
+                return
+            super().mousePressEvent(event)
             return
         if event.button() == Qt.RightButton:
             center = self.mapToScene(QPointF(0, 0))
