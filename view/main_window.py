@@ -359,21 +359,7 @@ class MainWindow(QMainWindow):
         self.shortcut_paste_near_cursor = QShortcut(QKeySequence.Paste, self)
         self.shortcut_paste_near_cursor.activated.connect(self.on_paste_near_cursor)
         
-        # Raccourcis de test
-        self.shortcut_tool_pointer = QShortcut(QKeySequence("V"), self)
-        self.shortcut_tool_pointer.activated.connect(lambda: self.set_tool("pointer"))
-        self.shortcut_tool_wire = QShortcut(QKeySequence("W"), self)
-        self.shortcut_tool_wire.activated.connect(lambda: self.set_tool("wire"))
-        self.shortcut_tool_resistor = QShortcut(QKeySequence("R"), self)
-        self.shortcut_tool_resistor.activated.connect(lambda: self.set_tool("resistor"))
-        self.shortcut_tool_source_dc = QShortcut(QKeySequence("D"), self)
-        self.shortcut_tool_source_dc.activated.connect(lambda: self.set_tool("source_dc"))
-        self.shortcut_tool_source_ac = QShortcut(QKeySequence("A"), self)
-        self.shortcut_tool_source_ac.activated.connect(lambda: self.set_tool("source_ac"))
-        self.shortcut_tool_capacitor = QShortcut(QKeySequence("C"), self)
-        self.shortcut_tool_capacitor.activated.connect(lambda: self.set_tool("capacitor"))
-        self.shortcut_tool_inductor = QShortcut(QKeySequence("L"), self)
-        self.shortcut_tool_inductor.activated.connect(lambda: self.set_tool("inductor"))
+        # Les raccourcis d'outils sont supprimes pour privilegier la liste des composants.
 
     def set_tool(self, tool_name: str) -> None:
         """Change l'outil actif pour la scene et la vue."""

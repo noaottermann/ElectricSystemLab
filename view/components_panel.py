@@ -191,6 +191,12 @@ class ComponentsPanel(QWidget):
 		"""Construit la liste des categories par defaut."""
 		return [
 			{
+				"key": "connections",
+				"label": "Connexions",
+				"icon": "categories/connections.png",
+				"color": "#7a6a3a",
+			},
+			{
 				"key": "sources",
 				"label": "Sources",
 				"icon": "categories/sources.png",
@@ -198,45 +204,22 @@ class ComponentsPanel(QWidget):
 			},
 			{
 				"key": "passive",
-				"label": "Passif",
+				"label": "Passifs",
 				"icon": "categories/passive.png",
 				"color": "#247ba0",
-			},
-			{
-				"key": "measurement",
-				"label": "Mesure",
-				"icon": "categories/measurement.png",
-				"color": "#70c1b3",
 			},
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
 		"""Construit les composants par defaut affiches dans la liste."""
-		fake_sources = [
-			{
-				"id": f"source_fake_{i}",
-				"label": f"Source {i}",
-				"icon": "components/placeholder.png",
-			}
-			for i in range(1, 11)
-		]
-		fake_passive = [
-			{
-				"id": f"passive_fake_{i}",
-				"label": f"Passif {i}",
-				"icon": "components/placeholder.png",
-			}
-			for i in range(1, 11)
-		]
-		fake_measurement = [
-			{
-				"id": f"measurement_fake_{i}",
-				"label": f"Mesure {i}",
-				"icon": "components/placeholder.png",
-			}
-			for i in range(1, 11)
-		]
 		return {
+			"connections": [
+				{
+					"id": "wire",
+					"label": "Fil",
+					"icon": "components/placeholder.png",
+				},
+			],
 			"sources": [
 				{
 					"id": "source_dc",
@@ -248,8 +231,7 @@ class ComponentsPanel(QWidget):
 					"label": "Source AC",
 					"icon": "components/source_ac.png",
 				},
-			]
-			+ fake_sources,
+			],
 			"passive": [
 				{
 					"id": "resistor",
@@ -266,9 +248,7 @@ class ComponentsPanel(QWidget):
 					"label": "Inductance",
 					"icon": "components/inductor.png",
 				},
-			]
-			+ fake_passive,
-			"measurement": fake_measurement,
+			],
 		}
 
 	def _populate_categories(self) -> None:
@@ -520,6 +500,8 @@ class ComponentsListWidget(QListWidget):
 
 		component_id = item.data(Qt.UserRole)
 		if not component_id or (isinstance(component_id, str) and component_id.startswith("header:")):
+			return
+		if component_id == "wire":
 			return
 
 		mime = QMimeData()
