@@ -1065,6 +1065,7 @@ class CircuitScene(QGraphicsScene):
         selected_component_nodes = set()
         selected_wire_endpoint_counts = {}
         selected_free_nodes = set()
+        selected_wire_items = []
         for selected_item in self.selectedItems():
             if hasattr(selected_item, "is_locked") and selected_item.is_locked():
                 continue
@@ -1072,6 +1073,7 @@ class CircuitScene(QGraphicsScene):
                 selected_component_nodes.add(selected_item.component.node_a)
                 selected_component_nodes.add(selected_item.component.node_b)
             elif isinstance(selected_item, WireItem):
+                selected_wire_items.append(selected_item)
                 node_a = selected_item.wire.node_a
                 node_b = selected_item.wire.node_b
                 if node_a is not None:
@@ -1080,6 +1082,17 @@ class CircuitScene(QGraphicsScene):
                     selected_wire_endpoint_counts[node_b] = selected_wire_endpoint_counts.get(node_b, 0) + 1
             elif isinstance(selected_item, NodeItem):
                 selected_free_nodes.add(selected_item.node)
+
+        if selected_wire_items and not selected_component_nodes:
+            self._detach_selected_wires_from_dipoles(selected_wire_items)
+            selected_wire_endpoint_counts = {}
+            for selected_item in selected_wire_items:
+                node_a = selected_item.wire.node_a
+                node_b = selected_item.wire.node_b
+                if node_a is not None:
+                    selected_wire_endpoint_counts[node_a] = selected_wire_endpoint_counts.get(node_a, 0) + 1
+                if node_b is not None:
+                    selected_wire_endpoint_counts[node_b] = selected_wire_endpoint_counts.get(node_b, 0) + 1
 
         preserve_internal_nodes = set(selected_component_nodes)
         preserve_internal_nodes.update(selected_free_nodes)
@@ -1135,6 +1148,33 @@ class CircuitScene(QGraphicsScene):
 
         event.accept()
         return True
+
+    def _detach_selected_wires_from_dipoles(self, selected_wire_items: list[WireItem]) -> None:
+        """Detache les fils selectionnes des noeuds de dipoles en conservant un noeud partage."""
+        if self.model is None:
+            return
+
+        remap = {}
+
+        for item in selected_wire_items:
+            wire = getattr(item, "wire", None)
+            if wire is None:
+                continue
+
+            for attr in ("node_a", "node_b"):
+                node = getattr(wire, attr, None)
+                if node is None:
+                    continue
+                if not self._is_node_attached_to_dipole(node):
+                    continue
+
+                new_node = remap.get(node)
+                if new_node is None:
+                    nx, ny = node.position
+                    new_node = self.model.create_node(float(nx), float(ny))
+                    remap[node] = new_node
+
+                setattr(wire, attr, new_node)
 
     def _handle_pointer_release(self, event: object) -> bool:
         """Finalise un deplacement de groupe en mode pointeur."""
