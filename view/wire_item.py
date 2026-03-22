@@ -87,8 +87,12 @@ class WireItem(QGraphicsLineItem):
         x_pos += delta.x()
         y_pos += delta.y()
         if should_snap:
-            snapped = scene.get_snapped_position(QPointF(x_pos, y_pos))
-            node.position = (snapped[0], snapped[1])
+            if hasattr(scene, "get_wire_snap_position"):
+                snapped_point = scene.get_wire_snap_position(node, x_pos, y_pos)
+                node.position = (snapped_point.x(), snapped_point.y())
+            else:
+                snapped = scene.get_snapped_position(QPointF(x_pos, y_pos))
+                node.position = (snapped[0], snapped[1])
         else:
             node.position = (x_pos, y_pos)
 

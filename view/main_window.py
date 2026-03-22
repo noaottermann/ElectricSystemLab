@@ -361,7 +361,7 @@ class MainWindow(QMainWindow):
 
         # Retour rapide a l'outil de selection
         self.shortcut_tool_pointer = QShortcut(QKeySequence(Qt.Key_Escape), self)
-        self.shortcut_tool_pointer.activated.connect(lambda: self.set_tool("pointer"))
+        self.shortcut_tool_pointer.activated.connect(self._reset_tool_selection)
         
         # Les raccourcis d'outils sont supprimes pour privilegier la liste des composants.
 
@@ -391,6 +391,13 @@ class MainWindow(QMainWindow):
             if hasattr(self, "view"):
                 self.view.setCursor(Qt.CrossCursor)
                 self.view.viewport().setCursor(Qt.CrossCursor)
+
+    def _reset_tool_selection(self) -> None:
+        """Revient a l'outil pointeur et efface la selection des composants."""
+        self.set_tool("pointer")
+        if hasattr(self, "components_panel") and self.components_panel is not None:
+            if hasattr(self.components_panel, "clear_component_selection"):
+                self.components_panel.clear_component_selection()
 
 
     def setup_menus(self) -> None:

@@ -108,6 +108,10 @@ class ComponentsPanel(QWidget):
 		self.components_list.clearSelection()
 		self.components_list.setCurrentRow(-1)
 
+	def clear_component_selection(self) -> None:
+		"""Expose la reinitialisation de la selection des composants."""
+		self._clear_component_selection()
+
 	def _wrap_category_list(self) -> QFrame:
 		"""Construit la colonne des categories."""
 		frame = QFrame()

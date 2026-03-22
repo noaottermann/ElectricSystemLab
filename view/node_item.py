@@ -17,6 +17,7 @@ class NodeItem(QGraphicsEllipseItem):
         self._undo_snapshot_taken = False
         self._drag_offset = QPointF(0, 0)
         self._locked = False
+        self._snap_candidate = False
 
         self.setFlags(
             QGraphicsItem.ItemIsSelectable
@@ -54,6 +55,16 @@ class NodeItem(QGraphicsEllipseItem):
         painter.setPen(self.pen())
         painter.setBrush(self.brush())
         painter.drawEllipse(self.rect())
+
+    def set_snap_candidate(self, is_candidate: bool) -> None:
+        """Marque le noeud comme candidat a l'aimantation."""
+        self._snap_candidate = bool(is_candidate)
+        if self._snap_candidate:
+            self.setBrush(QBrush(QColor(0, 200, 100)))
+        else:
+            if self.brush().color() == QColor("#0078d7"):
+                return
+            self.setBrush(QBrush(QColor(Qt.black)))
 
     def mousePressEvent(self, event) -> None:
         """Demarre un glisser du noeud."""

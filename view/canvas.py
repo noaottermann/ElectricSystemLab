@@ -237,6 +237,10 @@ class CircuitScene(QGraphicsScene):
     """Scene qui heberge les elements et gere la logique d'edition"""
     # Reglages de la grille
     GRID_SIZE = 20
+    WIRE_SNAP_THRESHOLD = 15.0
+    WIRE_SNAP_ANGLE_WEIGHT = 0.3
+    WIRE_SNAP_MIN_ANGLE_DIFF = 15.0
+    WIRE_SNAP_VISUAL_FEEDBACK = True
 
     def __init__(self, model) -> None:
         """Initialise la scene de circuit et son etat interne."""
@@ -257,6 +261,8 @@ class CircuitScene(QGraphicsScene):
         self._press_scene_pos: Optional[QPointF] = None
         self._suppress_move_until_release = False
         self._selection_snapshot: Optional[list] = None
+        self._snap_candidates: dict[object, float] = {}
+        self._last_snap_target = None
 
         # Etat d'annulation (stocke des instantanes complets du circuit avant edition)
         self._undo_stack: list[dict] = []
@@ -792,6 +798,51 @@ class CircuitScene(QGraphicsScene):
         
         return self.snap_to_grid(scene_pos)
 
+    def _calculate_snap_score(
+        self,
+        source_pos: tuple[float, float],
+        cursor_pos: tuple[float, float],
+        target_pos: tuple[float, float],
+    ) -> float:
+        """Calcule un score d'aimantation (plus petit = meilleur)."""
+        sx, sy = source_pos
+        cx, cy = cursor_pos
+        tx, ty = target_pos
+
+        dist = ((cx - tx) ** 2 + (cy - ty) ** 2) ** 0.5
+
+        if (sx, sy) == (cx, cy):
+            return dist
+
+        angle_to_target = math.degrees(math.atan2(ty - sy, tx - sx))
+        angle_to_cursor = math.degrees(math.atan2(cy - sy, cx - sx))
+        diff = abs(angle_to_target - angle_to_cursor)
+        diff = min(diff, 360 - diff)
+
+        angle_penalty = 0.0
+        if diff >= self.WIRE_SNAP_MIN_ANGLE_DIFF:
+            angle_penalty = diff
+
+        return dist + (angle_penalty * self.WIRE_SNAP_ANGLE_WEIGHT)
+
+    def _update_snap_candidate_visuals(self) -> None:
+        """Met a jour le feedback visuel des candidats d'aimantation."""
+        if not self.WIRE_SNAP_VISUAL_FEEDBACK:
+            return
+        target = self._last_snap_target
+        for item in self.items():
+            if not isinstance(item, NodeItem):
+                continue
+            node = getattr(item, "node", None)
+            is_candidate = node is not None and node is target
+            item.set_snap_candidate(is_candidate)
+
+    def _clear_snap_candidates(self) -> None:
+        """Reinitialise les candidats d'aimantation."""
+        self._snap_candidates.clear()
+        self._last_snap_target = None
+        self._update_snap_candidate_visuals()
+
     def get_smart_snapped_component_position(
         self, component_model, proposed_pos: QPointF, rotation: float
     ) -> QPointF:
@@ -880,8 +931,14 @@ class CircuitScene(QGraphicsScene):
 
         if self.current_tool == "wire" and self.drawing_wire:
             scene_pos = event.scenePos()
-            grid_x, grid_y = self.get_snapped_position(scene_pos)
-            self.finish_wire_drawing(grid_x, grid_y)
+            snapped = self.get_wire_snap_position(
+                None,
+                scene_pos.x(),
+                scene_pos.y(),
+                self.WIRE_SNAP_THRESHOLD,
+                source_pos=self.start_pos,
+            )
+            self.finish_wire_drawing(snapped.x(), snapped.y())
             event.accept()
         else:
             super().mouseReleaseEvent(event)
@@ -979,9 +1036,15 @@ class CircuitScene(QGraphicsScene):
         if self.current_tool != "wire" or not self.drawing_wire or not self.temp_wire_item:
             return False
         new_pos = event.scenePos()
-        grid_x, grid_y = self.get_snapped_position(new_pos)
+        snapped = self.get_wire_snap_position(
+            None,
+            new_pos.x(),
+            new_pos.y(),
+            self.WIRE_SNAP_THRESHOLD,
+            source_pos=self.start_pos,
+        )
         line = self.temp_wire_item.line()
-        line.setP2(QPointF(grid_x, grid_y))
+        line.setP2(QPointF(snapped.x(), snapped.y()))
         self.temp_wire_item.setLine(line)
         super().mouseMoveEvent(event)
         return True
@@ -1057,11 +1120,12 @@ class CircuitScene(QGraphicsScene):
                     if selected_component_nodes:
                         if item.wire.node_a in selected_component_nodes or item.wire.node_b in selected_component_nodes:
                             detach = False
+                    snap_endpoints = detach and not selected_component_nodes
                     item.apply_scene_delta(
                         grid_delta,
                         detach_shared_nodes=detach,
                         moved_node_ids=moved_wire_node_ids,
-                        snap_endpoints=False,
+                        snap_endpoints=snap_endpoints,
                         preserve_node_model_ids=preserve_node_model_ids,
                     )
 
@@ -1490,7 +1554,12 @@ class CircuitScene(QGraphicsScene):
         current_y = node_item.pos().y()
 
         # Priorite : conserver un rattachement exact a un noeud connectable proche
-        snapped_node = self._find_nearest_connectable_node_for_wire(node, current_x, current_y, 15)
+        snapped_node = self._find_nearest_connectable_node_for_wire(
+            node,
+            current_x,
+            current_y,
+            self.WIRE_SNAP_THRESHOLD,
+        )
         if snapped_node is not None:
             node = self._reattach_wire_node(node, snapped_node)
             x, y = node.position
@@ -1501,13 +1570,28 @@ class CircuitScene(QGraphicsScene):
         self._merge_overlaps_and_refresh()
         self._refresh_wires_for_node(node)
         self._sync_free_node_items_from_model()
+        self._clear_snap_candidates()
 
     def _find_nearest_connectable_node_for_wire(
-        self, source_node, x: float, y: float, threshold: float
+        self,
+        source_node,
+        x: float,
+        y: float,
+        threshold: float,
+        source_pos: Optional[tuple[float, float]] = None,
     ) -> Optional[object]:
         """Retourne le noeud connectable le plus proche d'un bout de fil."""
         nearest_node = None
-        nearest_dist = None
+        best_score = None
+        cursor_pos = (float(x), float(y))
+        if source_pos is not None:
+            source_pos = (float(source_pos[0]), float(source_pos[1]))
+        elif source_node is not None:
+            source_pos = (float(source_node.position[0]), float(source_node.position[1]))
+        else:
+            source_pos = cursor_pos
+
+        self._snap_candidates = {}
 
         for dipole in self.model.dipoles.values():
             for node in (dipole.node_a, dipole.node_b):
@@ -1517,9 +1601,11 @@ class CircuitScene(QGraphicsScene):
                 dist = ((x - nx) ** 2 + (y - ny) ** 2) ** 0.5
                 if dist > threshold:
                     continue
-                if nearest_dist is None or dist < nearest_dist:
+                score = self._calculate_snap_score(source_pos, cursor_pos, (nx, ny))
+                self._snap_candidates[node] = score
+                if best_score is None or score < best_score:
                     nearest_node = node
-                    nearest_dist = dist
+                    best_score = score
 
         for node in self.model.nodes.values():
             if node is source_node or not self._is_free_wire_endpoint(node):
@@ -1528,18 +1614,38 @@ class CircuitScene(QGraphicsScene):
             dist = ((x - nx) ** 2 + (y - ny) ** 2) ** 0.5
             if dist > threshold:
                 continue
-            if nearest_dist is None or dist < nearest_dist:
+            score = self._calculate_snap_score(source_pos, cursor_pos, (nx, ny))
+            self._snap_candidates[node] = score
+            if best_score is None or score < best_score:
                 nearest_node = node
-                nearest_dist = dist
+                best_score = score
 
+        self._last_snap_target = nearest_node
+        self._update_snap_candidate_visuals()
         return nearest_node
 
-    def get_wire_snap_position(self, source_node, x: float, y: float, threshold: float = 15) -> QPointF:
+    def get_wire_snap_position(
+        self,
+        source_node,
+        x: float,
+        y: float,
+        threshold: Optional[float] = None,
+        source_pos: Optional[tuple[float, float]] = None,
+    ) -> QPointF:
         """Retourne la position d'aimantation pour un bout de fil pendant le drag."""
-        target_node = self._find_nearest_connectable_node_for_wire(source_node, x, y, threshold)
+        if threshold is None:
+            threshold = self.WIRE_SNAP_THRESHOLD
+        target_node = self._find_nearest_connectable_node_for_wire(
+            source_node,
+            x,
+            y,
+            threshold,
+            source_pos=source_pos,
+        )
         if target_node is not None:
             tx, ty = target_node.position
             return QPointF(tx, ty)
+        self._clear_snap_candidates()
         snapped_x, snapped_y = self.snap_to_grid(QPointF(x, y))
         return QPointF(snapped_x, snapped_y)
 
@@ -1556,6 +1662,7 @@ class CircuitScene(QGraphicsScene):
         """Demarre le dessin interactif d'un fil."""
         self.drawing_wire = True
         self.start_pos = (x, y)
+        self._clear_snap_candidates()
         
         # Apercu temporaire du fil
         self.temp_wire_item = QGraphicsLineItem(x, y, x, y)
@@ -1572,6 +1679,7 @@ class CircuitScene(QGraphicsScene):
         self.removeItem(self.temp_wire_item)
         self.temp_wire_item = None
         self.drawing_wire = False
+        self._clear_snap_candidates()
         
         # N'ajoute pas de fil de longueur nulle
         if start_x == x and start_y == y:
@@ -1633,6 +1741,7 @@ class CircuitScene(QGraphicsScene):
             self.removeItem(self.temp_wire_item)
             self.temp_wire_item = None
         self.drawing_wire = False
+        self._clear_snap_candidates()
 
     def handle_wire_move(self, wire_item: WireItem, record_undo: bool = True) -> None:
         """Met a jour le modele et reinitialise le visuel apres un deplacement de fil."""
@@ -1643,7 +1752,7 @@ class CircuitScene(QGraphicsScene):
         delta = wire_item.pos()
         if delta.manhattanLength() > 0.1:
             wire_item.setPos(0, 0)
-            wire_item.apply_scene_delta(delta, detach_shared_nodes=True, snap_endpoints=False)
+            wire_item.apply_scene_delta(delta, detach_shared_nodes=True, snap_endpoints=True)
             wire_item.refresh_geometry()
         else:
             wire_item.refresh_geometry()
