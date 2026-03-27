@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QCursor, QKeySequence
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
@@ -11,6 +11,11 @@ from PyQt5.QtWidgets import (
     QToolBar,
     QWidget,
 )
+from controller.app_controller import AppController
+from controller.circuit_controller import CircuitController
+from controller.edit_controller import EditController
+from controller.file_controller import FileController
+from controller.simulation_controller import SimulationController
 from utils.translator import Translator
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
@@ -26,6 +31,7 @@ class MainWindow(QMainWindow):
         self.model = model
         self.custom_actions: dict[str, QAction] = {}
         self.init_ui_structure()
+        self._init_controllers()
         self.retranslate_ui()
 
     def init_ui_structure(self) -> None:
@@ -90,6 +96,27 @@ class MainWindow(QMainWindow):
         
         # Place le focus initial sur la vue du circuit plutôt que sur la barre de recherche
         self.view.setFocus()
+
+    def _init_controllers(self) -> None:
+        """Initialise les controleurs MVC et leurs dependances."""
+        self.app_controller = AppController(self, view=getattr(self, "view", None))
+        self.file_controller = FileController(self, self.model, getattr(self, "scene", None))
+        self.edit_controller = EditController(
+            self,
+            getattr(self, "scene", None),
+            view=getattr(self, "view", None),
+            app_controller=self.app_controller,
+        )
+        self.circuit_controller = CircuitController(
+            self,
+            getattr(self, "scene", None),
+            getattr(self, "view", None),
+            app_controller=self.app_controller,
+        )
+        self.simulation_controller = SimulationController(
+            self.model,
+            app_controller=self.app_controller,
+        )
 
     def resizeEvent(self, event) -> None:
         """Ajuste la barre d'outils lors des redimensionnements."""
@@ -302,8 +329,8 @@ class MainWindow(QMainWindow):
 
     def _create_options_actions(self) -> None:
         """Cree les actions du menu Options."""
-        self._make_action("action_auto_save_int", None, lambda: print("Auto-save intervalle"))
-        self._make_action("action_toggle_auto_save", None, lambda: print("Basculer la sauvegarde auto"))
+        self._make_action("action_auto_save_int", None, self.on_set_autosave_interval)
+        self._make_action("action_toggle_auto_save", None, self.on_toggle_autosave)
         self._make_action("action_lang_fr", None, self.set_lang_fr)
         self._make_action("action_lang_en", None, self.set_lang_en)
         self._make_action("action_restore_session", None, self.on_restore_session)
@@ -366,20 +393,27 @@ class MainWindow(QMainWindow):
         # Les raccourcis d'outils sont supprimes pour privilegier la liste des composants.
 
     def set_tool(self, tool_name: str) -> None:
-        """Change l'outil actif pour la scene et la vue."""
-        
+        """Change l'outil actif via le controleur."""
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.set_tool(tool_name)
+            return
+        self._apply_tool(tool_name)
+
+    def _apply_tool(self, tool_name: str) -> None:
+        """Applique directement l'outil actif pour la scene et la vue."""
+
         # Scène
-        if hasattr(self, 'scene'):
+        if hasattr(self, "scene"):
             self.scene.set_tool(tool_name)
-            
+
         # Vue
-        if hasattr(self, 'view'):
+        if hasattr(self, "view"):
             self.view.set_tool_mode(tool_name)
             if hasattr(self.view, "clear_tool_preview"):
                 self.view.clear_tool_preview()
             if hasattr(self, "scene") and hasattr(self.scene, "_clear_item_cursors"):
                 self.scene._clear_item_cursors()
-            
+
         # Change le curseur
         if tool_name == "pointer":
             self.setCursor(Qt.ArrowCursor)
@@ -687,387 +721,424 @@ class MainWindow(QMainWindow):
     # Gestionnaires d'actions
     def on_new_file(self) -> None:
         """Declenche la creation d'un nouveau fichier."""
-        print("Nouveau fichier")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.new_circuit()
 
     def on_new_window(self) -> None:
         """Ouvre une nouvelle fenetre."""
-        print("Nouvelle fenetre")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Nouvelle fenetre")
 
     def on_open_file(self) -> None:
         """Declenche l'ouverture d'un fichier."""
-        print("Ouvrir un fichier")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.open_circuit()
 
     def on_save_file(self) -> None:
         """Declenche la sauvegarde du fichier courant."""
-        print("Enregistrer")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.save_circuit()
 
     def on_save_as(self) -> None:
         """Declenche la sauvegarde sous un nouveau nom."""
-        print("Enregistrer sous")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.save_circuit_as()
 
     def on_import(self) -> None:
         """Declenche l'import de donnees."""
-        print("Importer")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.import_circuit()
 
     def on_export(self) -> None:
         """Declenche l'export de donnees."""
-        print("Exporter")
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.export_circuit()
 
     def on_version_history(self) -> None:
         """Affiche l'historique des versions."""
-        print("Historique")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Historique des versions")
 
     def on_select_all(self) -> None:
         """Selectionne tous les elements."""
-        print("Tout selectionner")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.select_all()
 
     def on_cut(self) -> None:
         """Coupe la selection courante."""
-        if hasattr(self, "scene"):
-            self.scene.cut_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.cut()
 
     def on_copy(self) -> None:
         """Copie la selection courante."""
-        if hasattr(self, "scene"):
-            self.scene.copy_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.copy()
 
     def on_paste(self) -> None:
         """Colle le contenu du presse-papiers."""
-        if hasattr(self, "scene"):
-            if hasattr(self, "view"):
-                view_rect = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
-                self.scene.paste_selection(view_rect=view_rect)
-            else:
-                self.scene.paste_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.paste()
 
     def on_duplicate(self) -> None:
         """Duplique la selection courante."""
-        if hasattr(self, "scene"):
-            if not self.scene.copy_selection():
-                self._update_transform_actions_visibility()
-                return
-            if hasattr(self, "view"):
-                view_rect = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
-                self.scene.paste_selection(view_rect=view_rect)
-            else:
-                self.scene.paste_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.duplicate()
 
     def on_lock(self) -> None:
         """Verrouille la selection courante."""
-        if hasattr(self, "scene"):
-            self.scene.lock_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.lock_selection()
 
     def on_unlock(self) -> None:
         """Deverrouille la selection courante."""
-        if hasattr(self, "scene"):
-            self.scene.unlock_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.unlock_selection()
 
     def on_paste_near_cursor(self) -> None:
         """Colle le contenu au niveau du curseur."""
-        if hasattr(self, "scene") and hasattr(self.scene, "has_clipboard_content"):
-            if not self.scene.has_clipboard_content():
-                self._update_transform_actions_visibility()
-                return
-
-        if hasattr(self, "scene") and hasattr(self, "view"):
-            cursor_global_pos = QCursor.pos()
-            cursor_view_pos = self.view.mapFromGlobal(cursor_global_pos)
-            cursor_scene_pos = self.view.mapToScene(cursor_view_pos)
-            self.scene.paste_selection(target_scene_pos=cursor_scene_pos)
-        elif hasattr(self, "scene"):
-            self.scene.paste_selection()
-        self._update_transform_actions_visibility()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.paste_near_cursor()
 
     def on_select_none(self) -> None:
         """Annule toute selection."""
-        print("Aucune selection")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.select_none()
 
     def on_select_invert(self) -> None:
         """Inverse la selection courante."""
-        print("Inverser la selection")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.select_invert()
 
     # TODO regrouper ces fonctions de filtre dans une seule avec un paramètre
     def on_filter_nodes(self) -> None:
         """Filtre les noeuds dans la selection."""
-        print("Filtrer les noeuds")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_nodes()
 
     def on_filter_wires(self) -> None:
         """Filtre les fils dans la selection."""
-        print("Filtrer les fils")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_wires()
 
     def on_filter_sources(self) -> None:
         """Filtre les sources dans la selection."""
-        print("Filtrer les sources")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_sources()
     
     def on_filter_resistors(self) -> None:
         """Filtre les resistances dans la selection."""
-        print("Filtrer les resistances")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_resistors()
 
     def on_filter_capacitors(self) -> None:
         """Filtre les condensateurs dans la selection."""
-        print("Filtrer les condensateurs")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_capacitors()
 
     def on_filter_inductors(self) -> None:
         """Filtre les inductances dans la selection."""
-        print("Filtrer les inductances")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_inductors()
 
     def on_filter_add(self) -> None:
         """Ajoute un filtre supplementaire."""
-        print("Ajouter un filtre")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.filter_add()
 
     def on_invert_x(self) -> None:
         """Inverser la selection sur l'axe X."""
-        print("Action: Inverser X")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.invert_x()
 
     def on_invert_y(self) -> None:
         """Inverser la selection sur l'axe Y."""
-        print("Action: Inverser Y")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.invert_y()
 
     def on_invert_xy(self) -> None:
         """Inverser la selection sur les axes X/Y."""
-        print("Action: Inverser XY")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.invert_xy()
 
     def on_align_left(self) -> None:
         """Aligne les elements sur la gauche."""
-        print("Action: Aligner a gauche")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.align_left()
 
     def on_align_right(self) -> None:
         """Aligne les elements sur la droite."""
-        print("Action: Aligner a droite")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.align_right()
 
     def on_align_top(self) -> None:
         """Aligne les elements en haut."""
-        print("Action: Aligner en haut")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.align_top()
 
     def on_align_bottom(self) -> None:
         """Aligne les elements en bas."""
-        print("Action: Aligner en bas")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.align_bottom()
 
     def on_distribute_horiz(self) -> None:
         """Distribue les elements horizontalement."""
-        print("Action: Distribuer horizontalement")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.distribute_horizontal()
 
     def on_distribute_vertic(self) -> None:
         """Distribue les elements verticalement."""
-        print("Action: Distribuer verticalement")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.distribute_vertical()
 
     def on_group_items(self) -> None:
         """Groupe les elements selectionnes."""
-        print("Action: Grouper les elements")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.group_items()
 
     def on_ungroup_items(self) -> None:
         """Degroupe les elements selectionnes."""
-        print("Action: Degrouper les elements")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.ungroup_items()
 
     def on_clean_canvas(self) -> None:
         """Nettoie la scene de travail."""
-        print("Action: Nettoyer le canvas")
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.clean_canvas()
 
     # Actions d'affichage
     def on_toggle_grid(self) -> None:
         """Bascule l'affichage de la grille."""
-        print("Action: Afficher/Masquer la grille")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_grid()
 
     def on_snap_grid(self) -> None:
         """Bascule l'aimantation a la grille."""
-        print("Action: Activer/Desactiver l'aimantation")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_snap_grid()
 
     def on_grid_size(self) -> None:
         """Ouvre le reglage de taille de grille."""
-        print("Action: Modifier la taille de la grille")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Taille de grille")
 
     def on_toggle_labels(self) -> None:
         """Bascule l'affichage des etiquettes."""
-        print("Action: Afficher/Masquer les etiquettes")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_labels()
 
     def on_toggle_nodes(self) -> None:
         """Bascule l'affichage des identifiants de noeuds."""
-        print("Action: Afficher/Masquer les IDs des noeuds")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_nodes()
 
     def on_toggle_wire_dir(self) -> None:
         """Bascule l'affichage du sens du courant."""
-        print("Action: Afficher/Masquer la direction du courant")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_wire_direction()
 
     def on_center_selection(self) -> None:
         """Centre la vue sur la selection."""
-        print("Action: Centrer la vue sur la selection")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.center_on_selection()
 
     def on_zoom_in(self) -> None:
         """Effectue un zoom avant."""
-        if hasattr(self, "view"):
-            self.view.scale(1.25, 1.25)
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.zoom_in()
 
     def on_zoom_out(self) -> None:
         """Effectue un zoom arriere."""
-        if hasattr(self, "view"):
-            self.view.scale(0.8, 0.8)
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.zoom_out()
 
     def on_reset_zoom(self) -> None:
         """Reinitialise le zoom de la vue."""
-        if hasattr(self, "view"):
-            self.view.resetTransform()
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.reset_zoom()
 
     def on_toggle_fullscreen(self) -> None:
         """Bascule le mode plein ecran."""
-        print("Action: Basculer le mode plein ecran")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.toggle_fullscreen()
 
     def on_highlight_short_circuit(self) -> None:
         """Declenche la mise en evidence des courts-circuits."""
-        print("Action: Surligner les courts-circuits")
+        if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
+            self.circuit_controller.highlight_short_circuit()
 
     def on_toggle_view_components(self) -> None:
         """Affiche ou masque le panneau des composants."""
-        if hasattr(self, "components_panel"):
-            is_visible = self.components_panel.isVisible()
-            self.components_panel.setVisible(not is_visible)
-            self._update_toolbar_geometry()
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.toggle_components_panel()
 
     def on_toggle_view_simulation(self) -> None:
         """Affiche la fenetre de simulation."""
-        print("Fenetre: Simulation")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Fenetre de simulation")
 
     def on_toggle_view_graphs(self) -> None:
         """Affiche la fenetre des graphiques."""
-        print("Fenetre: Graphiques")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Fenetre des graphiques")
 
     def on_toggle_view_examples(self) -> None:
         """Affiche la fenetre d'exemples."""
-        print("Fenetre: Exemples")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Fenetre des exemples")
 
     def on_toggle_view_toolbar(self) -> None:
         """Affiche ou masque la barre d'outils."""
-        print("Fenetre: Barre d'outils")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.toggle_toolbar()
 
     # Actions d'options
 
     def on_set_autosave_interval(self) -> None:
         """Ouvre le reglage de l'intervalle de sauvegarde."""
-        print("Option: Reglage de l'intervalle de sauvegarde")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Intervalle de sauvegarde")
 
     def on_toggle_autosave(self) -> None:
         """Active ou desactive la sauvegarde automatique."""
-        print("Option: Basculer la sauvegarde automatique")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Sauvegarde automatique")
 
     def on_set_language(self, lang: str) -> None:
         """Change la langue via un code explicite."""
-        self.change_language(lang)
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.change_language(lang)
+        else:
+            self.change_language(lang)
 
     def set_lang_fr(self) -> None:
         """Passe l'application en francais."""
-        self.change_language("fr")
+        self.on_set_language("fr")
 
     def set_lang_en(self) -> None:
         """Passe l'application en anglais."""
-        self.change_language("en")
+        self.on_set_language("en")
 
     def on_restore_session(self) -> None:
         """Restaure la session precedente."""
-        print("Option: Restaurer la session au demarrage")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Restaurer la session")
 
     def on_set_unit_si(self) -> None:
         """Passe les unites en systeme SI."""
-        print("Unites: Passage au systeme SI")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Unites SI")
 
     def on_set_unit_eng(self) -> None:
         """Passe les unites au systeme d'ingenierie."""
-        print("Unites: Passage au systeme ingenierie")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Unites ingenierie")
 
     def on_set_unit_compact(self) -> None:
         """Passe les unites en mode compact."""
-        print("Unites: Passage au mode compact")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Unites compactes")
 
     def on_set_precision(self) -> None:
         """Ouvre le reglage de precision."""
-        print("Option: Reglage de la precision")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Precision")
 
     def on_toggle_sci_notation(self) -> None:
         """Bascule la notation scientifique."""
-        print("Option: Notation scientifique ON/OFF")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Notation scientifique")
 
     def on_toggle_cross_cursor(self) -> None:
         """Bascule le curseur en croix."""
-        print("Option: Curseur en croix ON/OFF")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Curseur en croix")
 
     def on_toggle_animations(self) -> None:
         """Bascule les animations."""
-        print("Option: Animations ON/OFF")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Animations")
 
     def on_toggle_overlap(self) -> None:
         """Bascule l'autorisation de chevauchement."""
-        print("Option: Chevauchement ON/OFF")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Chevauchement")
 
     def on_toggle_editing(self) -> None:
         """Bascule le verrouillage de l'edition."""
-        print("Option: Verrouillage de l'edition")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Verrouillage edition")
 
     def on_toggle_conv_current(self) -> None:
         """Change la convention du sens du courant."""
-        print("Option: Sens du courant")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Sens du courant")
 
     def on_toggle_grid_export(self) -> None:
         """Bascule l'inclusion de la grille a l'export."""
-        print("Export: Grille incluse/exclue")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Export grille")
 
     def on_toggle_sim_export(self) -> None:
         """Bascule l'inclusion des donnees de simulation a l'export."""
-        print("Export: Donnees de sim incluses/exclues")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Export simulation")
 
     def on_change_bg_color(self) -> None:
         """Ouvre la selection de couleur de fond."""
-        print("Interface: Changement couleur de fond")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.change_background_color()
 
     def on_show_keybinds(self) -> None:
         """Affiche la liste des raccourcis."""
-        print("Fenetre: Liste des raccourcis")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Raccourcis")
 
     def on_set_color_positive(self) -> None:
         """Change la couleur des valeurs positives."""
-        print("Couleur: Positif")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Couleur positif")
 
     def on_set_color_negative(self) -> None:
         """Change la couleur des valeurs negatives."""
-        print("Couleur: Negatif")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Couleur negatif")
 
     def on_set_color_neutral(self) -> None:
         """Change la couleur des valeurs neutres."""
-        print("Couleur: Neutre")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Couleur neutre")
 
     def on_set_color_selected(self) -> None:
         """Change la couleur de selection."""
-        print("Couleur: Selection")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Couleur selection")
 
     def on_set_color_current(self) -> None:
         """Change la couleur du courant."""
-        print("Couleur: Courant")
+        if hasattr(self, "app_controller") and self.app_controller is not None:
+            self.app_controller.not_implemented("Couleur courant")
 
     def delete_selected_items(self) -> None:
         """Demande a la scene de supprimer ce qui est selectionne."""
-        # On vérifie que la scène existe
-        if hasattr(self, 'scene'):
-            self.scene.delete_selection()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.delete_selection()
 
     def undo_last_action(self) -> None:
         """Annule la derniere action modifiant le circuit."""
-        if hasattr(self, 'scene'):
-            self.scene.undo_last_action()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.undo()
 
     def redo_last_action(self) -> None:
         """Retablit la derniere action annulee."""
-        if hasattr(self, 'scene'):
-            self.scene.redo_last_action()
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.redo()
 
     def rotate_selected_components(self) -> None:
         """Tourne les composants selectionnes."""
-        if hasattr(self, "scene"):
-            self.scene.rotate_selected_components(90)
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.rotate_selection(90)
 
     def flip_selected_components(self) -> None:
         """Retourne les composants selectionnes."""
-        if hasattr(self, "scene"):
-            self.scene.rotate_selected_components(180)
+        if hasattr(self, "edit_controller") and self.edit_controller is not None:
+            self.edit_controller.flip_selection()

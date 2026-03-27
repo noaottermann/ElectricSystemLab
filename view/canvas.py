@@ -263,6 +263,9 @@ class CircuitScene(QGraphicsScene):
         self._selection_snapshot: Optional[list] = None
         self._snap_candidates: dict[object, float] = {}
         self._last_snap_target = None
+        self.show_grid = True
+        self.snap_enabled = True
+        self.nodes_visible = True
 
         # Etat d'annulation (stocke des instantanes complets du circuit avant edition)
         self._undo_stack: list[dict] = []
@@ -750,6 +753,8 @@ class CircuitScene(QGraphicsScene):
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         """Dessine la grille de points de fond pour l'alignement."""
+        if not self.show_grid:
+            return
         painter.setPen(QPen(QColor(200, 200, 200), 1))
         
         # Dessine uniquement les points visibles
@@ -765,6 +770,8 @@ class CircuitScene(QGraphicsScene):
 
     def snap_to_grid(self, pos: QPointF) -> tuple[float, float]:
         """Arrondit une position (x, y) au point de grille le plus proche."""
+        if not self.snap_enabled:
+            return pos.x(), pos.y()
         gs = self.GRID_SIZE
         x = round(pos.x() / gs) * gs
         y = round(pos.y() / gs) * gs
@@ -795,8 +802,31 @@ class CircuitScene(QGraphicsScene):
 
         if closest_node_pos and min_dist < THRESHOLD:
             return closest_node_pos
-        
-        return self.snap_to_grid(scene_pos)
+
+        if self.snap_enabled:
+            return self.snap_to_grid(scene_pos)
+        return scene_pos.x(), scene_pos.y()
+
+    def toggle_grid(self) -> None:
+        """Active ou desactive l'affichage de la grille."""
+        self.show_grid = not self.show_grid
+        self.update()
+
+    def toggle_snap(self) -> None:
+        """Active ou desactive l'aimantation a la grille."""
+        self.snap_enabled = not self.snap_enabled
+
+    def toggle_nodes(self) -> None:
+        """Affiche ou masque les noeuds libres."""
+        self.nodes_visible = not self.nodes_visible
+        for item in self.items():
+            if isinstance(item, NodeItem):
+                item.setVisible(self.nodes_visible)
+
+    def clean_canvas(self) -> None:
+        """Nettoie la scene (fusion et suppression des doublons)."""
+        self._merge_overlaps_and_refresh()
+        self._sync_free_node_items_from_model()
 
     def _calculate_snap_score(
         self,
@@ -1455,7 +1485,9 @@ class CircuitScene(QGraphicsScene):
         for node in self.model.nodes.values():
             if self._is_node_attached_to_dipole(node):
                 continue
-            self.addItem(NodeItem(node))
+            item = NodeItem(node)
+            item.setVisible(self.nodes_visible)
+            self.addItem(item)
 
     def _merge_overlaps_and_refresh(self) -> bool:
         """Fusionne les noeuds qui se chevauchent et rafraichit la scene."""
@@ -1576,6 +1608,7 @@ class CircuitScene(QGraphicsScene):
                             break
                 if highlight_node:
                     new_item.setBrush(QColor("#0078d7"))
+                new_item.setVisible(self.nodes_visible)
                 self.addItem(new_item)
 
     def preview_node_move(self, node_model, snapped_pos: QPointF) -> None:

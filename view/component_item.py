@@ -69,10 +69,12 @@ class ComponentItem(QGraphicsItem):
                 return self.pos()
             scene = self.scene()
             new_pos = value
-            grid_size = scene.GRID_SIZE
-            x = round(new_pos.x() / grid_size) * grid_size
-            y = round(new_pos.y() / grid_size) * grid_size  
-            snapped_pos = QPointF(x, y)
+            snapped_pos = new_pos
+            if getattr(scene, "snap_enabled", True):
+                grid_size = scene.GRID_SIZE
+                x = round(new_pos.x() / grid_size) * grid_size
+                y = round(new_pos.y() / grid_size) * grid_size
+                snapped_pos = QPointF(x, y)
 
             if hasattr(scene, "get_smart_snapped_component_position"):
                 snapped_pos = scene.get_smart_snapped_component_position(

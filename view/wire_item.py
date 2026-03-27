@@ -174,10 +174,12 @@ class WireItem(QGraphicsLineItem):
             if self._locked:
                 return self.pos()
             new_pos = value
-            grid_size = self.scene().GRID_SIZE
-            x = round(new_pos.x() / grid_size) * grid_size
-            y = round(new_pos.y() / grid_size) * grid_size
-            return QPointF(x, y)
+            if getattr(self.scene(), "snap_enabled", True):
+                grid_size = self.scene().GRID_SIZE
+                x = round(new_pos.x() / grid_size) * grid_size
+                y = round(new_pos.y() / grid_size) * grid_size
+                return QPointF(x, y)
+            return new_pos
 
         # Visuels de selection
         if change == QGraphicsItem.ItemSelectedChange:
