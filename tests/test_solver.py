@@ -5,8 +5,9 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.circuit import Circuit
-from model.components import Resistor, VoltageSourceDC
+from model.components import Resistor, VoltageSourceAC, VoltageSourceDC
 from solver.dc_solver import DCSolver
+from solver.transient_solver import TransientSolver
 
 class TestDCSolver(unittest.TestCase):
     
@@ -90,6 +91,62 @@ class TestDCSolver(unittest.TestCase):
             
         diff = abs(n1.potential - n2.potential)
         self.assertAlmostEqual(diff, 10.0, places=5)
+
+
+class TestTransientSolver(unittest.TestCase):
+    def setUp(self):
+        self.circuit = Circuit()
+        self.solver = TransientSolver()
+
+    def test_transient_dc_resistive_trace(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_pos, n_gnd, dc_voltage=10.0)
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_pos, n_gnd, resistance=5.0)
+        self.circuit.add_dipole(resistor)
+
+        result = self.solver.solve(self.circuit, duration=0.01, time_step=0.005)
+
+        self.assertEqual(result["time"], [0.0, 0.005, 0.01])
+        self.assertIn(n_pos.id, result["node_potentials"])
+        self.assertEqual(len(result["node_potentials"][n_pos.id]), 3)
+        self.assertAlmostEqual(result["node_potentials"][n_pos.id][-1], 10.0, places=5)
+        self.assertAlmostEqual(abs(result["dipole_currents"][resistor.id][-1]), 2.0, places=5)
+
+    def test_transient_ac_source_changes_over_time(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        source = VoltageSourceAC(
+            self.circuit.get_next_dipole_id(),
+            n_pos,
+            n_gnd,
+            amplitude=10.0,
+            frequency=1.0,
+            phase=0.0,
+            offset=0.0,
+        )
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_pos, n_gnd, resistance=10.0)
+        self.circuit.add_dipole(resistor)
+
+        result = self.solver.solve(self.circuit, duration=0.5, time_step=0.25)
+        potentials = result["node_potentials"][n_pos.id]
+
+        self.assertEqual(result["time"], [0.0, 0.25, 0.5])
+        self.assertAlmostEqual(potentials[0], 0.0, places=5)
+        self.assertAlmostEqual(potentials[1], 10.0, places=5)
+        self.assertAlmostEqual(potentials[2], 0.0, places=5)
+        self.assertAlmostEqual(result["dipole_currents"][resistor.id][1], 1.0, places=5)
+
+    def test_transient_invalid_step(self):
+        n1 = self.circuit.create_node(0, 0, is_ground=True)
+        n2 = self.circuit.create_node(20, 0)
+        self.circuit.add_dipole(VoltageSourceDC(self.circuit.get_next_dipole_id(), n2, n1, dc_voltage=5.0))
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n2, n1, resistance=10.0))
+
+        with self.assertRaises(ValueError):
+            self.solver.solve(self.circuit, duration=0.1, time_step=0.0)
 
 if __name__ == '__main__':
     unittest.main()
