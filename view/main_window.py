@@ -20,6 +20,7 @@ from controller.simulation_controller import SimulationController
 from utils.translator import Translator
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
+from view.graph_panel import GraphPanel
 
 class MainWindow(QMainWindow):
     """
@@ -80,6 +81,10 @@ class MainWindow(QMainWindow):
         self.components_panel.setMinimumWidth(200)
         self.components_panel.setMaximumWidth(300)
         self.components_panel.tool_selected.connect(self.set_tool)
+        self.graph_panel = GraphPanel()
+        self.graph_panel.setMinimumWidth(260)
+        self.graph_panel.setMaximumWidth(420)
+        self.graph_panel.setVisible(False)
 
         central_widget = QWidget()
         central_layout = QHBoxLayout(central_widget)
@@ -87,6 +92,7 @@ class MainWindow(QMainWindow):
         central_layout.setSpacing(0)
         central_layout.addWidget(self.components_panel)
         central_layout.addWidget(self.view, 1)
+        central_layout.addWidget(self.graph_panel)
         self.setCentralWidget(central_widget)
 
         # Ancre la barre d'outils dans la zone centrale pour suivre la géométrie du panneau et de la vue
@@ -152,12 +158,16 @@ class MainWindow(QMainWindow):
         if hasattr(self, "components_panel") and self.components_panel.isVisible():
             panel_width = self.components_panel.width()
 
+        right_panel_width = 0
+        if hasattr(self, "graph_panel") and self.graph_panel.isVisible():
+            right_panel_width = self.graph_panel.width()
+
         x = min(panel_width, max(0, content_width - 1))
-        remaining_width = content_width - x
+        remaining_width = content_width - x - right_panel_width
         if remaining_width <= 0:
             return
 
-        desired_width = content_width - (2 * panel_width)
+        desired_width = content_width - panel_width - right_panel_width
         min_width = min(280, remaining_width)
         toolbar_width = max(min_width, desired_width)
         toolbar_width = min(toolbar_width, remaining_width)
@@ -330,6 +340,8 @@ class MainWindow(QMainWindow):
         self._make_action("action_show_components", None, self.on_toggle_view_components)
         self._make_action("action_show_sim", None, self.on_toggle_view_simulation)
         self._make_action("action_show_graphs", None, self.on_toggle_view_graphs)
+        self.custom_actions["action_show_graphs"].setCheckable(True)
+        self.custom_actions["action_show_graphs"].setChecked(False)
         self._make_action("action_show_examples", None, self.on_toggle_view_examples)
         self._make_action("action_show_toolbar", None, self.on_toggle_view_toolbar)
         self._make_action("action_theme_dark", None, self.set_dark_mode)
@@ -995,6 +1007,14 @@ class MainWindow(QMainWindow):
         """Lance la simulation DC via le controleur de simulation."""
         if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
             self.simulation_controller.run_dc()
+            if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
+                self.graph_panel.set_dc_results(self.model)
+                if not self.graph_panel.isVisible():
+                    self.graph_panel.setVisible(True)
+                    action = self.custom_actions.get("action_show_graphs")
+                    if action is not None:
+                        action.setChecked(True)
+                    self._update_toolbar_geometry()
 
     def on_run_simulation_transient(self) -> None:
         """Lance la simulation transitoire avec des parametres par defaut."""
@@ -1025,12 +1045,26 @@ class MainWindow(QMainWindow):
         if not ok_step:
             return
 
-        self.simulation_controller.run_transient(duration=duration, time_step=time_step)
+        result = self.simulation_controller.run_transient(duration=duration, time_step=time_step)
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            self.graph_panel.set_transient_results(result, circuit=self.model)
+            if result and not self.graph_panel.isVisible():
+                self.graph_panel.setVisible(True)
+                action = self.custom_actions.get("action_show_graphs")
+                if action is not None:
+                    action.setChecked(True)
+                self._update_toolbar_geometry()
 
     def on_toggle_view_graphs(self) -> None:
         """Affiche la fenetre des graphiques."""
-        if hasattr(self, "app_controller") and self.app_controller is not None:
-            self.app_controller.not_implemented("Fenetre des graphiques")
+        if not hasattr(self, "graph_panel") or self.graph_panel is None:
+            return
+
+        self.graph_panel.setVisible(not self.graph_panel.isVisible())
+        action = self.custom_actions.get("action_show_graphs")
+        if action is not None:
+            action.setChecked(self.graph_panel.isVisible())
+        self._update_toolbar_geometry()
 
     def on_toggle_view_examples(self) -> None:
         """Affiche la fenetre d'exemples."""
