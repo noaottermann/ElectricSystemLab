@@ -25,5 +25,6 @@ def test_components_panel_default_labels_are_french() -> None:
     categories = panel._build_default_categories()
     labels = {category["label"] for category in categories}
 
-    assert "Passif" in labels
-    assert "Mesure" in labels
+    assert "Connexions" in labels
+    assert "Sources" in labels
+    assert "Passifs" in labels
