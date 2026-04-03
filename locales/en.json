@@ -70,6 +70,7 @@
     "action_show_sim": "Simulation",
     "action_sim_run_dc": "Run DC simulation",
     "action_sim_run_transient": "Run transient simulation",
+    "action_sim_export_results": "Export simulation results",
     "action_show_graphs": "Graphs",
     "action_show_examples": "Examples",
     "action_show_toolbar": "Toolbar",

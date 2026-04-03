@@ -157,6 +157,54 @@ class FileController:
 			return
 		self._status(f"Export: {Path(path).with_suffix('.json').name}")
 
+	def export_simulation_results(self) -> None:
+		"""Exporte uniquement les resultats de simulation."""
+		path, _ = QFileDialog.getSaveFileName(
+			self.window,
+			"Exporter les resultats de simulation",
+			"",
+			"Nodal (*.json);;Tous les fichiers (*.*)",
+		)
+		if not path:
+			return
+
+		simulation_controller = getattr(self.window, "simulation_controller", None)
+		if simulation_controller is None:
+			QMessageBox.warning(self.window, "Erreur", "Aucun controleur de simulation disponible.")
+			return
+
+		result = getattr(simulation_controller, "last_transient_result", None)
+		if not result:
+			# Fallback: resume l'etat courant du circuit comme resultats DC.
+			result = {
+				"dc": {
+					"nodes": [
+						{
+							"id": node.id,
+							"potential": node.potential,
+							"is_ground": node.is_ground,
+						}
+						for node in sorted(self.model.nodes.values(), key=lambda n: n.id)
+					],
+					"dipoles": [
+						{
+							"id": dipole.id,
+							"type": dipole.__class__.__name__,
+							"current": dipole.current,
+							"voltage": dipole.voltage,
+						}
+						for dipole in sorted(self.model.dipoles.values(), key=lambda d: d.id)
+					],
+				}
+			}
+
+		try:
+			self._exporter.export_simulation_results_to_file(result, path)
+		except Exception as exc:
+			QMessageBox.warning(self.window, "Erreur", f"Export des resultats impossible.\n{exc}")
+			return
+		self._status(f"Resultats exportes: {Path(path).with_suffix('.json').name}")
+
 	def _set_current_path(self, path: Path) -> None:
 		"""Met a jour le chemin courant et la liste des recents."""
 		self.current_path = path

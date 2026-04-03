@@ -106,6 +106,22 @@ class TestIO(unittest.TestCase):
 			self.assertIn("simulation", exported)
 			self.assertEqual(exported["simulation"], payload)
 
+	def test_export_simulation_results_to_file(self) -> None:
+		with tempfile.TemporaryDirectory() as tmp:
+			path = Path(tmp) / "results.json"
+			results = {
+				"dc": {
+					"nodes": [{"id": 1, "potential": 5.0, "is_ground": False}],
+					"dipoles": [{"id": 1, "type": "Resistor", "current": 0.05, "voltage": 5.0}],
+				}
+			}
+
+			_io_modules["exporter"].export_simulation_results_to_file(results, path)
+
+			exported = json.loads(path.read_text(encoding="utf-8"))
+			self.assertEqual(exported["type"], "simulation_results")
+			self.assertEqual(exported["dc"], results["dc"])
+
 
 if __name__ == "__main__":
 	unittest.main()

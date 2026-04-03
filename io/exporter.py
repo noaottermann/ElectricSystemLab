@@ -26,3 +26,15 @@ def export_circuit(
 	payload = json.loads(circuit.to_json())
 	payload["simulation"] = simulation_data
 	file_path.write_text(json.dumps(payload, indent=4), encoding="utf-8")
+
+
+def export_simulation_results_to_file(results: dict[str, Any], path: Union[Path, str]) -> None:
+	"""Exporte uniquement les resultats de simulation vers un fichier JSON."""
+	file_path = Path(path)
+	if file_path.suffix.lower() != ".json":
+		raise ValueError("Format non pris en charge (attendu .json).")
+	payload = {
+		"type": "simulation_results",
+		**results,
+	}
+	file_path.write_text(json.dumps(payload, indent=4), encoding="utf-8")
