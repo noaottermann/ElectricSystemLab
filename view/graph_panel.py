@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QLabel, QTextEdit, QTabWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+	QLabel, QTextEdit, QTabWidget, QVBoxLayout, QWidget,
+	QCheckBox, QHBoxLayout, QScrollArea, QGroupBox
+)
 from PyQt5.QtCore import Qt
 
 import numpy as np
@@ -10,6 +13,7 @@ try:
 	import matplotlib
 	matplotlib.use('Qt5Agg')
 	from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+	from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 	from matplotlib.figure import Figure
 	MATPLOTLIB_AVAILABLE = True
 except ImportError:
@@ -17,23 +21,29 @@ except ImportError:
 
 
 class GraphPanel(QWidget):
-	"""Panneau persistant affichant les resultats de simulation avec graphiques."""
+	"""Panneau persistant avec graphiques et controles interactifs."""
 
 	def __init__(self, parent=None) -> None:
 		super().__init__(parent)
 		self.setObjectName("graphPanel")
+		
+		# État pour le filtrage transient
+		self.selected_nodes = set()
+		self.selected_dipoles = set()
+		self.last_transient_result = None
+		self.last_circuit = None
 
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(10, 8, 10, 8)
 		layout.setSpacing(8)
 
-		title = QLabel("Résultats")
+		title = QLabel("Résultats & Graphiques")
 		title.setObjectName("graphPanelTitle")
 		layout.addWidget(title)
 
 		self.tabs = QTabWidget()
 		
-		# Onglet DC
+		# ===== Onglet DC =====
 		self.dc_widget = QWidget()
 		self.dc_layout = QVBoxLayout(self.dc_widget)
 		self.dc_layout.setContentsMargins(0, 0, 0, 0)
@@ -47,15 +57,62 @@ class GraphPanel(QWidget):
 			self.dc_text.setReadOnly(True)
 			self.dc_layout.addWidget(self.dc_text)
 		
-		# Onglet Transitoire
+		# ===== Onglet Transitoire =====
 		self.transient_widget = QWidget()
 		self.transient_layout = QVBoxLayout(self.transient_widget)
 		self.transient_layout.setContentsMargins(0, 0, 0, 0)
 		
+		# Contrôles de sélection
+		self.transient_controls = QWidget()
+		self.transient_controls_layout = QVBoxLayout(self.transient_controls)
+		self.transient_controls_layout.setContentsMargins(5, 5, 5, 5)
+		self.transient_controls_layout.setSpacing(5)
+		
+		# Sélection des nœuds
+		self.nodes_group = QGroupBox("Nœuds")
+		self.nodes_layout = QHBoxLayout(self.nodes_group)
+		self.nodes_layout.setSpacing(3)
+		self.nodes_layout.setContentsMargins(5, 5, 5, 5)
+		self.nodes_scroll = QScrollArea()
+		self.nodes_scroll.setWidgetResizable(True)
+		self.nodes_scroll.setMaximumHeight(35)
+		nodes_container = QWidget()
+		self.nodes_scroll.setWidget(nodes_container)
+		self.nodes_container = nodes_container
+		self.nodes_scroll_layout = QHBoxLayout(nodes_container)
+		self.nodes_scroll_layout.setSpacing(3)
+		self.nodes_scroll_layout.setContentsMargins(0, 0, 0, 0)
+		self.nodes_layout.addWidget(self.nodes_scroll)
+		self.transient_controls_layout.addWidget(self.nodes_group)
+		
+		# Sélection des dipôles
+		self.dipoles_group = QGroupBox("Dipôles")
+		self.dipoles_layout = QHBoxLayout(self.dipoles_group)
+		self.dipoles_layout.setSpacing(3)
+		self.dipoles_layout.setContentsMargins(5, 5, 5, 5)
+		self.dipoles_scroll = QScrollArea()
+		self.dipoles_scroll.setWidgetResizable(True)
+		self.dipoles_scroll.setMaximumHeight(35)
+		dipoles_container = QWidget()
+		self.dipoles_scroll.setWidget(dipoles_container)
+		self.dipoles_container = dipoles_container
+		self.dipoles_scroll_layout = QHBoxLayout(dipoles_container)
+		self.dipoles_scroll_layout.setSpacing(3)
+		self.dipoles_scroll_layout.setContentsMargins(0, 0, 0, 0)
+		self.dipoles_layout.addWidget(self.dipoles_scroll)
+		self.transient_controls_layout.addWidget(self.dipoles_group)
+		
+		self.transient_layout.addWidget(self.transient_controls)
+		
+		# Graphique transitoire
 		if MATPLOTLIB_AVAILABLE:
 			self.transient_figure = Figure(figsize=(4, 3), dpi=100)
 			self.transient_canvas = FigureCanvas(self.transient_figure)
-			self.transient_layout.addWidget(self.transient_canvas)
+			self.transient_layout.addWidget(self.transient_canvas, 1)
+			
+			# Toolbar zoom/pan
+			self.transient_toolbar = NavigationToolbar2QT(self.transient_canvas, self.transient_widget)
+			self.transient_layout.addWidget(self.transient_toolbar)
 		else:
 			self.transient_text = QTextEdit()
 			self.transient_text.setReadOnly(True)
@@ -67,8 +124,65 @@ class GraphPanel(QWidget):
 
 		self.clear_results()
 
+	def _create_node_checkbox(self, node_id: str) -> None:
+		"""Crée une checkbox pour un nœud."""
+		checkbox = QCheckBox(f"N{node_id}")
+		checkbox.setChecked(True)
+		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
+		self.nodes_scroll_layout.addWidget(checkbox)
+
+	def _create_dipole_checkbox(self, dipole_id: str) -> None:
+		"""Crée une checkbox pour un dipôle."""
+		checkbox = QCheckBox(f"D{dipole_id}")
+		checkbox.setChecked(True)
+		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
+		self.dipoles_scroll_layout.addWidget(checkbox)
+
+	def _clear_checkboxes(self) -> None:
+		"""Efface toutes les checkboxes existantes."""
+		while self.nodes_scroll_layout.count():
+			item = self.nodes_scroll_layout.takeAt(0)
+			if item and item.widget():
+				item.widget().deleteLater()
+		while self.dipoles_scroll_layout.count():
+			item = self.dipoles_scroll_layout.takeAt(0)
+			if item and item.widget():
+				item.widget().deleteLater()
+
+	def _on_selection_changed(self) -> None:
+		"""Callback quand la sélection change."""
+		if not MATPLOTLIB_AVAILABLE or not self.last_transient_result:
+			return
+		
+		# Récupère la sélection actuelle
+		self.selected_nodes = set()
+		self.selected_dipoles = set()
+		
+		for i in range(self.nodes_scroll_layout.count()):
+			item = self.nodes_scroll_layout.itemAt(i)
+			if item and item.widget():
+				checkbox = item.widget()
+				if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+					node_id = checkbox.text().replace("N", "")
+					self.selected_nodes.add(node_id)
+		
+		for i in range(self.dipoles_scroll_layout.count()):
+			item = self.dipoles_scroll_layout.itemAt(i)
+			if item and item.widget():
+				checkbox = item.widget()
+				if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+					dipole_id = checkbox.text().replace("D", "")
+					self.selected_dipoles.add(dipole_id)
+		
+		# Redessine les graphiques
+		self._plot_transient_results(self.last_transient_result, self.last_circuit)
+
 	def clear_results(self) -> None:
 		"""Reinitialise le contenu affiche."""
+		self._clear_checkboxes()
+		self.selected_nodes = set()
+		self.selected_dipoles = set()
+		
 		if MATPLOTLIB_AVAILABLE:
 			self.dc_figure.clear()
 			self.dc_canvas.draw()
@@ -148,9 +262,27 @@ class GraphPanel(QWidget):
 	def set_transient_results(self, result: dict | None, circuit=None) -> None:
 		"""Affiche les traces transitoires avec graphiques."""
 		if not result:
+			self._clear_checkboxes()
 			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_text'):
 				self.transient_text.setPlainText("Aucun résultat transitoire disponible.")
 			return
+
+		# Stocke les résultats pour les mises à jour interactives
+		self.last_transient_result = result
+		self.last_circuit = circuit
+
+		# Crée les checkboxes de sélection
+		self._clear_checkboxes()
+		node_potentials = result.get("node_potentials", {})
+		dipole_currents = result.get("dipole_currents", {})
+		
+		for node_id in sorted(node_potentials.keys()):
+			self._create_node_checkbox(str(node_id))
+			self.selected_nodes.add(str(node_id))
+		
+		for dipole_id in sorted(dipole_currents.keys()):
+			self._create_dipole_checkbox(str(dipole_id))
+			self.selected_dipoles.add(str(dipole_id))
 
 		if MATPLOTLIB_AVAILABLE:
 			self._plot_transient_results(result, circuit)
@@ -168,48 +300,62 @@ class GraphPanel(QWidget):
 		if len(time_values) == 0:
 			return
 		
-		# Nombre de subplots: nœuds + dipôles
-		num_nodes = len(node_potentials)
-		num_dipoles = len(dipole_currents)
-		total_plots = max(1, min(4, num_nodes + num_dipoles))  # Limité à 4 plots
+		# Filtre selon la sélection
+		selected_nodes = []
+		for node_id in sorted(node_potentials.keys()):
+			if str(node_id) in self.selected_nodes:
+				values = np.array(node_potentials.get(node_id, []))
+				if len(values) > 0:
+					selected_nodes.append((node_id, values))
 		
-		# Crée les subplots
+		selected_dipoles = []
+		for dipole_id in sorted(dipole_currents.keys()):
+			if str(dipole_id) in self.selected_dipoles:
+				values = np.array(dipole_currents.get(dipole_id, []))
+				if len(values) > 0:
+					selected_dipoles.append((dipole_id, values))
+		
+		total_plots = len(selected_nodes) + len(selected_dipoles)
+		if total_plots == 0:
+			return
+		
+		# Crée les subplots dynamiquement
 		if total_plots == 1:
 			axes = [self.transient_figure.add_subplot(111)]
 		elif total_plots == 2:
 			axes = [self.transient_figure.add_subplot(211), self.transient_figure.add_subplot(212)]
+		elif total_plots == 3:
+			axes = [self.transient_figure.add_subplot(311), self.transient_figure.add_subplot(312),
+					self.transient_figure.add_subplot(313)]
 		else:
 			axes = [self.transient_figure.add_subplot(221), self.transient_figure.add_subplot(222),
 					self.transient_figure.add_subplot(223), self.transient_figure.add_subplot(224)]
 		
-		# Affiche les potentiels des nœuds
 		ax_idx = 0
-		for node_id in sorted(node_potentials.keys())[:2]:  # Affiche les 2 premiers nœuds
-			values = np.array(node_potentials.get(node_id, []))
-			if len(values) > 0:
-				axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'N{node_id}')
-				axes[ax_idx].set_ylabel('Potentiel (V)', fontsize=9)
-				axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
-				axes[ax_idx].set_title(f'Potentiel du Nœud {node_id}', fontsize=10, fontweight='bold')
-				axes[ax_idx].grid(True, alpha=0.3)
-				axes[ax_idx].legend(loc='best', fontsize=8)
-				ax_idx += 1
-				if ax_idx >= len(axes):
-					break
 		
-		# Affiche les courants des dipôles
-		for dipole_id in sorted(dipole_currents.keys())[:2]:  # Affiche les 2 premiers dipôles
-			values = np.array(dipole_currents.get(dipole_id, []))
-			if len(values) > 0:
-				axes[ax_idx].plot(time_values, values, 'g-', linewidth=2, label=f'D{dipole_id}')
-				axes[ax_idx].set_ylabel('Courant (A)', fontsize=9)
-				axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
-				axes[ax_idx].set_title(f'Courant du Dipôle {dipole_id}', fontsize=10, fontweight='bold')
-				axes[ax_idx].grid(True, alpha=0.3)
-				axes[ax_idx].legend(loc='best', fontsize=8)
-				ax_idx += 1
-				if ax_idx >= len(axes):
-					break
+		# Affiche les potentiels des nœuds sélectionnés
+		for node_id, values in selected_nodes:
+			if ax_idx >= len(axes):
+				break
+			axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'N{node_id}')
+			axes[ax_idx].set_ylabel('Potentiel (V)', fontsize=9)
+			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
+			axes[ax_idx].set_title(f'Potentiel du Nœud {node_id}', fontsize=10, fontweight='bold')
+			axes[ax_idx].grid(True, alpha=0.3)
+			axes[ax_idx].legend(loc='best', fontsize=8)
+			ax_idx += 1
+		
+		# Affiche les courants des dipôles sélectionnés
+		for dipole_id, values in selected_dipoles:
+			if ax_idx >= len(axes):
+				break
+			axes[ax_idx].plot(time_values, values, 'g-', linewidth=2, label=f'D{dipole_id}')
+			axes[ax_idx].set_ylabel('Courant (A)', fontsize=9)
+			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
+			axes[ax_idx].set_title(f'Courant du Dipôle {dipole_id}', fontsize=10, fontweight='bold')
+			axes[ax_idx].grid(True, alpha=0.3)
+			axes[ax_idx].legend(loc='best', fontsize=8)
+			ax_idx += 1
 		
 		self.transient_figure.tight_layout()
 		self.transient_canvas.draw()
@@ -243,16 +389,5 @@ class GraphPanel(QWidget):
 			if not values:
 				continue
 			lines.append(f"- D{dipole_id}: {values[-1]:.6g} A")
-
-		self.transient_text.setPlainText("\n".join(lines))
-		lines.append("Dipoles (dernier point):")
-		for dipole_id in sorted(dipole_currents, key=lambda x: str(x)):
-			values = dipole_currents.get(dipole_id, [])
-			if not values:
-				continue
-			label = f"D{dipole_id}"
-			if circuit is not None and isinstance(dipole_id, int) and dipole_id in circuit.dipoles:
-				label = f"D{dipole_id} {circuit.dipoles[dipole_id].__class__.__name__}"
-			lines.append(f"- {label}: {values[-1]:.6g} A")
 
 		self.transient_text.setPlainText("\n".join(lines))
