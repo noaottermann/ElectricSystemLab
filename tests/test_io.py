@@ -122,6 +122,22 @@ class TestIO(unittest.TestCase):
 			self.assertEqual(exported["type"], "simulation_results")
 			self.assertEqual(exported["dc"], results["dc"])
 
+	def test_export_transient_results_to_csv(self) -> None:
+		with tempfile.TemporaryDirectory() as tmp:
+			path = Path(tmp) / "traces.csv"
+			results = {
+				"time": [0.0, 0.1, 0.2],
+				"node_potentials": {1: [0.0, 1.0, 2.0]},
+				"dipole_currents": {2: [0.0, 0.5, 1.0]},
+			}
+
+			_io_modules["exporter"].export_transient_results_to_csv(results, path)
+
+			content = path.read_text(encoding="utf-8").splitlines()
+			self.assertGreaterEqual(len(content), 2)
+			self.assertIn("time,node_1,dipole_2", content[0])
+			self.assertIn("0.1,1.0,0.5", content[2])
+
 
 if __name__ == "__main__":
 	unittest.main()

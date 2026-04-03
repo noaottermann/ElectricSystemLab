@@ -258,6 +258,7 @@ class MainWindow(QMainWindow):
         self._make_action("action_sim_run_dc", None, self.on_run_simulation_dc)
         self._make_action("action_sim_run_transient", None, self.on_run_simulation_transient)
         self._make_action("action_sim_export_results", None, self.on_export_simulation_results)
+        self._make_action("action_sim_export_csv", None, self.on_export_transient_csv)
 
     def _make_action(self, key, shortcut=None, slot=None) -> QAction:
         """Cree une action Qt et l'enregistre dans le dictionnaire."""
@@ -480,6 +481,7 @@ class MainWindow(QMainWindow):
         self.menu_simulation.addAction(self.custom_actions["action_sim_run_transient"])
         self.menu_simulation.addSeparator()
         self.menu_simulation.addAction(self.custom_actions["action_sim_export_results"])
+        self.menu_simulation.addAction(self.custom_actions["action_sim_export_csv"])
 
     def _setup_file_menu(self) -> None:
         """Construit le menu Fichier."""
@@ -1062,6 +1064,11 @@ class MainWindow(QMainWindow):
         """Exporte uniquement les resultats de simulation."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
             self.file_controller.export_simulation_results()
+
+    def on_export_transient_csv(self) -> None:
+        """Exporte les traces transitoires au format CSV."""
+        if hasattr(self, "file_controller") and self.file_controller is not None:
+            self.file_controller.export_transient_results_csv()
 
     def on_toggle_view_graphs(self) -> None:
         """Affiche la fenetre des graphiques."""

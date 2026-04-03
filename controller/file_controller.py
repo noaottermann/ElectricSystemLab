@@ -205,6 +205,34 @@ class FileController:
 			return
 		self._status(f"Resultats exportes: {Path(path).with_suffix('.json').name}")
 
+	def export_transient_results_csv(self) -> None:
+		"""Exporte les traces transitoires dans un fichier CSV."""
+		path, _ = QFileDialog.getSaveFileName(
+			self.window,
+			"Exporter les traces transitoires",
+			"",
+			"CSV (*.csv);;Tous les fichiers (*.*)",
+		)
+		if not path:
+			return
+
+		simulation_controller = getattr(self.window, "simulation_controller", None)
+		if simulation_controller is None:
+			QMessageBox.warning(self.window, "Erreur", "Aucun controleur de simulation disponible.")
+			return
+
+		result = getattr(simulation_controller, "last_transient_result", None)
+		if not result:
+			QMessageBox.warning(self.window, "Erreur", "Aucune simulation transitoire disponible.")
+			return
+
+		try:
+			self._exporter.export_transient_results_to_csv(result, path)
+		except Exception as exc:
+			QMessageBox.warning(self.window, "Erreur", f"Export CSV impossible.\n{exc}")
+			return
+		self._status(f"CSV exporte: {Path(path).with_suffix('.csv').name}")
+
 	def _set_current_path(self, path: Path) -> None:
 		"""Met a jour le chemin courant et la liste des recents."""
 		self.current_path = path

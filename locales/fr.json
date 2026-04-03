@@ -71,6 +71,7 @@
     "action_sim_run_dc": "Lancer simulation DC",
     "action_sim_run_transient": "Lancer simulation transitoire",
     "action_sim_export_results": "Exporter les résultats de simulation",
+    "action_sim_export_csv": "Exporter les traces CSV",
     "action_show_graphs": "Graphiques",
     "action_show_examples": "Exemples",
     "action_show_toolbar": "Barre d'outils",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import csv
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -38,3 +39,41 @@ def export_simulation_results_to_file(results: dict[str, Any], path: Union[Path,
 		**results,
 	}
 	file_path.write_text(json.dumps(payload, indent=4), encoding="utf-8")
+
+
+def export_transient_results_to_csv(results: dict[str, Any], path: Union[Path, str]) -> None:
+	"""Exporte les traces transitoires vers un fichier CSV plat."""
+	file_path = Path(path)
+	if file_path.suffix.lower() != ".csv":
+		raise ValueError("Format non pris en charge (attendu .csv).")
+
+	time_values = list(results.get("time", []))
+	node_potentials = results.get("node_potentials", {}) or {}
+	dipole_currents = results.get("dipole_currents", {}) or {}
+
+	columns = ["time"]
+	node_keys = sorted(node_potentials.keys(), key=lambda key: str(key))
+	dipole_keys = sorted(dipole_currents.keys(), key=lambda key: str(key))
+	columns.extend([f"node_{key}" for key in node_keys])
+	columns.extend([f"dipole_{key}" for key in dipole_keys])
+
+	row_count = len(time_values)
+	for values in list(node_potentials.values()) + list(dipole_currents.values()):
+		row_count = max(row_count, len(values))
+
+	with file_path.open("w", newline="", encoding="utf-8") as handle:
+		writer = csv.DictWriter(handle, fieldnames=columns)
+		writer.writeheader()
+		for index in range(row_count):
+			row: dict[str, Any] = {column: "" for column in columns}
+			if index < len(time_values):
+				row["time"] = time_values[index]
+			for key in node_keys:
+				values = node_potentials.get(key, [])
+				if index < len(values):
+					row[f"node_{key}"] = values[index]
+			for key in dipole_keys:
+				values = dipole_currents.get(key, [])
+				if index < len(values):
+					row[f"dipole_{key}"] = values[index]
+			writer.writerow(row)
