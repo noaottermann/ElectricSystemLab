@@ -2,12 +2,44 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
+import sys
 from typing import Optional
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
+
+def _load_project_io_modules() -> tuple[object, object, object]:
+	"""Charge les modules io du projet sans conflit avec le module standard io."""
+	project_root = Path(__file__).resolve().parents[1]
+	io_dir = project_root / "io"
+
+	pkg_name = "project_io"
+	if pkg_name not in sys.modules:
+		pkg_spec = importlib.util.spec_from_file_location(
+			pkg_name,
+			io_dir / "__init__.py",
+			submodule_search_locations=[str(io_dir)],
+		)
+		pkg_module = importlib.util.module_from_spec(pkg_spec)
+		sys.modules[pkg_name] = pkg_module
+		pkg_spec.loader.exec_module(pkg_module)
+
+	def _load_module(module_name: str):
+		full_name = f"{pkg_name}.{module_name}"
+		if full_name in sys.modules:
+			return sys.modules[full_name]
+		module_spec = importlib.util.spec_from_file_location(full_name, io_dir / f"{module_name}.py")
+		module = importlib.util.module_from_spec(module_spec)
+		sys.modules[full_name] = module
+		module_spec.loader.exec_module(module)
+		return module
+
+	serializer_module = _load_module("serializer")
+	importer_module = _load_module("importer")
+	exporter_module = _load_module("exporter")
+	return serializer_module, importer_module, exporter_module
 
 
 class FileController:
@@ -19,6 +51,7 @@ class FileController:
 		self.scene = scene
 		self.current_path: Optional[Path] = None
 		self.recent_files: list[Path] = []
+		self._serializer, self._importer, self._exporter = _load_project_io_modules()
 
 	def new_circuit(self) -> None:
 		"""Cree un nouveau circuit vide."""
@@ -45,8 +78,7 @@ class FileController:
 	def open_circuit_from_path(self, path: Path) -> None:
 		"""Charge un circuit depuis un chemin fourni."""
 		try:
-			json_str = Path(path).read_text(encoding="utf-8")
-			self.model.load_from_json(json_str, self._component_class_map())
+			self._serializer.load_circuit_from_file(self.model, path)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Impossible d'ouvrir le fichier.\n{exc}")
 			return
@@ -61,8 +93,7 @@ class FileController:
 			self.save_circuit_as()
 			return
 		try:
-			json_str = self.model.to_json()
-			Path(self.current_path).write_text(json_str, encoding="utf-8")
+			self._serializer.save_circuit_to_file(self.model, self.current_path)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Impossible de sauvegarder.\n{exc}")
 			return
@@ -95,8 +126,7 @@ class FileController:
 		if not path:
 			return
 		try:
-			json_str = Path(path).read_text(encoding="utf-8")
-			self.model.load_from_json(json_str, self._component_class_map())
+			self._importer.import_circuit(self.model, path)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Import impossible.\n{exc}")
 			return
@@ -114,16 +144,12 @@ class FileController:
 		)
 		if not path:
 			return
-		resolved = Path(path)
-		if resolved.suffix.lower() != ".json":
-			resolved = resolved.with_suffix(".json")
 		try:
-			json_str = self.model.to_json()
-			resolved.write_text(json_str, encoding="utf-8")
+			self._exporter.export_circuit(self.model, path)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Export impossible.\n{exc}")
 			return
-		self._status(f"Export: {resolved.name}")
+		self._status(f"Export: {Path(path).with_suffix('.json').name}")
 
 	def _set_current_path(self, path: Path) -> None:
 		"""Met a jour le chemin courant et la liste des recents."""
@@ -142,12 +168,3 @@ class FileController:
 		if hasattr(self.window, "status_bar") and self.window.status_bar is not None:
 			self.window.status_bar.showMessage(message, 3000)
 
-	def _component_class_map(self) -> dict[str, type]:
-		"""Mappe les types de composant vers leurs classes."""
-		return {
-			"Resistor": Resistor,
-			"VoltageSourceDC": VoltageSourceDC,
-			"VoltageSourceAC": VoltageSourceAC,
-			"Capacitor": Capacitor,
-			"Inductor": Inductor,
-		}
