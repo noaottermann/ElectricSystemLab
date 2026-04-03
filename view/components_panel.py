@@ -80,6 +80,7 @@ class ComponentsPanel(QWidget):
 		self.category_list.currentItemChanged.connect(self._on_category_changed)
 		self.category_list.itemClicked.connect(self._on_category_clicked)
 		self.components_list.itemClicked.connect(self._on_component_clicked)
+		self.components_list.tool_requested.connect(self.tool_selected.emit)
 
 		self._app = QApplication.instance()
 		if self._app is not None:
@@ -487,6 +488,8 @@ class ComponentsPanel(QWidget):
 
 class ComponentsListWidget(QListWidget):
 	MIME_TYPE = "application/x-component-id"
+	NON_DRAGGABLE_COMPONENT_IDS = {"wire"}
+	tool_requested = pyqtSignal(str)
 
 	def startDrag(self, supported_actions: Qt.DropActions) -> None:
 		"""Demarre le glisser-deposer d'un composant."""
@@ -497,7 +500,8 @@ class ComponentsListWidget(QListWidget):
 		component_id = item.data(Qt.UserRole)
 		if not component_id or (isinstance(component_id, str) and component_id.startswith("header:")):
 			return
-		if component_id == "wire":
+		if component_id in self.NON_DRAGGABLE_COMPONENT_IDS:
+			self.tool_requested.emit(str(component_id))
 			return
 
 		mime = QMimeData()
