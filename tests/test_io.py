@@ -91,6 +91,21 @@ class TestIO(unittest.TestCase):
 			with self.assertRaises(ValueError):
 				import_circuit(self.circuit, bad_path)
 
+	def test_export_circuit_with_simulation_data(self) -> None:
+		with tempfile.TemporaryDirectory() as tmp:
+			path = Path(tmp) / "with_sim.json"
+			payload = {
+				"time": [0.0, 0.01],
+				"node_potentials": {"1": [0.0, 1.0]},
+				"dipole_currents": {"1": [0.0, 0.1]},
+			}
+
+			export_circuit(self.circuit, path, simulation_data=payload)
+
+			exported = json.loads(path.read_text(encoding="utf-8"))
+			self.assertIn("simulation", exported)
+			self.assertEqual(exported["simulation"], payload)
+
 
 if __name__ == "__main__":
 	unittest.main()

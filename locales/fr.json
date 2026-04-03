@@ -68,6 +68,8 @@
     "action_fullscreen": "Basculer en plein écran",
     "action_show_components": "Composants",
     "action_show_sim": "Simulation",
+    "action_sim_run_dc": "Lancer simulation DC",
+    "action_sim_run_transient": "Lancer simulation transitoire",
     "action_show_graphs": "Graphiques",
     "action_show_examples": "Exemples",
     "action_show_toolbar": "Barre d'outils",
@@ -98,5 +100,8 @@
     "action_color_sel": "Sélectionné",
     "action_color_cur": "Courant",
     "action_lang_fr": "Français",
-    "action_lang_en": "English"
+    "action_lang_en": "English",
+    "dialog_transient_title": "Simulation transitoire",
+    "dialog_transient_duration": "Durée (s)",
+    "dialog_transient_step": "Pas de temps (s)"
 }

@@ -68,6 +68,8 @@
     "action_fullscreen": "Toggle Fullscreen",
     "action_show_components": "Components",
     "action_show_sim": "Simulation",
+    "action_sim_run_dc": "Run DC simulation",
+    "action_sim_run_transient": "Run transient simulation",
     "action_show_graphs": "Graphs",
     "action_show_examples": "Examples",
     "action_show_toolbar": "Toolbar",
@@ -98,5 +100,8 @@
     "action_color_sel": "Selected",
     "action_color_cur": "Current",
     "action_lang_fr": "Français",
-    "action_lang_en": "English"
+    "action_lang_en": "English",
+    "dialog_transient_title": "Transient simulation",
+    "dialog_transient_duration": "Duration (s)",
+    "dialog_transient_step": "Time step (s)"
 }

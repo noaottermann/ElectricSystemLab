@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QAction,
     QApplication,
     QHBoxLayout,
+    QInputDialog,
     QMainWindow,
     QMessageBox,
     QShortcut,
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow):
     def init_ui_structure(self) -> None:
         """Crée la structure principale de l'interface."""
         self._configure_window_geometry()
+        self.include_simulation_in_export = False
         
         # Initialisation
         self.create_actions()
@@ -239,6 +241,12 @@ class MainWindow(QMainWindow):
         self._create_edit_actions()
         self._create_view_actions()
         self._create_options_actions()
+        self._create_simulation_actions()
+
+    def _create_simulation_actions(self) -> None:
+        """Cree les actions du menu Simulation."""
+        self._make_action("action_sim_run_dc", None, self.on_run_simulation_dc)
+        self._make_action("action_sim_run_transient", None, self.on_run_simulation_transient)
 
     def _make_action(self, key, shortcut=None, slot=None) -> QAction:
         """Cree une action Qt et l'enregistre dans le dictionnaire."""
@@ -349,6 +357,8 @@ class MainWindow(QMainWindow):
 
         self._make_action("action_grid_export", None, self.on_toggle_grid_export)
         self._make_action("action_sim_export", None, self.on_toggle_sim_export)
+        self.custom_actions["action_sim_export"].setCheckable(True)
+        self.custom_actions["action_sim_export"].setChecked(self.include_simulation_in_export)
         self._make_action("action_bg_color", None, self.on_change_bg_color)
         self._make_action("action_keybinds", None, self.on_show_keybinds)
 
@@ -449,7 +459,12 @@ class MainWindow(QMainWindow):
         self._setup_edit_menu()
         self._setup_view_menu()
         self._setup_options_menu()
-        # Menu simulation
+        self._setup_simulation_menu()
+
+    def _setup_simulation_menu(self) -> None:
+        """Construit le menu Simulation."""
+        self.menu_simulation.addAction(self.custom_actions["action_sim_run_dc"])
+        self.menu_simulation.addAction(self.custom_actions["action_sim_run_transient"])
 
     def _setup_file_menu(self) -> None:
         """Construit le menu Fichier."""
@@ -976,6 +991,42 @@ class MainWindow(QMainWindow):
         if hasattr(self, "app_controller") and self.app_controller is not None:
             self.app_controller.not_implemented("Fenetre de simulation")
 
+    def on_run_simulation_dc(self) -> None:
+        """Lance la simulation DC via le controleur de simulation."""
+        if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            self.simulation_controller.run_dc()
+
+    def on_run_simulation_transient(self) -> None:
+        """Lance la simulation transitoire avec des parametres par defaut."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+
+        duration, ok_duration = QInputDialog.getDouble(
+            self,
+            Translator.tr("dialog_transient_title"),
+            Translator.tr("dialog_transient_duration"),
+            1.0,
+            1e-6,
+            1e6,
+            6,
+        )
+        if not ok_duration:
+            return
+
+        time_step, ok_step = QInputDialog.getDouble(
+            self,
+            Translator.tr("dialog_transient_title"),
+            Translator.tr("dialog_transient_step"),
+            0.01,
+            1e-9,
+            1e6,
+            9,
+        )
+        if not ok_step:
+            return
+
+        self.simulation_controller.run_transient(duration=duration, time_step=time_step)
+
     def on_toggle_view_graphs(self) -> None:
         """Affiche la fenetre des graphiques."""
         if hasattr(self, "app_controller") and self.app_controller is not None:
@@ -1080,8 +1131,16 @@ class MainWindow(QMainWindow):
 
     def on_toggle_sim_export(self) -> None:
         """Bascule l'inclusion des donnees de simulation a l'export."""
+        self.include_simulation_in_export = not self.include_simulation_in_export
+        action = self.custom_actions.get("action_sim_export")
+        if action is not None:
+            action.setChecked(self.include_simulation_in_export)
+
         if hasattr(self, "app_controller") and self.app_controller is not None:
-            self.app_controller.not_implemented("Export simulation")
+            if self.include_simulation_in_export:
+                self.app_controller.set_status("Export simulation active")
+            else:
+                self.app_controller.set_status("Export simulation inactif")
 
     def on_change_bg_color(self) -> None:
         """Ouvre la selection de couleur de fond."""

@@ -144,8 +144,14 @@ class FileController:
 		)
 		if not path:
 			return
+
+		simulation_data = None
+		if getattr(self.window, "include_simulation_in_export", False):
+			simulation_controller = getattr(self.window, "simulation_controller", None)
+			if simulation_controller is not None:
+				simulation_data = getattr(simulation_controller, "last_transient_result", None)
 		try:
-			self._exporter.export_circuit(self.model, path)
+			self._exporter.export_circuit(self.model, path, simulation_data=simulation_data)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Export impossible.\n{exc}")
 			return
