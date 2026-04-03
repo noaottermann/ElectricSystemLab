@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QInputDialog,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QShortcut,
     QStatusBar,
     QToolBar,
@@ -18,6 +19,7 @@ from controller.edit_controller import EditController
 from controller.file_controller import FileController
 from controller.simulation_controller import SimulationController
 from utils.translator import Translator
+from utils.assets import get_logo_icon, logo_exists
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
 from view.graph_panel import GraphPanel
@@ -39,6 +41,7 @@ class MainWindow(QMainWindow):
     def init_ui_structure(self) -> None:
         """Crée la structure principale de l'interface."""
         self._configure_window_geometry()
+        self._set_window_logo()
         self.include_simulation_in_export = False
         
         # Initialisation
@@ -71,6 +74,13 @@ class MainWindow(QMainWindow):
         y = (screen_height - height) // 2
         self.setGeometry(x, y, width, height)
 
+    def _set_window_logo(self) -> None:
+        """Définit le logo de la fenêtre principale."""
+        if logo_exists():
+            logo_icon = get_logo_icon()
+            if not logo_icon.isNull():
+                self.setWindowIcon(logo_icon)
+
     def _setup_central_widget(self) -> None:
         """Construit le widget central et ses panneaux."""
         self.scene = CircuitScene(self.model)
@@ -85,6 +95,30 @@ class MainWindow(QMainWindow):
         self.graph_panel.setMinimumWidth(260)
         self.graph_panel.setMaximumWidth(420)
         self.graph_panel.setVisible(False)
+
+        # Crée le bouton Graphiques flottant
+        self.graphics_button = QPushButton()
+        self.graphics_button.setFixedSize(80, 120)  # Portrait: plus haut que large
+        self.graphics_button.clicked.connect(self.on_toggle_view_graphs)
+        self.graphics_button.setParent(self)
+        self.graphics_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1f618d;
+            }
+            """
+        )
 
         central_widget = QWidget()
         central_layout = QHBoxLayout(central_widget)
@@ -142,7 +176,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _update_toolbar_geometry(self) -> None:
-        """Positionne la barre d'outils en bas du widget central."""
+        """Positionne la barre d'outils en bas du widget central et le bouton flottant."""
         if not hasattr(self, "toolbar") or self.toolbar is None:
             return
         if self.centralWidget() is None:
@@ -153,6 +187,18 @@ class MainWindow(QMainWindow):
         content_height = central_widget.height()
         if content_width <= 0 or content_height <= 0:
             return
+
+        # Positiorme le bouton Graphiques flottant aux 2/3 de la hauteur, tout à droite
+        if hasattr(self, "graphics_button") and self.graphics_button is not None:
+            button_width = self.graphics_button.width()
+            button_height = self.graphics_button.height()
+            
+            # Position: 2/3 de la hauteur de la fenêtre, tout à droite
+            btn_x = self.width() - button_width - 10  # 10px de marge à droite
+            btn_y = int(self.height() * 2 / 3 - button_height / 2)
+            
+            self.graphics_button.move(btn_x, btn_y)
+            self.graphics_button.raise_()
 
         panel_width = 0
         if hasattr(self, "components_panel") and self.components_panel.isVisible():
@@ -742,6 +788,8 @@ class MainWindow(QMainWindow):
             self.toolbar_unlock_action.setText(Translator.tr("action_unlock"))
         if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
             self.toolbar_delete_action.setText(Translator.tr("action_delete"))
+        if hasattr(self, "graphics_button") and self.graphics_button is not None:
+            self.graphics_button.setText(Translator.tr("action_show_graphs"))
 
     def change_language(self, lang: str) -> None:
         """Change la langue et rafraichit l'interface."""
