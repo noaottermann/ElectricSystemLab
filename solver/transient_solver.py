@@ -33,6 +33,7 @@ class TransientSolver(BaseSolver):
 
 		time_values = self._build_time_grid(duration, time_step)
 		node_potentials: dict[int, list[float]] = {node_id: [] for node_id in circuit.nodes}
+		dipole_voltages: dict[int, list[float]] = {dipole.id: [] for dipole in circuit.dipoles.values()}
 		dipole_currents: dict[int, list[float]] = {
 			dipole.id: [] for dipole in circuit.dipoles.values() if isinstance(dipole, (Resistor, VoltageSourceDC, VoltageSourceAC))
 		}
@@ -67,12 +68,14 @@ class TransientSolver(BaseSolver):
 				x,
 				num_v_vars,
 				node_potentials,
+				dipole_voltages,
 				dipole_currents,
 			)
 
 		return {
 			"time": time_values,
 			"node_potentials": node_potentials,
+			"dipole_voltages": dipole_voltages,
 			"dipole_currents": dipole_currents,
 		}
 
@@ -145,6 +148,7 @@ class TransientSolver(BaseSolver):
 		solution,
 		current_var_offset: int,
 		node_potentials,
+		dipole_voltages,
 		dipole_currents,
 	) -> None:
 		for node_id, node in circuit.nodes.items():
@@ -156,6 +160,9 @@ class TransientSolver(BaseSolver):
 				if idx is not None:
 					node.potential = float(solution[idx])
 			node_potentials[node_id].append(float(node.potential))
+
+		for dipole in circuit.dipoles.values():
+			dipole_voltages[dipole.id].append(float(dipole.voltage))
 
 		for dipole in circuit.dipoles.values():
 			if isinstance(dipole, Resistor):

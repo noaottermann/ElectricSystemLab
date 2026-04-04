@@ -48,17 +48,17 @@ def export_transient_results_to_csv(results: dict[str, Any], path: Union[Path, s
 		raise ValueError("Format non pris en charge (attendu .csv).")
 
 	time_values = list(results.get("time", []))
-	node_potentials = results.get("node_potentials", {}) or {}
+	dipole_voltages = results.get("dipole_voltages", {}) or results.get("node_potentials", {}) or {}
 	dipole_currents = results.get("dipole_currents", {}) or {}
 
 	columns = ["time"]
-	node_keys = sorted(node_potentials.keys(), key=lambda key: str(key))
+	voltage_keys = sorted(dipole_voltages.keys(), key=lambda key: str(key))
 	dipole_keys = sorted(dipole_currents.keys(), key=lambda key: str(key))
-	columns.extend([f"node_{key}" for key in node_keys])
+	columns.extend([f"dipole_voltage_{key}" for key in voltage_keys])
 	columns.extend([f"dipole_{key}" for key in dipole_keys])
 
 	row_count = len(time_values)
-	for values in list(node_potentials.values()) + list(dipole_currents.values()):
+	for values in list(dipole_voltages.values()) + list(dipole_currents.values()):
 		row_count = max(row_count, len(values))
 
 	with file_path.open("w", newline="", encoding="utf-8") as handle:
@@ -68,10 +68,10 @@ def export_transient_results_to_csv(results: dict[str, Any], path: Union[Path, s
 			row: dict[str, Any] = {column: "" for column in columns}
 			if index < len(time_values):
 				row["time"] = time_values[index]
-			for key in node_keys:
-				values = node_potentials.get(key, [])
+			for key in voltage_keys:
+				values = dipole_voltages.get(key, [])
 				if index < len(values):
-					row[f"node_{key}"] = values[index]
+					row[f"dipole_voltage_{key}"] = values[index]
 			for key in dipole_keys:
 				values = dipole_currents.get(key, [])
 				if index < len(values):

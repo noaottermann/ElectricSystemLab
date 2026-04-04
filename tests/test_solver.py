@@ -109,9 +109,9 @@ class TestTransientSolver(unittest.TestCase):
         result = self.solver.solve(self.circuit, duration=0.01, time_step=0.005)
 
         self.assertEqual(result["time"], [0.0, 0.005, 0.01])
-        self.assertIn(n_pos.id, result["node_potentials"])
-        self.assertEqual(len(result["node_potentials"][n_pos.id]), 3)
-        self.assertAlmostEqual(result["node_potentials"][n_pos.id][-1], 10.0, places=5)
+        self.assertIn(resistor.id, result["dipole_voltages"])
+        self.assertEqual(len(result["dipole_voltages"][resistor.id]), 3)
+        self.assertAlmostEqual(result["dipole_voltages"][resistor.id][-1], 10.0, places=5)
         self.assertAlmostEqual(abs(result["dipole_currents"][resistor.id][-1]), 2.0, places=5)
 
     def test_transient_ac_source_changes_over_time(self):
@@ -131,12 +131,12 @@ class TestTransientSolver(unittest.TestCase):
         self.circuit.add_dipole(resistor)
 
         result = self.solver.solve(self.circuit, duration=0.5, time_step=0.25)
-        potentials = result["node_potentials"][n_pos.id]
+        voltages = result["dipole_voltages"][resistor.id]
 
         self.assertEqual(result["time"], [0.0, 0.25, 0.5])
-        self.assertAlmostEqual(potentials[0], 0.0, places=5)
-        self.assertAlmostEqual(potentials[1], 10.0, places=5)
-        self.assertAlmostEqual(potentials[2], 0.0, places=5)
+        self.assertAlmostEqual(voltages[0], 0.0, places=5)
+        self.assertAlmostEqual(voltages[1], 10.0, places=5)
+        self.assertAlmostEqual(voltages[2], 0.0, places=5)
         self.assertAlmostEqual(result["dipole_currents"][resistor.id][1], 1.0, places=5)
 
     def test_transient_invalid_step(self):

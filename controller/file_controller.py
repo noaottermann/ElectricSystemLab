@@ -178,20 +178,12 @@ class FileController:
 			# Fallback: resume l'etat courant du circuit comme resultats DC.
 			result = {
 				"dc": {
-					"nodes": [
-						{
-							"id": node.id,
-							"potential": node.potential,
-							"is_ground": node.is_ground,
-						}
-						for node in sorted(self.model.nodes.values(), key=lambda n: n.id)
-					],
 					"dipoles": [
 						{
 							"id": dipole.id,
 							"type": dipole.__class__.__name__,
-							"current": dipole.current,
 							"voltage": dipole.voltage,
+							"current": dipole.current,
 						}
 						for dipole in sorted(self.model.dipoles.values(), key=lambda d: d.id)
 					],

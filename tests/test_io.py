@@ -135,7 +135,7 @@ class TestIO(unittest.TestCase):
 
 			content = path.read_text(encoding="utf-8").splitlines()
 			self.assertGreaterEqual(len(content), 2)
-			self.assertIn("time,node_1,dipole_2", content[0])
+			self.assertIn("time,dipole_voltage_1,dipole_2", content[0])
 			self.assertIn("0.1,1.0,0.5", content[2])
 
 

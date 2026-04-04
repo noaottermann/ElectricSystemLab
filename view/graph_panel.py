@@ -121,12 +121,16 @@ class TimeSeriesPlotWidget(QWidget):
 
 		# Courbes
 		colors = [QColor("#2563eb"), QColor("#16a34a"), QColor("#dc2626"), QColor("#7c3aed"), QColor("#ea580c")]
+		cursor_points = []
 		for index, entry in enumerate(self.series):
 			x_values = np.asarray(entry.get("x", []), dtype=float)
 			y_values = np.asarray(entry.get("y", []), dtype=float)
 			if x_values.size == 0 or y_values.size == 0:
 				continue
 			painter.setPen(QPen(colors[index % len(colors)], 2))
+			if self.cursor_time is not None:
+				cursor_index, cursor_sample_time, cursor_sample_value = _trace_value_at_time(x_values, y_values, float(self.cursor_time))
+				cursor_points.append((index, cursor_sample_time, cursor_sample_value))
 			points = []
 			for x_value, y_value in zip(x_values, y_values):
 				points.append((map_x(float(x_value)), map_y(float(y_value))))
@@ -134,12 +138,38 @@ class TimeSeriesPlotWidget(QWidget):
 				p1 = points[i - 1]
 				p2 = points[i]
 				painter.drawLine(int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1]))
+			if self.cursor_time is not None and x_values.size:
+				cursor_index = _nearest_index(x_values, float(self.cursor_time))
+				cursor_x = map_x(float(x_values[cursor_index]))
+				cursor_y = map_y(float(y_values[cursor_index]))
+				painter.setBrush(colors[index % len(colors)])
+				painter.setPen(QPen(colors[index % len(colors)], 1))
+				painter.drawEllipse(int(cursor_x) - 3, int(cursor_y) - 3, 6, 6)
 
 		# Repère temporel
 		if self.cursor_time is not None:
 			cursor_x = map_x(float(self.cursor_time))
 			painter.setPen(QPen(QColor("#6b7280"), 1, Qt.DashLine))
 			painter.drawLine(int(cursor_x), plot_rect.top(), int(cursor_x), plot_rect.bottom())
+
+			info_lines = [f"t = {float(self.cursor_time):.4g} s"]
+			for index, sample_time, sample_value in cursor_points[:4]:
+				label = str(self.series[index].get("label", f"Trace {index + 1}"))
+				unit_label = str(self.series[index].get("unit_label", "Valeur"))
+				info_lines.append(f"{label}: {sample_value:.4g} {unit_label.split('(')[-1].rstrip(')') if '(' in unit_label else ''}".rstrip())
+
+			box_width = min(220, plot_rect.width() - 20)
+			box_height = 18 + 14 * len(info_lines)
+			box_left = max(plot_rect.left() + 8, min(int(cursor_x) + 10, plot_rect.right() - box_width - 6))
+			box_top = plot_rect.top() + 8
+			painter.setPen(QPen(QColor("#cbd5e1"), 1))
+			painter.setBrush(QColor(255, 255, 255, 235))
+			painter.drawRoundedRect(box_left, box_top, box_width, box_height, 6, 6)
+			painter.setPen(QPen(QColor("#111827")))
+			text_y = box_top + 16
+			for line in info_lines:
+				painter.drawText(box_left + 10, text_y, line)
+				text_y += 14
 
 		# Légende
 		legend_x = plot_rect.right() - 150
@@ -216,8 +246,8 @@ class GraphPanel(QWidget):
 		self.transient_controls_layout.setContentsMargins(5, 5, 5, 5)
 		self.transient_controls_layout.setSpacing(5)
 		
-		# Sélection des nœuds
-		self.nodes_group = QGroupBox("Nœuds")
+		# Sélection des dipôles pour les tensions
+		self.nodes_group = QGroupBox("Dipôles (tension)")
 		self.nodes_layout = QHBoxLayout(self.nodes_group)
 		self.nodes_layout.setSpacing(3)
 		self.nodes_layout.setContentsMargins(5, 5, 5, 5)
@@ -291,8 +321,8 @@ class GraphPanel(QWidget):
 		self.clear_results()
 
 	def _create_node_checkbox(self, node_id: str) -> None:
-		"""Crée une checkbox pour un nœud."""
-		checkbox = QCheckBox(f"N{node_id}")
+		"""Crée une checkbox pour un dipôle (tension)."""
+		checkbox = QCheckBox(f"D{node_id}")
 		checkbox.setChecked(True)
 		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
 		self.nodes_scroll_layout.addWidget(checkbox)
@@ -360,7 +390,7 @@ class GraphPanel(QWidget):
 			if item and item.widget():
 				checkbox = item.widget()
 				if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-					node_id = checkbox.text().replace("N", "")
+					node_id = checkbox.text().replace("D", "")
 					self.selected_nodes.add(node_id)
 		
 		for i in range(self.dipoles_scroll_layout.count()):
@@ -414,27 +444,24 @@ class GraphPanel(QWidget):
 		"""Affiche les resultats DC avec matplotlib."""
 		self.dc_figure.clear()
 		
-		# Récupère les données
-		nodes = sorted(circuit.nodes.values(), key=lambda n: n.id)
-		node_names = [f"N{n.id}" for n in nodes]
-		node_potentials = [n.potential for n in nodes]
-		
+		# Récupère les données par dipôle
 		dipoles = sorted(circuit.dipoles.values(), key=lambda d: d.id)
 		dipole_names = [f"D{d.id}" for d in dipoles]
+		dipole_voltages = [d.voltage for d in dipoles]
 		dipole_currents = [d.current for d in dipoles]
 		
 		# Crée la figure avec 2 subplots
 		ax1 = self.dc_figure.add_subplot(211)
 		ax2 = self.dc_figure.add_subplot(212)
 		
-		# Potentiels des nœuds
-		if node_potentials:
-			colors = ['#3498db' if v >= 0 else '#e74c3c' for v in node_potentials]
-			ax1.bar(range(len(node_potentials)), node_potentials, color=colors, alpha=0.7)
-			ax1.set_xticks(range(len(node_names)))
-			ax1.set_xticklabels(node_names, fontsize=9)
-			ax1.set_ylabel('Potentiel (V)', fontsize=9)
-			ax1.set_title('Potentiels des Nœuds', fontsize=10, fontweight='bold')
+		# Tensions des dipôles
+		if dipole_voltages:
+			colors = ['#3498db' if v >= 0 else '#e74c3c' for v in dipole_voltages]
+			ax1.bar(range(len(dipole_voltages)), dipole_voltages, color=colors, alpha=0.7)
+			ax1.set_xticks(range(len(dipole_names)))
+			ax1.set_xticklabels(dipole_names, fontsize=9)
+			ax1.set_ylabel('Tension (V)', fontsize=9)
+			ax1.set_title('Tensions des Dipôles', fontsize=10, fontweight='bold')
 			ax1.grid(True, alpha=0.3)
 		
 		# Courants des dipôles
@@ -452,9 +479,9 @@ class GraphPanel(QWidget):
 
 	def _text_dc_results(self, circuit) -> None:
 		"""Affiche les resultats DC en texte (fallback sans matplotlib)."""
-		lines = ["Simulation DC", "", "Noeuds (potentiels):"]
-		for node in sorted(circuit.nodes.values(), key=lambda n: n.id):
-			lines.append(f"- N{node.id}: {node.potential:.6g} V")
+		lines = ["Simulation DC", "", "Dipoles (tensions):"]
+		for dipole in sorted(circuit.dipoles.values(), key=lambda d: d.id):
+			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.voltage:.6g} V")
 
 		lines.append("")
 		lines.append("Dipoles (courants):")
@@ -479,10 +506,10 @@ class GraphPanel(QWidget):
 
 		# Crée les checkboxes de sélection
 		self._clear_checkboxes()
-		node_potentials = result.get("node_potentials", {})
+		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 		
-		for node_id in sorted(node_potentials.keys()):
+		for node_id in sorted(dipole_voltages.keys()):
 			self._create_node_checkbox(str(node_id))
 			self.selected_nodes.add(str(node_id))
 		
@@ -505,8 +532,8 @@ class GraphPanel(QWidget):
 		else:
 			lines.append("Aucun point temporel.")
 		lines.append("")
-		lines.append("Nœuds sélectionnés: " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else "aucun"))
-		lines.append("Dipôles sélectionnés: " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else "aucun"))
+		lines.append("Dipôles tension sélectionnés: " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else "aucun"))
+		lines.append("Dipôles courant sélectionnés: " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else "aucun"))
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 		if cursor_time is not None:
 			lines.append("")
@@ -516,25 +543,18 @@ class GraphPanel(QWidget):
 	def _plot_transient_results_native(self, result: dict) -> None:
 		"""Prépare un rendu natif Qt quand matplotlib n'est pas disponible."""
 		time_values = np.asarray(result.get("time", []), dtype=float)
-		node_potentials = result.get("node_potentials", {})
+		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 
 		series = []
-		for node_id in sorted(node_potentials.keys()):
+		for node_id in sorted(dipole_voltages.keys()):
 			if str(node_id) not in self.selected_nodes:
 				continue
-			values = np.asarray(node_potentials.get(node_id, []), dtype=float)
+			values = np.asarray(dipole_voltages.get(node_id, []), dtype=float)
 			if values.size == 0:
 				continue
-			series.append({"x": time_values, "y": values, "label": f"N{node_id}", "unit_label": "Potentiel (V)"})
-		for dipole_id in sorted(dipole_currents.keys()):
-			if str(dipole_id) not in self.selected_dipoles:
-				continue
-			values = np.asarray(dipole_currents.get(dipole_id, []), dtype=float)
-			if values.size == 0:
-				continue
-			series.append({"x": time_values, "y": values, "label": f"D{dipole_id}", "unit_label": "Courant (A)"})
+			series.append({"x": time_values, "y": values, "label": f"D{node_id}", "unit_label": "Tension (V)"})
 
 		if hasattr(self, 'transient_plot'):
 			self.transient_plot.set_series(series, cursor_time=cursor_time)
@@ -544,17 +564,17 @@ class GraphPanel(QWidget):
 		self.transient_figure.clear()
 		
 		time_values = np.array(result.get("time", []))
-		node_potentials = result.get("node_potentials", {})
+		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 		
 		if len(time_values) == 0:
 			return
 		
-		# Filtre selon la sélection
+		# Filtre selon la sélection des tensions
 		selected_nodes = []
-		for node_id in sorted(node_potentials.keys()):
+		for node_id in sorted(dipole_voltages.keys()):
 			if str(node_id) in self.selected_nodes:
-				values = np.array(node_potentials.get(node_id, []))
+				values = np.array(dipole_voltages.get(node_id, []))
 				if len(values) > 0:
 					selected_nodes.append((node_id, values))
 		
@@ -565,7 +585,7 @@ class GraphPanel(QWidget):
 				if len(values) > 0:
 					selected_dipoles.append((dipole_id, values))
 		
-		total_plots = len(selected_nodes) + len(selected_dipoles)
+		total_plots = len(selected_nodes)
 		if total_plots == 0:
 			self.transient_stats_text.setPlainText("Aucune trace sélectionnée.")
 			return
@@ -586,30 +606,16 @@ class GraphPanel(QWidget):
 		
 		ax_idx = 0
 		
-		# Affiche les potentiels des nœuds sélectionnés
+		# Affiche les tensions des dipôles sélectionnés
 		for node_id, values in selected_nodes:
 			if ax_idx >= len(axes):
 				break
-			axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'N{node_id}')
+			axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'D{node_id}')
 			if cursor_time is not None:
 				axes[ax_idx].axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
-			axes[ax_idx].set_ylabel('Potentiel (V)', fontsize=9)
+			axes[ax_idx].set_ylabel('Tension (V)', fontsize=9)
 			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
-			axes[ax_idx].set_title(f'Potentiel du Nœud {node_id}', fontsize=10, fontweight='bold')
-			axes[ax_idx].grid(True, alpha=0.3)
-			axes[ax_idx].legend(loc='best', fontsize=8)
-			ax_idx += 1
-		
-		# Affiche les courants des dipôles sélectionnés
-		for dipole_id, values in selected_dipoles:
-			if ax_idx >= len(axes):
-				break
-			axes[ax_idx].plot(time_values, values, 'g-', linewidth=2, label=f'D{dipole_id}')
-			if cursor_time is not None:
-				axes[ax_idx].axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
-			axes[ax_idx].set_ylabel('Courant (A)', fontsize=9)
-			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
-			axes[ax_idx].set_title(f'Courant du Dipôle {dipole_id}', fontsize=10, fontweight='bold')
+			axes[ax_idx].set_title(f'Tension du Dipôle {node_id}', fontsize=10, fontweight='bold')
 			axes[ax_idx].grid(True, alpha=0.3)
 			axes[ax_idx].legend(loc='best', fontsize=8)
 			ax_idx += 1
@@ -649,7 +655,7 @@ class GraphPanel(QWidget):
 	def _text_transient_results(self, result: dict) -> None:
 		"""Affiche les resultats transitoires en texte (fallback sans matplotlib)."""
 		time_values = result.get("time", [])
-		node_potentials = result.get("node_potentials", {})
+		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 
 		lines = ["Simulation transitoire", ""]
@@ -661,12 +667,12 @@ class GraphPanel(QWidget):
 			lines.append("Aucun point temporel.")
 
 		lines.append("")
-		lines.append("Noeuds (dernier point):")
-		for node_id in sorted(node_potentials, key=lambda x: str(x)):
-			values = node_potentials.get(node_id, [])
+		lines.append("Dipoles (tensions, dernier point):")
+		for node_id in sorted(dipole_voltages, key=lambda x: str(x)):
+			values = dipole_voltages.get(node_id, [])
 			if not values:
 				continue
-			lines.append(f"- N{node_id}: {values[-1]:.6g} V")
+			lines.append(f"- D{node_id}: {values[-1]:.6g} V")
 
 		lines.append("")
 		lines.append("Dipoles (dernier point):")
