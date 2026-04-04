@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.circuit import Circuit
-from model.components import Resistor, VoltageSourceAC, VoltageSourceDC
+from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
 from solver.dc_solver import DCSolver
 from solver.transient_solver import TransientSolver
 
@@ -147,6 +147,43 @@ class TestTransientSolver(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.solver.solve(self.circuit, duration=0.1, time_step=0.0)
+
+    def test_transient_rc_response_is_dynamic(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_src = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_src, n_gnd, dc_voltage=10.0)
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_src, n_out, resistance=1000.0)
+        self.circuit.add_dipole(resistor)
+        capacitor = Capacitor(self.circuit.get_next_dipole_id(), n_out, n_gnd, capacitance=1e-6)
+        self.circuit.add_dipole(capacitor)
+
+        result = self.solver.solve(self.circuit, duration=0.003, time_step=0.0001)
+        v_cap = result["dipole_voltages"][capacitor.id]
+
+        self.assertGreater(v_cap[-1], v_cap[0])
+        self.assertGreater(v_cap[-1], 0.0)
+        self.assertLess(v_cap[-1], 10.1)
+
+    def test_transient_rl_response_is_dynamic(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_src = self.circuit.create_node(0, 100)
+        n_mid = self.circuit.create_node(80, 100)
+
+        source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_src, n_gnd, dc_voltage=10.0)
+        self.circuit.add_dipole(source)
+        inductor = Inductor(self.circuit.get_next_dipole_id(), n_src, n_mid, inductance=1e-3)
+        self.circuit.add_dipole(inductor)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_mid, n_gnd, resistance=10.0)
+        self.circuit.add_dipole(resistor)
+
+        result = self.solver.solve(self.circuit, duration=0.005, time_step=0.0001)
+        i_l = result["dipole_currents"][inductor.id]
+
+        self.assertGreater(i_l[-1], i_l[0])
+        self.assertGreater(i_l[-1], 0.0)
 
 if __name__ == '__main__':
     unittest.main()

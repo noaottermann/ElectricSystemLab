@@ -98,7 +98,7 @@ class MainWindow(QMainWindow):
 
         # Crée le bouton Graphiques flottant
         self.graphics_button = QPushButton()
-        self.graphics_button.setFixedSize(80, 120)  # Portrait: plus haut que large
+        self.graphics_button.setFixedSize(116, 132)  # Compact mais lisible
         self.graphics_button.clicked.connect(self.on_toggle_view_graphs)
         self.graphics_button.setParent(self)
         self.graphics_button.setStyleSheet(
@@ -109,7 +109,8 @@ class MainWindow(QMainWindow):
                 border: none;
                 border-radius: 8px;
                 font-weight: bold;
-                padding: 10px;
+                font-size: 12px;
+                padding: 10px 12px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -188,15 +189,28 @@ class MainWindow(QMainWindow):
         if content_width <= 0 or content_height <= 0:
             return
 
-        # Positiorme le bouton Graphiques flottant aux 2/3 de la hauteur, tout à droite
+        # Positionne le bouton Graphiques aux 2/3 de la hauteur de l'écran, tout à droite
         if hasattr(self, "graphics_button") and self.graphics_button is not None:
             button_width = self.graphics_button.width()
             button_height = self.graphics_button.height()
-            
-            # Position: 2/3 de la hauteur de la fenêtre, tout à droite
-            btn_x = self.width() - button_width - 10  # 10px de marge à droite
-            btn_y = int(self.height() * 2 / 3 - button_height / 2)
-            
+
+            screen_geometry = None
+            screen = self.screen()
+            if screen is not None:
+                screen_geometry = screen.availableGeometry()
+            elif QApplication.primaryScreen() is not None:
+                screen_geometry = QApplication.primaryScreen().availableGeometry()
+
+            if screen_geometry is not None:
+                btn_x = screen_geometry.right() - button_width - 10
+                btn_y = screen_geometry.top() + int(screen_geometry.height() * 1 / 3) - button_height // 2
+            else:
+                btn_x = self.width() - button_width - 10
+                btn_y = int(self.height() * 1 / 3 - button_height / 2)
+
+            btn_x = max(0, btn_x)
+            btn_y = max(0, btn_y)
+
             self.graphics_button.move(btn_x, btn_y)
             self.graphics_button.raise_()
 
