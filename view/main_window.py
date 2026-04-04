@@ -130,6 +130,29 @@ class MainWindow(QMainWindow):
         central_layout.addWidget(self.graph_panel)
         self.setCentralWidget(central_widget)
 
+        # Bouton de repli externe, collé à gauche de l'onglet Graphiques
+        self.graph_collapse_button = QPushButton(">>>", central_widget)
+        self.graph_collapse_button.setFixedSize(36, 24)
+        self.graph_collapse_button.setVisible(False)
+        self.graph_collapse_button.clicked.connect(lambda: self._set_graph_panel_visible(False))
+        self.graph_collapse_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2c3e50;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1f2d3a;
+            }
+            QPushButton:pressed {
+                background-color: #17212b;
+            }
+            """
+        )
+
         # Ancre la barre d'outils dans la zone centrale pour suivre la géométrie du panneau et de la vue
         if hasattr(self, "toolbar"):
             self.toolbar.setParent(central_widget)
@@ -214,6 +237,24 @@ class MainWindow(QMainWindow):
             self.graphics_button.move(btn_x, btn_y)
             self.graphics_button.raise_()
 
+        # Positionne le bouton de repli juste a gauche de l'onglet Graphiques quand il est visible
+        if (
+            hasattr(self, "graph_collapse_button")
+            and self.graph_collapse_button is not None
+            and hasattr(self, "graph_panel")
+            and self.graph_panel is not None
+            and self.graph_panel.isVisible()
+        ):
+            panel_geo = self.graph_panel.geometry()
+            button_width = self.graph_collapse_button.width()
+            button_height = self.graph_collapse_button.height()
+            btn_x = max(0, panel_geo.x() - button_width)
+            btn_y = max(0, panel_geo.y())
+            if button_height > panel_geo.height():
+                btn_y = max(0, panel_geo.y() + panel_geo.height() - button_height)
+            self.graph_collapse_button.move(btn_x, btn_y)
+            self.graph_collapse_button.raise_()
+
         panel_width = 0
         if hasattr(self, "components_panel") and self.components_panel.isVisible():
             panel_width = self.components_panel.width()
@@ -237,6 +278,24 @@ class MainWindow(QMainWindow):
 
         self.toolbar.setGeometry(x, y, toolbar_width, toolbar_height)
         self.toolbar.raise_()
+
+    def _set_graph_panel_visible(self, visible: bool) -> None:
+        """Affiche/masque le panneau Graphiques et synchronise le bouton flottant."""
+        if not hasattr(self, "graph_panel") or self.graph_panel is None:
+            return
+        self.graph_panel.setVisible(visible)
+
+        if hasattr(self, "graphics_button") and self.graphics_button is not None:
+            self.graphics_button.setVisible(not visible)
+
+        if hasattr(self, "graph_collapse_button") and self.graph_collapse_button is not None:
+            self.graph_collapse_button.setVisible(visible)
+
+        action = self.custom_actions.get("action_show_graphs")
+        if action is not None:
+            action.setChecked(visible)
+
+        self._update_toolbar_geometry()
 
     def _update_transform_actions_visibility(self) -> None:
         """Ajuste la visibilite des actions selon la selection."""
@@ -1077,11 +1136,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
                 self.graph_panel.set_dc_results(self.model)
                 if not self.graph_panel.isVisible():
-                    self.graph_panel.setVisible(True)
-                    action = self.custom_actions.get("action_show_graphs")
-                    if action is not None:
-                        action.setChecked(True)
-                    self._update_toolbar_geometry()
+                    self._set_graph_panel_visible(True)
 
     def on_run_simulation_transient(self) -> None:
         """Lance la simulation transitoire avec des parametres par defaut."""
@@ -1116,11 +1171,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.set_transient_results(result, circuit=self.model)
             if result and not self.graph_panel.isVisible():
-                self.graph_panel.setVisible(True)
-                action = self.custom_actions.get("action_show_graphs")
-                if action is not None:
-                    action.setChecked(True)
-                self._update_toolbar_geometry()
+                self._set_graph_panel_visible(True)
 
     def on_export_simulation_results(self) -> None:
         """Exporte uniquement les resultats de simulation."""
@@ -1137,11 +1188,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "graph_panel") or self.graph_panel is None:
             return
 
-        self.graph_panel.setVisible(not self.graph_panel.isVisible())
-        action = self.custom_actions.get("action_show_graphs")
-        if action is not None:
-            action.setChecked(self.graph_panel.isVisible())
-        self._update_toolbar_geometry()
+        self._set_graph_panel_visible(not self.graph_panel.isVisible())
 
     def on_toggle_view_examples(self) -> None:
         """Affiche la fenetre d'exemples."""

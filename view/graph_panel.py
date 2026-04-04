@@ -215,9 +215,16 @@ class GraphPanel(QWidget):
 		layout.setContentsMargins(10, 8, 10, 8)
 		layout.setSpacing(8)
 
+		header = QWidget()
+		header_layout = QHBoxLayout(header)
+		header_layout.setContentsMargins(0, 0, 0, 0)
+		header_layout.setSpacing(8)
+
 		title = QLabel("Résultats & Graphiques")
 		title.setObjectName("graphPanelTitle")
-		layout.addWidget(title)
+		header_layout.addWidget(title, 1)
+
+		layout.addWidget(header)
 
 		self.tabs = QTabWidget()
 		
