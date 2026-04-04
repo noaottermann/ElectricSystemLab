@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import (
 	QLabel, QTextEdit, QTabWidget, QVBoxLayout, QWidget,
-	QCheckBox, QHBoxLayout, QScrollArea, QGroupBox
+	QCheckBox, QHBoxLayout, QScrollArea, QGroupBox, QPushButton
 )
 from PyQt5.QtCore import Qt
 
@@ -20,6 +20,20 @@ except ImportError:
 	MATPLOTLIB_AVAILABLE = False
 
 
+def _rms(values: np.ndarray) -> float:
+	"""Retourne la valeur efficace d'un signal."""
+	if values.size == 0:
+		return 0.0
+	return float(np.sqrt(np.mean(np.square(values))))
+
+
+def _nearest_index(time_values: np.ndarray, target_time: float) -> int:
+	"""Retourne l'indice du temps le plus proche de la cible."""
+	if time_values.size == 0:
+		return 0
+	return int(np.abs(time_values - target_time).argmin())
+
+
 class GraphPanel(QWidget):
 	"""Panneau persistant avec graphiques et controles interactifs."""
 
@@ -32,6 +46,7 @@ class GraphPanel(QWidget):
 		self.selected_dipoles = set()
 		self.last_transient_result = None
 		self.last_circuit = None
+		self.cursor_time = None
 
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(10, 8, 10, 8)
@@ -83,6 +98,12 @@ class GraphPanel(QWidget):
 		self.nodes_scroll_layout.setSpacing(3)
 		self.nodes_scroll_layout.setContentsMargins(0, 0, 0, 0)
 		self.nodes_layout.addWidget(self.nodes_scroll)
+		self.nodes_select_all_button = QPushButton("Tout")
+		self.nodes_select_all_button.clicked.connect(lambda: self._set_group_selection(self.nodes_scroll_layout, True))
+		self.nodes_layout.addWidget(self.nodes_select_all_button)
+		self.nodes_select_none_button = QPushButton("Aucun")
+		self.nodes_select_none_button.clicked.connect(lambda: self._set_group_selection(self.nodes_scroll_layout, False))
+		self.nodes_layout.addWidget(self.nodes_select_none_button)
 		self.transient_controls_layout.addWidget(self.nodes_group)
 		
 		# Sélection des dipôles
@@ -100,6 +121,12 @@ class GraphPanel(QWidget):
 		self.dipoles_scroll_layout.setSpacing(3)
 		self.dipoles_scroll_layout.setContentsMargins(0, 0, 0, 0)
 		self.dipoles_layout.addWidget(self.dipoles_scroll)
+		self.dipoles_select_all_button = QPushButton("Tout")
+		self.dipoles_select_all_button.clicked.connect(lambda: self._set_group_selection(self.dipoles_scroll_layout, True))
+		self.dipoles_layout.addWidget(self.dipoles_select_all_button)
+		self.dipoles_select_none_button = QPushButton("Aucun")
+		self.dipoles_select_none_button.clicked.connect(lambda: self._set_group_selection(self.dipoles_scroll_layout, False))
+		self.dipoles_layout.addWidget(self.dipoles_select_none_button)
 		self.transient_controls_layout.addWidget(self.dipoles_group)
 		
 		self.transient_layout.addWidget(self.transient_controls)
@@ -109,6 +136,7 @@ class GraphPanel(QWidget):
 			self.transient_figure = Figure(figsize=(4, 3), dpi=100)
 			self.transient_canvas = FigureCanvas(self.transient_figure)
 			self.transient_layout.addWidget(self.transient_canvas, 1)
+			self.transient_canvas.mpl_connect("button_press_event", self._on_plot_click)
 			
 			# Toolbar zoom/pan
 			self.transient_toolbar = NavigationToolbar2QT(self.transient_canvas, self.transient_widget)
@@ -117,6 +145,11 @@ class GraphPanel(QWidget):
 			self.transient_text = QTextEdit()
 			self.transient_text.setReadOnly(True)
 			self.transient_layout.addWidget(self.transient_text)
+
+		self.transient_stats_text = QTextEdit()
+		self.transient_stats_text.setReadOnly(True)
+		self.transient_stats_text.setMaximumHeight(130)
+		self.transient_layout.addWidget(self.transient_stats_text)
 		
 		self.tabs.addTab(self.dc_widget, "DC")
 		self.tabs.addTab(self.transient_widget, "Transitoire")
@@ -148,6 +181,27 @@ class GraphPanel(QWidget):
 			item = self.dipoles_scroll_layout.takeAt(0)
 			if item and item.widget():
 				item.widget().deleteLater()
+
+	def _set_group_selection(self, layout: QHBoxLayout, checked: bool) -> None:
+		"""Coche/decoches toutes les checkbox d'un groupe."""
+		for i in range(layout.count()):
+			item = layout.itemAt(i)
+			if not item or not item.widget():
+				continue
+			widget = item.widget()
+			if isinstance(widget, QCheckBox):
+				widget.blockSignals(True)
+				widget.setChecked(checked)
+				widget.blockSignals(False)
+		self._on_selection_changed()
+
+	def _on_plot_click(self, event) -> None:
+		"""Place un curseur temporel sur clic dans un graphe transitoire."""
+		if event is None or event.xdata is None:
+			return
+		self.cursor_time = float(event.xdata)
+		if self.last_transient_result:
+			self._plot_transient_results(self.last_transient_result, self.last_circuit)
 
 	def _on_selection_changed(self) -> None:
 		"""Callback quand la sélection change."""
@@ -182,6 +236,8 @@ class GraphPanel(QWidget):
 		self._clear_checkboxes()
 		self.selected_nodes = set()
 		self.selected_dipoles = set()
+		self.cursor_time = None
+		self.transient_stats_text.setPlainText("Aucune mesure disponible.")
 		
 		if MATPLOTLIB_AVAILABLE:
 			self.dc_figure.clear()
@@ -317,6 +373,7 @@ class GraphPanel(QWidget):
 		
 		total_plots = len(selected_nodes) + len(selected_dipoles)
 		if total_plots == 0:
+			self.transient_stats_text.setPlainText("Aucune trace sélectionnée.")
 			return
 		
 		# Crée les subplots dynamiquement
@@ -338,6 +395,8 @@ class GraphPanel(QWidget):
 			if ax_idx >= len(axes):
 				break
 			axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'N{node_id}')
+			if self.cursor_time is not None:
+				axes[ax_idx].axvline(self.cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
 			axes[ax_idx].set_ylabel('Potentiel (V)', fontsize=9)
 			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
 			axes[ax_idx].set_title(f'Potentiel du Nœud {node_id}', fontsize=10, fontweight='bold')
@@ -350,6 +409,8 @@ class GraphPanel(QWidget):
 			if ax_idx >= len(axes):
 				break
 			axes[ax_idx].plot(time_values, values, 'g-', linewidth=2, label=f'D{dipole_id}')
+			if self.cursor_time is not None:
+				axes[ax_idx].axvline(self.cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
 			axes[ax_idx].set_ylabel('Courant (A)', fontsize=9)
 			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
 			axes[ax_idx].set_title(f'Courant du Dipôle {dipole_id}', fontsize=10, fontweight='bold')
@@ -359,6 +420,34 @@ class GraphPanel(QWidget):
 		
 		self.transient_figure.tight_layout()
 		self.transient_canvas.draw()
+		self._update_transient_stats(time_values, selected_nodes, selected_dipoles)
+
+	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
+		"""Construit la ligne de stats pour une trace."""
+		if values.size == 0:
+			return f"{label}: trace vide"
+		parts = [
+			f"{label}",
+			f"min={float(values.min()):.4g}{unit}",
+			f"max={float(values.max()):.4g}{unit}",
+			f"rms={_rms(values):.4g}{unit}",
+			f"fin={float(values[-1]):.4g}{unit}",
+		]
+		if self.cursor_time is not None and time_values.size:
+			idx = _nearest_index(time_values, self.cursor_time)
+			parts.append(f"@t={float(time_values[idx]):.4g}s -> {float(values[idx]):.4g}{unit}")
+		return " | ".join(parts)
+
+	def _update_transient_stats(self, time_values: np.ndarray, selected_nodes: list, selected_dipoles: list) -> None:
+		"""Met a jour le panneau de mesures transitoires."""
+		lines = ["Mesures:"]
+		for node_id, values in selected_nodes:
+			lines.append(self._build_trace_stats(f"N{node_id}", "V", time_values, values))
+		for dipole_id, values in selected_dipoles:
+			lines.append(self._build_trace_stats(f"D{dipole_id}", "A", time_values, values))
+		if len(lines) == 1:
+			lines.append("Aucune mesure disponible.")
+		self.transient_stats_text.setPlainText("\n".join(lines))
 
 	def _text_transient_results(self, result: dict) -> None:
 		"""Affiche les resultats transitoires en texte (fallback sans matplotlib)."""
