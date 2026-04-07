@@ -58,6 +58,8 @@ class MainWindow(QMainWindow):
         # Widget central
         self._setup_central_widget()
 
+        self._realtime_auto_open_graph_once = False
+        self._realtime_timer_interval_ms = 30
         self.realtime_timer = QTimer(self)
         self.realtime_timer.setSingleShot(False)
         self.realtime_timer.timeout.connect(self._on_realtime_tick)
@@ -293,6 +295,16 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "graph_panel") or self.graph_panel is None:
             return
         self.graph_panel.setVisible(visible)
+
+        # En mode temps reel, la simulation ne tourne que lorsque le panneau Graphiques est ouvert.
+        if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            if self.simulation_controller.is_realtime_running:
+                if visible:
+                    if hasattr(self, "realtime_timer") and not self.realtime_timer.isActive():
+                        self.realtime_timer.start(self._realtime_timer_interval_ms)
+                else:
+                    if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+                        self.realtime_timer.stop()
 
         if hasattr(self, "graphics_button") and self.graphics_button is not None:
             self.graphics_button.setVisible(not visible)
@@ -1203,8 +1215,9 @@ class MainWindow(QMainWindow):
         """Met a jour le panneau graphiques a chaque tick temps reel."""
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.set_transient_results(result, circuit=self.model)
-            if not self.graph_panel.isVisible():
+            if self._realtime_auto_open_graph_once and not self.graph_panel.isVisible():
                 self._set_graph_panel_visible(True)
+            self._realtime_auto_open_graph_once = False
 
     def _on_realtime_finished(self) -> None:
         """Callback appele a la fin d'une simulation temps reel."""
@@ -1255,9 +1268,10 @@ class MainWindow(QMainWindow):
         if not started:
             return
 
+        self._realtime_auto_open_graph_once = True
         self._set_realtime_actions_state(True)
-        interval_ms = max(30, int(time_step * 1000))
-        self.realtime_timer.start(interval_ms)
+        self._realtime_timer_interval_ms = max(30, int(time_step * 1000))
+        self.realtime_timer.start(self._realtime_timer_interval_ms)
         self._on_realtime_tick()
 
     def on_stop_simulation_realtime(self) -> None:
@@ -1266,6 +1280,7 @@ class MainWindow(QMainWindow):
             self.realtime_timer.stop()
         if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
             self.simulation_controller.stop_realtime_transient()
+        self._realtime_auto_open_graph_once = False
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.set_transient_window(None)
         self._set_realtime_actions_state(False)
