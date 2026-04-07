@@ -18,6 +18,8 @@ class SimulationController:
 		self._realtime_running = False
 		self._realtime_time_step = 0.0
 		self._realtime_current_time = 0.0
+		self._realtime_max_points = 300
+		self._realtime_result_buffer = None
 		self._realtime_on_update = None
 		self._realtime_on_finished = None
 
@@ -49,6 +51,40 @@ class SimulationController:
 		if self.app_controller is not None and status_message:
 			self.app_controller.set_status(status_message)
 		return result
+
+	def _solve_transient_window(
+		self,
+		duration: float,
+		time_step: float,
+		start_time: float,
+		status_message: str | None,
+	):
+		"""Execute le solveur transitoire sur une fenetre temporelle locale."""
+		if self.model is None:
+			if self.app_controller is not None:
+				self.app_controller.set_status("Aucun circuit pour la simulation")
+			return None
+
+		try:
+			result = self._transient_solver.solve(
+				self.model,
+				duration=duration,
+				time_step=time_step,
+				start_time=start_time,
+			)
+		except ValueError as exc:
+			if self.app_controller is not None:
+				self.app_controller.set_status(f"Simulation transitoire impossible: {exc}")
+			return None
+
+		self.last_transient_result = result
+		if self.app_controller is not None and status_message:
+			self.app_controller.set_status(status_message)
+		return result
+
+	def set_realtime_history_limit(self, max_points: int) -> None:
+		"""Configure la taille maximale d'historique conservee en temps reel."""
+		self._realtime_max_points = max(20, int(max_points))
 
 	def run_transient(self, duration: float = 1.0, time_step: float = 0.01):
 		"""Lance une simulation transitoire avec des parametres simples."""
@@ -90,6 +126,12 @@ class SimulationController:
 		self._realtime_running = True
 		self._realtime_time_step = float(time_step)
 		self._realtime_current_time = 0.0
+		self._realtime_result_buffer = {
+			"time": [],
+			"node_potentials": {},
+			"dipole_voltages": {},
+			"dipole_currents": {},
+		}
 		self._realtime_on_update = on_update
 		self._realtime_on_finished = on_finished
 
@@ -102,17 +144,20 @@ class SimulationController:
 		if not self._realtime_running:
 			return None
 
-		next_time = self._realtime_current_time + self._realtime_time_step
-		result = self._solve_transient(
-			duration=next_time,
+		start_time = self._realtime_current_time
+		next_time = start_time + self._realtime_time_step
+		window_result = self._solve_transient_window(
+			duration=self._realtime_time_step,
 			time_step=self._realtime_time_step,
+			start_time=start_time,
 			status_message=None,
 		)
-		if result is None:
+		if window_result is None:
 			self.stop_realtime_transient("Simulation temps reel interrompue")
 			return None
 
 		self._realtime_current_time = next_time
+		result = self._append_realtime_sample(window_result)
 		if callable(self._realtime_on_update):
 			self._realtime_on_update(result)
 
@@ -122,6 +167,50 @@ class SimulationController:
 			)
 
 		return result
+
+	def _append_realtime_sample(self, window_result: dict[str, object]) -> dict[str, object]:
+		"""Ajoute un echantillon au buffer temps reel en conservant une taille bornee."""
+		if self._realtime_result_buffer is None:
+			self._realtime_result_buffer = {
+				"time": [],
+				"node_potentials": {},
+				"dipole_voltages": {},
+				"dipole_currents": {},
+			}
+
+		buffer = self._realtime_result_buffer
+		window_times = window_result.get("time", [])
+		if not window_times:
+			return buffer
+		buffer["time"].append(float(window_times[-1]))
+
+		for key in ("node_potentials", "dipole_voltages", "dipole_currents"):
+			source_map = window_result.get(key, {})
+			target_map = buffer[key]
+			for comp_id, values in source_map.items():
+				if comp_id not in target_map:
+					target_map[comp_id] = []
+				if values:
+					target_map[comp_id].append(float(values[-1]))
+				else:
+					target_map[comp_id].append(0.0)
+
+		self._trim_realtime_buffer(buffer)
+		self.last_transient_result = buffer
+		return buffer
+
+	def _trim_realtime_buffer(self, buffer: dict[str, object]) -> None:
+		"""Limite l'historique temps reel pour garder un cout constant."""
+		time_values = buffer.get("time", [])
+		overflow = len(time_values) - self._realtime_max_points
+		if overflow <= 0:
+			return
+
+		del time_values[:overflow]
+		for key in ("node_potentials", "dipole_voltages", "dipole_currents"):
+			series_map = buffer.get(key, {})
+			for values in series_map.values():
+				del values[:overflow]
 
 	@property
 	def realtime_elapsed_time(self) -> float:
@@ -139,6 +228,7 @@ class SimulationController:
 		on_finished = self._realtime_on_finished
 
 		self._realtime_running = False
+		self._realtime_result_buffer = None
 		self._realtime_on_update = None
 		self._realtime_on_finished = None
 

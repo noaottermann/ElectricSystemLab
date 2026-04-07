@@ -113,6 +113,23 @@ class TestSimulationController(unittest.TestCase):
         self.assertFalse(controller.is_realtime_running)
         self.assertIn("Simulation temps reel arretee", app.messages[-1][0])
 
+    def test_realtime_history_is_bounded(self) -> None:
+        app = FakeAppController()
+        controller = SimulationController(self._build_ac_circuit(), app_controller=app)
+        controller.set_realtime_history_limit(20)
+
+        started = controller.start_realtime_transient(time_step=0.1)
+        self.assertTrue(started)
+
+        latest = None
+        for _ in range(30):
+            latest = controller.tick_realtime_transient()
+
+        self.assertIsNotNone(latest)
+        self.assertLessEqual(len(latest["time"]), 20)
+        self.assertAlmostEqual(latest["time"][-1], 3.0, places=6)
+        self.assertAlmostEqual(latest["time"][0], 1.1, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

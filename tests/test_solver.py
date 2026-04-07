@@ -185,5 +185,27 @@ class TestTransientSolver(unittest.TestCase):
         self.assertGreater(i_l[-1], i_l[0])
         self.assertGreater(i_l[-1], 0.0)
 
+    def test_transient_time_grid_with_start_time_offset(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        source = VoltageSourceAC(
+            self.circuit.get_next_dipole_id(),
+            n_pos,
+            n_gnd,
+            amplitude=10.0,
+            frequency=1.0,
+            phase=0.0,
+            offset=0.0,
+        )
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_pos, n_gnd, resistance=10.0)
+        self.circuit.add_dipole(resistor)
+
+        result = self.solver.solve(self.circuit, duration=0.25, time_step=0.25, start_time=0.25)
+
+        self.assertEqual(result["time"], [0.25, 0.5])
+        self.assertAlmostEqual(result["dipole_voltages"][resistor.id][0], 10.0, places=5)
+        self.assertAlmostEqual(result["dipole_voltages"][resistor.id][1], 0.0, places=5)
+
 if __name__ == '__main__':
     unittest.main()

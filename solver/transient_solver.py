@@ -12,13 +12,15 @@ from solver.utils import build_group_index, group_connected_nodes, matrix_index_
 class TransientSolver(BaseSolver):
 	"""Solveur transitoire simple (sources DC/AC et reseau resistif)."""
 
-	def solve(self, circuit, duration: float, time_step: float) -> dict[str, object]:
+	def solve(self, circuit, duration: float, time_step: float, start_time: float = 0.0) -> dict[str, object]:
 		"""Resout le circuit pour chaque pas de temps et retourne les traces."""
 		self._validate_circuit(circuit)
 		if duration < 0:
 			raise ValueError("La duree doit etre positive")
 		if time_step <= 0:
 			raise ValueError("Le pas de temps doit etre strictement positif")
+		if start_time < 0:
+			raise ValueError("Le temps de depart doit etre positif")
 
 		node_groups = group_connected_nodes(circuit)
 		_, ground_group_id = self._ensure_ground(circuit, node_groups)
@@ -31,7 +33,7 @@ class TransientSolver(BaseSolver):
 		if total_vars == 0:
 			raise ValueError("Aucune equation a resoudre")
 
-		time_values = self._build_time_grid(duration, time_step)
+		time_values = self._build_time_grid(duration, time_step, start_time)
 		node_potentials: dict[int, list[float]] = {node_id: [] for node_id in circuit.nodes}
 		dipole_voltages: dict[int, list[float]] = {dipole.id: [] for dipole in circuit.dipoles.values()}
 		dipole_currents: dict[int, list[float]] = {
@@ -113,11 +115,11 @@ class TransientSolver(BaseSolver):
 			if isinstance(dipole, (VoltageSourceDC, VoltageSourceAC))
 		]
 
-	def _build_time_grid(self, duration: float, time_step: float) -> list[float]:
+	def _build_time_grid(self, duration: float, time_step: float, start_time: float = 0.0) -> list[float]:
 		steps = int(round(duration / time_step))
-		times = [round(i * time_step, 12) for i in range(steps + 1)]
+		times = [round(start_time + i * time_step, 12) for i in range(steps + 1)]
 		if not times:
-			return [0.0]
+			return [round(start_time, 12)]
 		return times
 
 	def _assemble_resistors(self, circuit, node_groups, group_to_idx, ground_group_id, matrix_a) -> None:

@@ -1259,6 +1259,8 @@ class MainWindow(QMainWindow):
             target_points = 150
             window_seconds = max(time_step, target_points * time_step)
             self.graph_panel.set_transient_window(window_seconds)
+            if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+                self.simulation_controller.set_realtime_history_limit(target_points)
 
         started = self.simulation_controller.start_realtime_transient(
             time_step=time_step,
