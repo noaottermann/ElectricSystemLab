@@ -70,6 +70,8 @@
     "action_show_sim": "Simulation",
     "action_sim_run_dc": "Lancer simulation DC",
     "action_sim_run_transient": "Lancer simulation transitoire",
+    "action_sim_run_realtime": "Lancer simulation temps reel",
+    "action_sim_stop_realtime": "Arreter simulation temps reel",
     "action_sim_export_results": "Exporter les résultats de simulation",
     "action_sim_export_csv": "Exporter les traces CSV",
     "action_show_graphs": "Graphiques",
@@ -104,6 +106,7 @@
     "action_lang_fr": "Français",
     "action_lang_en": "English",
     "dialog_transient_title": "Simulation transitoire",
+    "dialog_realtime_title": "Simulation temps reel",
     "dialog_transient_duration": "Durée (s)",
     "dialog_transient_step": "Pas de temps (s)"
 }

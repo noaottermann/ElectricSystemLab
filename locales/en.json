@@ -70,6 +70,8 @@
     "action_show_sim": "Simulation",
     "action_sim_run_dc": "Run DC simulation",
     "action_sim_run_transient": "Run transient simulation",
+    "action_sim_run_realtime": "Run realtime simulation",
+    "action_sim_stop_realtime": "Stop realtime simulation",
     "action_sim_export_results": "Export simulation results",
     "action_sim_export_csv": "Export CSV traces",
     "action_show_graphs": "Graphs",
@@ -104,6 +106,7 @@
     "action_lang_fr": "Français",
     "action_lang_en": "English",
     "dialog_transient_title": "Transient simulation",
+    "dialog_realtime_title": "Realtime simulation",
     "dialog_transient_duration": "Duration (s)",
     "dialog_transient_step": "Time step (s)"
 }

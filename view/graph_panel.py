@@ -210,6 +210,7 @@ class GraphPanel(QWidget):
 		self.last_circuit = None
 		self.hover_time = None
 		self.cursor_time = None
+		self.transient_window_seconds = None
 
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(10, 8, 10, 8)
@@ -313,8 +314,10 @@ class GraphPanel(QWidget):
 			self.transient_toolbar = NavigationToolbar2QT(self.transient_canvas, self.transient_widget)
 			self.transient_layout.addWidget(self.transient_toolbar)
 		else:
-			self.transient_plot = TimeSeriesPlotWidget()
-			self.transient_layout.addWidget(self.transient_plot, 1)
+			self.transient_voltage_plot = TimeSeriesPlotWidget()
+			self.transient_current_plot = TimeSeriesPlotWidget()
+			self.transient_layout.addWidget(self.transient_voltage_plot, 1)
+			self.transient_layout.addWidget(self.transient_current_plot, 1)
 
 		self.transient_stats_text = QTextEdit()
 		self.transient_stats_text.setReadOnly(True)
@@ -327,17 +330,42 @@ class GraphPanel(QWidget):
 
 		self.clear_results()
 
-	def _create_node_checkbox(self, node_id: str) -> None:
+	def set_transient_window(self, window_seconds: Optional[float]) -> None:
+		"""Definit la fenetre temporelle affichee pour le mode transitoire."""
+		if window_seconds is None or window_seconds <= 0:
+			self.transient_window_seconds = None
+		else:
+			self.transient_window_seconds = float(window_seconds)
+
+	def _compute_time_window(self, time_values: np.ndarray) -> tuple[np.ndarray, float, float]:
+		"""Retourne le masque de fenetre [t-delta, t] et ses bornes."""
+		if time_values.size == 0:
+			return np.array([], dtype=bool), 0.0, 0.0
+
+		end_time = float(time_values[-1])
+		if self.transient_window_seconds is None:
+			start_time = float(time_values[0])
+		else:
+			start_time = max(float(time_values[0]), end_time - float(self.transient_window_seconds))
+
+		mask = time_values >= start_time
+		if not np.any(mask):
+			mask = np.zeros(time_values.size, dtype=bool)
+			mask[-1] = True
+			start_time = float(time_values[-1])
+		return mask, start_time, end_time
+
+	def _create_node_checkbox(self, node_id: str, checked: bool = True) -> None:
 		"""Crée une checkbox pour un dipôle (tension)."""
 		checkbox = QCheckBox(f"D{node_id}")
-		checkbox.setChecked(True)
+		checkbox.setChecked(checked)
 		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
 		self.nodes_scroll_layout.addWidget(checkbox)
 
-	def _create_dipole_checkbox(self, dipole_id: str) -> None:
+	def _create_dipole_checkbox(self, dipole_id: str, checked: bool = True) -> None:
 		"""Crée une checkbox pour un dipôle."""
 		checkbox = QCheckBox(f"D{dipole_id}")
-		checkbox.setChecked(True)
+		checkbox.setChecked(checked)
 		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
 		self.dipoles_scroll_layout.addWidget(checkbox)
 
@@ -432,8 +460,10 @@ class GraphPanel(QWidget):
 		else:
 			if hasattr(self, 'dc_text'):
 				self.dc_text.setPlainText("Aucun résultat DC disponible.")
-			if hasattr(self, 'transient_plot'):
-				self.transient_plot.set_series([])
+			if hasattr(self, 'transient_voltage_plot'):
+				self.transient_voltage_plot.set_series([])
+			if hasattr(self, 'transient_current_plot'):
+				self.transient_current_plot.set_series([])
 
 	def set_dc_results(self, circuit) -> None:
 		"""Affiche un resume des potentiels/courants apres simulation DC."""
@@ -501,13 +531,17 @@ class GraphPanel(QWidget):
 		"""Affiche les traces transitoires avec graphiques."""
 		if not result:
 			self._clear_checkboxes()
-			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_plot'):
-				self.transient_plot.set_series([])
+			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_voltage_plot'):
+				self.transient_voltage_plot.set_series([])
+			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_current_plot'):
+				self.transient_current_plot.set_series([])
 			return
 
 		# Stocke les résultats pour les mises à jour interactives
 		self.last_transient_result = result
 		self.last_circuit = circuit
+		previous_nodes = set(self.selected_nodes)
+		previous_dipoles = set(self.selected_dipoles)
 		self.selected_nodes = set()
 		self.selected_dipoles = set()
 
@@ -517,12 +551,18 @@ class GraphPanel(QWidget):
 		dipole_currents = result.get("dipole_currents", {})
 		
 		for node_id in sorted(dipole_voltages.keys()):
-			self._create_node_checkbox(str(node_id))
-			self.selected_nodes.add(str(node_id))
+			node_id_str = str(node_id)
+			is_checked = node_id_str in previous_nodes if previous_nodes else True
+			self._create_node_checkbox(node_id_str, checked=is_checked)
+			if is_checked:
+				self.selected_nodes.add(node_id_str)
 		
 		for dipole_id in sorted(dipole_currents.keys()):
-			self._create_dipole_checkbox(str(dipole_id))
-			self.selected_dipoles.add(str(dipole_id))
+			dipole_id_str = str(dipole_id)
+			is_checked = dipole_id_str in previous_dipoles if previous_dipoles else True
+			self._create_dipole_checkbox(dipole_id_str, checked=is_checked)
+			if is_checked:
+				self.selected_dipoles.add(dipole_id_str)
 
 		if MATPLOTLIB_AVAILABLE:
 			self._plot_transient_results(result, circuit)
@@ -539,6 +579,13 @@ class GraphPanel(QWidget):
 		else:
 			lines.append("Aucun point temporel.")
 		lines.append("")
+		if self.transient_window_seconds is not None and time_values.size:
+			mask, start_time, end_time = self._compute_time_window(time_values)
+			window_points = int(np.count_nonzero(mask))
+			lines.append(
+				f"Fenêtre affichée: [{start_time:.6g}s, {end_time:.6g}s] ({window_points} points)"
+			)
+			lines.append("")
 		lines.append("Dipôles tension sélectionnés: " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else "aucun"))
 		lines.append("Dipôles courant sélectionnés: " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else "aucun"))
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
@@ -553,18 +600,45 @@ class GraphPanel(QWidget):
 		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
+		window_mask, _, _ = self._compute_time_window(time_values)
+		visible_time_values = time_values[window_mask]
 
-		series = []
+		voltage_series = []
 		for node_id in sorted(dipole_voltages.keys()):
 			if str(node_id) not in self.selected_nodes:
 				continue
 			values = np.asarray(dipole_voltages.get(node_id, []), dtype=float)
 			if values.size == 0:
 				continue
-			series.append({"x": time_values, "y": values, "label": f"D{node_id}", "unit_label": "Tension (V)"})
+			if values.size != time_values.size:
+				trim_size = min(values.size, time_values.size)
+				x_values = time_values[:trim_size]
+				y_values = values[:trim_size]
+				local_mask, _, _ = self._compute_time_window(x_values)
+				voltage_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{node_id}", "unit_label": "Tension (V)"})
+				continue
+			voltage_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{node_id}", "unit_label": "Tension (V)"})
 
-		if hasattr(self, 'transient_plot'):
-			self.transient_plot.set_series(series, cursor_time=cursor_time)
+		current_series = []
+		for dipole_id in sorted(dipole_currents.keys()):
+			if str(dipole_id) not in self.selected_dipoles:
+				continue
+			values = np.asarray(dipole_currents.get(dipole_id, []), dtype=float)
+			if values.size == 0:
+				continue
+			if values.size != time_values.size:
+				trim_size = min(values.size, time_values.size)
+				x_values = time_values[:trim_size]
+				y_values = values[:trim_size]
+				local_mask, _, _ = self._compute_time_window(x_values)
+				current_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{dipole_id}", "unit_label": "Courant (A)"})
+				continue
+			current_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{dipole_id}", "unit_label": "Courant (A)"})
+
+		if hasattr(self, 'transient_voltage_plot'):
+			self.transient_voltage_plot.set_series(voltage_series, cursor_time=cursor_time)
+		if hasattr(self, 'transient_current_plot'):
+			self.transient_current_plot.set_series(current_series, cursor_time=cursor_time)
 
 	def _plot_transient_results(self, result: dict, circuit=None) -> None:
 		"""Affiche les resultats transitoires avec matplotlib."""
@@ -576,6 +650,9 @@ class GraphPanel(QWidget):
 		
 		if len(time_values) == 0:
 			return
+
+		window_mask, window_start, window_end = self._compute_time_window(time_values)
+		visible_time_values = time_values[window_mask]
 		
 		# Filtre selon la sélection des tensions
 		selected_nodes = []
@@ -583,53 +660,82 @@ class GraphPanel(QWidget):
 			if str(node_id) in self.selected_nodes:
 				values = np.array(dipole_voltages.get(node_id, []))
 				if len(values) > 0:
-					selected_nodes.append((node_id, values))
+					if len(values) == len(time_values):
+						selected_nodes.append((node_id, values[window_mask]))
+					else:
+						trim_size = min(len(values), len(time_values))
+						x_values = time_values[:trim_size]
+						y_values = values[:trim_size]
+						local_mask, _, _ = self._compute_time_window(x_values)
+						visible_time_values = x_values[local_mask]
+						selected_nodes.append((node_id, y_values[local_mask]))
 		
 		selected_dipoles = []
 		for dipole_id in sorted(dipole_currents.keys()):
 			if str(dipole_id) in self.selected_dipoles:
 				values = np.array(dipole_currents.get(dipole_id, []))
 				if len(values) > 0:
-					selected_dipoles.append((dipole_id, values))
+					if len(values) == len(time_values):
+						selected_dipoles.append((dipole_id, values[window_mask]))
+					else:
+						trim_size = min(len(values), len(time_values))
+						x_values = time_values[:trim_size]
+						y_values = values[:trim_size]
+						local_mask, _, _ = self._compute_time_window(x_values)
+						visible_time_values = x_values[local_mask]
+						selected_dipoles.append((dipole_id, y_values[local_mask]))
 		
-		total_plots = len(selected_nodes)
-		if total_plots == 0:
+		if len(selected_nodes) == 0 and len(selected_dipoles) == 0:
 			self.transient_stats_text.setPlainText("Aucune trace sélectionnée.")
+			self.transient_canvas.draw()
 			return
 
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
-		
-		# Crée les subplots dynamiquement
-		if total_plots == 1:
-			axes = [self.transient_figure.add_subplot(111)]
-		elif total_plots == 2:
-			axes = [self.transient_figure.add_subplot(211), self.transient_figure.add_subplot(212)]
-		elif total_plots == 3:
-			axes = [self.transient_figure.add_subplot(311), self.transient_figure.add_subplot(312),
-					self.transient_figure.add_subplot(313)]
-		else:
-			axes = [self.transient_figure.add_subplot(221), self.transient_figure.add_subplot(222),
-					self.transient_figure.add_subplot(223), self.transient_figure.add_subplot(224)]
-		
-		ax_idx = 0
-		
-		# Affiche les tensions des dipôles sélectionnés
-		for node_id, values in selected_nodes:
-			if ax_idx >= len(axes):
-				break
-			axes[ax_idx].plot(time_values, values, 'b-', linewidth=2, label=f'D{node_id}')
+
+		ax_voltage = self.transient_figure.add_subplot(211)
+		ax_current = self.transient_figure.add_subplot(212)
+
+		if selected_nodes:
+			for node_id, values in selected_nodes:
+				ax_voltage.plot(visible_time_values, values, linewidth=2, label=f'D{node_id}')
 			if cursor_time is not None:
-				axes[ax_idx].axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
-			axes[ax_idx].set_ylabel('Tension (V)', fontsize=9)
-			axes[ax_idx].set_xlabel('Temps (s)', fontsize=9)
-			axes[ax_idx].set_title(f'Tension du Dipôle {node_id}', fontsize=10, fontweight='bold')
-			axes[ax_idx].grid(True, alpha=0.3)
-			axes[ax_idx].legend(loc='best', fontsize=8)
-			ax_idx += 1
+				ax_voltage.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
+			if self.transient_window_seconds is not None:
+				ax_voltage.set_xlim(window_start, window_end)
+			ax_voltage.set_ylabel('Tension (V)', fontsize=9)
+			ax_voltage.set_xlabel('Temps (s)', fontsize=9)
+			ax_voltage.set_title('Tensions des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_voltage.grid(True, alpha=0.3)
+			ax_voltage.legend(loc='best', fontsize=8)
+		else:
+			ax_voltage.set_title('Tensions des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_voltage.set_ylabel('Tension (V)', fontsize=9)
+			ax_voltage.set_xlabel('Temps (s)', fontsize=9)
+			ax_voltage.grid(True, alpha=0.3)
+			ax_voltage.text(0.5, 0.5, 'Aucune tension sélectionnée', transform=ax_voltage.transAxes, ha='center', va='center')
+
+		if selected_dipoles:
+			for dipole_id, values in selected_dipoles:
+				ax_current.plot(visible_time_values, values, linewidth=2, label=f'D{dipole_id}')
+			if cursor_time is not None:
+				ax_current.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
+			if self.transient_window_seconds is not None:
+				ax_current.set_xlim(window_start, window_end)
+			ax_current.set_ylabel('Courant (A)', fontsize=9)
+			ax_current.set_xlabel('Temps (s)', fontsize=9)
+			ax_current.set_title('Courants des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_current.grid(True, alpha=0.3)
+			ax_current.legend(loc='best', fontsize=8)
+		else:
+			ax_current.set_title('Courants des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_current.set_ylabel('Courant (A)', fontsize=9)
+			ax_current.set_xlabel('Temps (s)', fontsize=9)
+			ax_current.grid(True, alpha=0.3)
+			ax_current.text(0.5, 0.5, 'Aucun courant sélectionné', transform=ax_current.transAxes, ha='center', va='center')
 		
 		self.transient_figure.tight_layout()
 		self.transient_canvas.draw()
-		self._update_transient_stats(time_values, selected_nodes, selected_dipoles)
+		self._update_transient_stats(visible_time_values, selected_nodes, selected_dipoles)
 
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
 		"""Construit la ligne de stats pour une trace."""

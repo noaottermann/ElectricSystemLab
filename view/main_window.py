@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
@@ -57,6 +57,10 @@ class MainWindow(QMainWindow):
         
         # Widget central
         self._setup_central_widget()
+
+        self.realtime_timer = QTimer(self)
+        self.realtime_timer.setSingleShot(False)
+        self.realtime_timer.timeout.connect(self._on_realtime_tick)
 
     def _configure_window_geometry(self) -> None:
         """Calcule et applique la taille initiale de la fenêtre."""
@@ -191,6 +195,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         """Nettoie les connexions Qt lors de la fermeture."""
+        if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+            self.realtime_timer.stop()
+        if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            self.simulation_controller.stop_realtime_transient(status_message=None)
+
         # Pendant la fermeture, des signaux Qt en attente peuvent encore arriver pendant la destruction de la scène
         try:
             if hasattr(self, "scene") and self.scene is not None:
@@ -376,8 +385,11 @@ class MainWindow(QMainWindow):
         """Cree les actions du menu Simulation."""
         self._make_action("action_sim_run_dc", None, self.on_run_simulation_dc)
         self._make_action("action_sim_run_transient", None, self.on_run_simulation_transient)
+        self._make_action("action_sim_run_realtime", None, self.on_run_simulation_realtime)
+        self._make_action("action_sim_stop_realtime", None, self.on_stop_simulation_realtime)
         self._make_action("action_sim_export_results", None, self.on_export_simulation_results)
         self._make_action("action_sim_export_csv", None, self.on_export_transient_csv)
+        self.custom_actions["action_sim_stop_realtime"].setEnabled(False)
 
     def _make_action(self, key, shortcut=None, slot=None) -> QAction:
         """Cree une action Qt et l'enregistre dans le dictionnaire."""
@@ -598,6 +610,8 @@ class MainWindow(QMainWindow):
         """Construit le menu Simulation."""
         self.menu_simulation.addAction(self.custom_actions["action_sim_run_dc"])
         self.menu_simulation.addAction(self.custom_actions["action_sim_run_transient"])
+        self.menu_simulation.addAction(self.custom_actions["action_sim_run_realtime"])
+        self.menu_simulation.addAction(self.custom_actions["action_sim_stop_realtime"])
         self.menu_simulation.addSeparator()
         self.menu_simulation.addAction(self.custom_actions["action_sim_export_results"])
         self.menu_simulation.addAction(self.custom_actions["action_sim_export_csv"])
@@ -1132,6 +1146,8 @@ class MainWindow(QMainWindow):
     def on_run_simulation_dc(self) -> None:
         """Lance la simulation DC via le controleur de simulation."""
         if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            if self.simulation_controller.is_realtime_running:
+                self.on_stop_simulation_realtime()
             self.simulation_controller.run_dc()
             if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
                 self.graph_panel.set_dc_results(self.model)
@@ -1142,6 +1158,9 @@ class MainWindow(QMainWindow):
         """Lance la simulation transitoire avec des parametres par defaut."""
         if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
             return
+
+        if self.simulation_controller.is_realtime_running:
+            self.on_stop_simulation_realtime()
 
         duration, ok_duration = QInputDialog.getDouble(
             self,
@@ -1172,6 +1191,84 @@ class MainWindow(QMainWindow):
             self.graph_panel.set_transient_results(result, circuit=self.model)
             if result and not self.graph_panel.isVisible():
                 self._set_graph_panel_visible(True)
+
+    def _set_realtime_actions_state(self, is_running: bool) -> None:
+        """Synchronise l'etat des actions de simulation temps reel."""
+        if "action_sim_run_realtime" in self.custom_actions:
+            self.custom_actions["action_sim_run_realtime"].setEnabled(not is_running)
+        if "action_sim_stop_realtime" in self.custom_actions:
+            self.custom_actions["action_sim_stop_realtime"].setEnabled(is_running)
+
+    def _on_realtime_update(self, result: dict) -> None:
+        """Met a jour le panneau graphiques a chaque tick temps reel."""
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            self.graph_panel.set_transient_results(result, circuit=self.model)
+            if not self.graph_panel.isVisible():
+                self._set_graph_panel_visible(True)
+
+    def _on_realtime_finished(self) -> None:
+        """Callback appele a la fin d'une simulation temps reel."""
+        if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+            self.realtime_timer.stop()
+        self._set_realtime_actions_state(False)
+
+    def _on_realtime_tick(self) -> None:
+        """Declenche un pas de simulation temps reel."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+
+        result = self.simulation_controller.tick_realtime_transient()
+        if result is None and not self.simulation_controller.is_realtime_running:
+            if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+                self.realtime_timer.stop()
+            self._set_realtime_actions_state(False)
+
+    def on_run_simulation_realtime(self) -> None:
+        """Lance une simulation transitoire avec rafraichissement temps reel du graphe."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+        if self.simulation_controller.is_realtime_running:
+            return
+
+        time_step, ok_step = QInputDialog.getDouble(
+            self,
+            Translator.tr("dialog_realtime_title"),
+            Translator.tr("dialog_transient_step"),
+            0.01,
+            1e-9,
+            1e6,
+            9,
+        )
+        if not ok_step:
+            return
+
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            target_points = 150
+            window_seconds = max(time_step, target_points * time_step)
+            self.graph_panel.set_transient_window(window_seconds)
+
+        started = self.simulation_controller.start_realtime_transient(
+            time_step=time_step,
+            on_update=self._on_realtime_update,
+            on_finished=self._on_realtime_finished,
+        )
+        if not started:
+            return
+
+        self._set_realtime_actions_state(True)
+        interval_ms = max(30, int(time_step * 1000))
+        self.realtime_timer.start(interval_ms)
+        self._on_realtime_tick()
+
+    def on_stop_simulation_realtime(self) -> None:
+        """Arrete la simulation temps reel en cours."""
+        if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+            self.realtime_timer.stop()
+        if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            self.simulation_controller.stop_realtime_transient()
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            self.graph_panel.set_transient_window(None)
+        self._set_realtime_actions_state(False)
 
     def on_export_simulation_results(self) -> None:
         """Exporte uniquement les resultats de simulation."""

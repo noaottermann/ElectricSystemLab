@@ -69,6 +69,50 @@ class TestSimulationController(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIn("Simulation transitoire impossible", app.messages[-1][0])
 
+    def test_realtime_simulation_progress_without_auto_completion(self) -> None:
+        app = FakeAppController()
+        controller = SimulationController(self._build_ac_circuit(), app_controller=app)
+        updates = []
+        finished = []
+
+        started = controller.start_realtime_transient(
+            time_step=0.25,
+            on_update=lambda result: updates.append(result),
+            on_finished=lambda: finished.append(True),
+        )
+        self.assertTrue(started)
+        self.assertTrue(controller.is_realtime_running)
+
+        controller.tick_realtime_transient()
+        self.assertEqual(len(updates), 1)
+        self.assertTrue(controller.is_realtime_running)
+
+        controller.tick_realtime_transient()
+        self.assertEqual(len(updates), 2)
+        self.assertTrue(controller.is_realtime_running)
+        self.assertEqual(len(finished), 0)
+        self.assertGreater(controller.realtime_elapsed_time, 0.0)
+
+    def test_realtime_start_rejects_invalid_params(self) -> None:
+        app = FakeAppController()
+        controller = SimulationController(self._build_dc_circuit(), app_controller=app)
+
+        started = controller.start_realtime_transient(time_step=0.0)
+
+        self.assertFalse(started)
+        self.assertFalse(controller.is_realtime_running)
+        self.assertIn("Parametres temps reel invalides", app.messages[-1][0])
+
+    def test_realtime_stop_sets_state(self) -> None:
+        app = FakeAppController()
+        controller = SimulationController(self._build_dc_circuit(), app_controller=app)
+
+        controller.start_realtime_transient(time_step=0.1)
+        controller.stop_realtime_transient()
+
+        self.assertFalse(controller.is_realtime_running)
+        self.assertIn("Simulation temps reel arretee", app.messages[-1][0])
+
 
 if __name__ == "__main__":
     unittest.main()
