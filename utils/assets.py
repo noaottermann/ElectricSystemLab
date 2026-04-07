@@ -13,17 +13,7 @@ def get_assets_dir() -> Path:
 
 
 def get_logo_icon() -> QIcon:
-    """
-    Charge et retourne l'icône du logo.
-    
-    Cherche le logo dans l'ordre:
-    1. logo.png
-    2. logo.jpg
-    3. logo.ico
-    
-    Returns:
-        QIcon: L'icône du logo si elle existe, sinon un icône vide.
-    """
+    """Charge et retourne l'icône du logo."""
     assets_dir = get_assets_dir()
     
     # Liste des formats acceptés par ordre de préférence
@@ -40,12 +30,7 @@ def get_logo_icon() -> QIcon:
 
 
 def logo_exists() -> bool:
-    """
-    Vérifie si un fichier de logo existe dans le dossier assets.
-    
-    Returns:
-        bool: True si un logo existe, False sinon
-    """
+    """Vérifie si un fichier de logo existe dans le dossier assets."""
     assets_dir = get_assets_dir()
     logo_formats = ["logo.png", "logo.jpg", "logo.jpeg", "logo.ico", "logo.bmp"]
     
@@ -56,13 +41,5 @@ def logo_exists() -> bool:
 
 
 def get_asset_path(filename: str) -> Path:
-    """
-    Retourne le chemin complet d'un asset.
-    
-    Args:
-        filename: Le nom du fichier dans le dossier assets
-        
-    Returns:
-        Path: Le chemin complet vers l'asset
-    """
+    """Retourne le chemin complet d'un asset."""
     return get_assets_dir() / filename

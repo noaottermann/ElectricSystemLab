@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QShortcut,
     QStatusBar,
+    QStyle,
     QToolBar,
     QWidget,
 )
@@ -19,7 +20,7 @@ from controller.edit_controller import EditController
 from controller.file_controller import FileController
 from controller.simulation_controller import SimulationController
 from utils.translator import Translator
-from utils.assets import get_logo_icon, logo_exists
+from utils.assets import get_asset_path, get_logo_icon, logo_exists
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
 from view.graph_panel import GraphPanel
@@ -771,6 +772,8 @@ class MainWindow(QMainWindow):
         self.toolbar.setObjectName("mainToolbar")
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.toolbar.setIconSize(self.toolbar.iconSize())
         self.toolbar.setStyleSheet(
             """
             QToolBar#mainToolbar {
@@ -779,7 +782,8 @@ class MainWindow(QMainWindow):
             }
             QToolBar#mainToolbar QToolButton {
                 min-height: 32px;
-                padding: 4px 10px;
+                min-width: 32px;
+                padding: 4px;
             }
             """
         )
@@ -842,6 +846,39 @@ class MainWindow(QMainWindow):
         self.toolbar_transform_separator.setVisible(False)
         self.toolbar_delete_separator.setVisible(False)
         self.toolbar_delete_action.setVisible(False)
+
+        self._apply_toolbar_icons()
+
+    def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
+        """Assigne une icone depuis assets, avec fallback optionnel."""
+        icon_path = get_asset_path(relative_asset_path)
+        if icon_path.exists():
+            action.setIcon(QIcon(str(icon_path)))
+            return
+        if fallback_icon is not None:
+            action.setIcon(fallback_icon)
+
+    def _apply_toolbar_icons(self) -> None:
+        """Mappe les actions de la toolbar sur les icones du dossier assets/toolbar."""
+        self._set_action_icon_from_asset(self.custom_actions["action_undo"], "toolbar/undo.png")
+        self._set_action_icon_from_asset(
+            self.custom_actions["action_redo"],
+            "toolbar/redo.png",
+            fallback_icon=self.style().standardIcon(QStyle.SP_ArrowForward),
+        )
+        self._set_action_icon_from_asset(self.custom_actions["action_zoom_in"], "toolbar/zoom_in.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_zoom_out"], "toolbar/zoom_out.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_reset_zoom"], "toolbar/zoom_reset.png")
+
+        self._set_action_icon_from_asset(self.toolbar_cut_action, "toolbar/cut.png")
+        self._set_action_icon_from_asset(self.toolbar_copy_action, "toolbar/copy.png")
+        self._set_action_icon_from_asset(self.toolbar_paste_action, "toolbar/paste.png")
+        self._set_action_icon_from_asset(self.toolbar_duplicate_action, "toolbar/duplicate.png")
+        self._set_action_icon_from_asset(self.toolbar_lock_action, "toolbar/lock.png")
+        self._set_action_icon_from_asset(self.toolbar_unlock_action, "toolbar/unlock.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_rotate"], "toolbar/rotate.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_flip"], "toolbar/flip.png")
+        self._set_action_icon_from_asset(self.toolbar_delete_action, "toolbar/delete.png")
 
     def retranslate_ui(self) -> None:
         """Met a jour tous les textes de l'interface."""
