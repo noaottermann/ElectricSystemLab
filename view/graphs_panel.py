@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt5.QtGui import QPainter, QPen, QColor
 from PyQt5.QtWidgets import (
 	QLabel, QTextEdit, QVBoxLayout, QWidget,
-	QCheckBox, QHBoxLayout, QScrollArea, QGroupBox, QPushButton
+	QCheckBox, QHBoxLayout, QGridLayout, QScrollArea, QGroupBox, QPushButton
 )
 from PyQt5.QtCore import Qt
 
@@ -206,6 +206,8 @@ class GraphPanel(QWidget):
 		# État pour le filtrage transient
 		self.selected_nodes = set()
 		self.selected_dipoles = set()
+		self.node_checkboxes: dict[str, QCheckBox] = {}
+		self.dipole_checkboxes: dict[str, QCheckBox] = {}
 		self.last_transient_result = None
 		self.last_circuit = None
 		self.hover_time = None
@@ -236,52 +238,76 @@ class GraphPanel(QWidget):
 		self.transient_controls = QWidget()
 		self.transient_controls_layout = QVBoxLayout(self.transient_controls)
 		self.transient_controls_layout.setContentsMargins(5, 5, 5, 5)
-		self.transient_controls_layout.setSpacing(5)
+		self.transient_controls_layout.setSpacing(8)
 		
 		# Sélection des dipôles pour les tensions
 		self.nodes_group = QGroupBox("Dipôles (tension)")
-		self.nodes_layout = QHBoxLayout(self.nodes_group)
-		self.nodes_layout.setSpacing(3)
+		self.nodes_layout = QVBoxLayout(self.nodes_group)
+		self.nodes_layout.setSpacing(4)
 		self.nodes_layout.setContentsMargins(5, 5, 5, 5)
 		self.nodes_scroll = QScrollArea()
 		self.nodes_scroll.setWidgetResizable(True)
-		self.nodes_scroll.setMaximumHeight(35)
+		self.nodes_scroll.setMaximumHeight(150)
 		nodes_container = QWidget()
 		self.nodes_scroll.setWidget(nodes_container)
 		self.nodes_container = nodes_container
-		self.nodes_scroll_layout = QHBoxLayout(nodes_container)
-		self.nodes_scroll_layout.setSpacing(3)
+		self.nodes_scroll_layout = QGridLayout(nodes_container)
+		self.nodes_scroll_layout.setSpacing(4)
 		self.nodes_scroll_layout.setContentsMargins(0, 0, 0, 0)
+		self.nodes_scroll_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 		self.nodes_layout.addWidget(self.nodes_scroll)
+		nodes_controls = QWidget()
+		nodes_controls_layout = QHBoxLayout(nodes_controls)
+		nodes_controls_layout.setContentsMargins(0, 0, 0, 0)
+		nodes_controls_layout.setSpacing(4)
+		nodes_controls_layout.addWidget(QLabel("Sélection"))
+		nodes_controls_layout.addStretch(1)
 		self.nodes_select_all_button = QPushButton("Tout")
-		self.nodes_select_all_button.clicked.connect(lambda: self._set_group_selection(self.nodes_scroll_layout, True))
-		self.nodes_layout.addWidget(self.nodes_select_all_button)
+		self.nodes_select_all_button.setFixedSize(42, 20)
+		self.nodes_select_all_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
+		self.nodes_select_all_button.clicked.connect(lambda: self._set_checkboxes_selection(self.node_checkboxes, True))
+		nodes_controls_layout.addWidget(self.nodes_select_all_button)
 		self.nodes_select_none_button = QPushButton("Aucun")
-		self.nodes_select_none_button.clicked.connect(lambda: self._set_group_selection(self.nodes_scroll_layout, False))
-		self.nodes_layout.addWidget(self.nodes_select_none_button)
+		self.nodes_select_none_button.setFixedSize(48, 20)
+		self.nodes_select_none_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
+		self.nodes_select_none_button.clicked.connect(lambda: self._set_checkboxes_selection(self.node_checkboxes, False))
+		nodes_controls_layout.addWidget(self.nodes_select_none_button)
+		self.nodes_layout.addWidget(nodes_controls)
 		self.transient_controls_layout.addWidget(self.nodes_group)
 		
 		# Sélection des dipôles
 		self.dipoles_group = QGroupBox("Dipôles")
-		self.dipoles_layout = QHBoxLayout(self.dipoles_group)
-		self.dipoles_layout.setSpacing(3)
+		self.dipoles_layout = QVBoxLayout(self.dipoles_group)
+		self.dipoles_layout.setSpacing(4)
 		self.dipoles_layout.setContentsMargins(5, 5, 5, 5)
 		self.dipoles_scroll = QScrollArea()
 		self.dipoles_scroll.setWidgetResizable(True)
-		self.dipoles_scroll.setMaximumHeight(35)
+		self.dipoles_scroll.setMaximumHeight(150)
 		dipoles_container = QWidget()
 		self.dipoles_scroll.setWidget(dipoles_container)
 		self.dipoles_container = dipoles_container
-		self.dipoles_scroll_layout = QHBoxLayout(dipoles_container)
-		self.dipoles_scroll_layout.setSpacing(3)
+		self.dipoles_scroll_layout = QGridLayout(dipoles_container)
+		self.dipoles_scroll_layout.setSpacing(4)
 		self.dipoles_scroll_layout.setContentsMargins(0, 0, 0, 0)
+		self.dipoles_scroll_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 		self.dipoles_layout.addWidget(self.dipoles_scroll)
+		dipoles_controls = QWidget()
+		dipoles_controls_layout = QHBoxLayout(dipoles_controls)
+		dipoles_controls_layout.setContentsMargins(0, 0, 0, 0)
+		dipoles_controls_layout.setSpacing(4)
+		dipoles_controls_layout.addWidget(QLabel("Sélection"))
+		dipoles_controls_layout.addStretch(1)
 		self.dipoles_select_all_button = QPushButton("Tout")
-		self.dipoles_select_all_button.clicked.connect(lambda: self._set_group_selection(self.dipoles_scroll_layout, True))
-		self.dipoles_layout.addWidget(self.dipoles_select_all_button)
+		self.dipoles_select_all_button.setFixedSize(42, 20)
+		self.dipoles_select_all_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
+		self.dipoles_select_all_button.clicked.connect(lambda: self._set_checkboxes_selection(self.dipole_checkboxes, True))
+		dipoles_controls_layout.addWidget(self.dipoles_select_all_button)
 		self.dipoles_select_none_button = QPushButton("Aucun")
-		self.dipoles_select_none_button.clicked.connect(lambda: self._set_group_selection(self.dipoles_scroll_layout, False))
-		self.dipoles_layout.addWidget(self.dipoles_select_none_button)
+		self.dipoles_select_none_button.setFixedSize(48, 20)
+		self.dipoles_select_none_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
+		self.dipoles_select_none_button.clicked.connect(lambda: self._set_checkboxes_selection(self.dipole_checkboxes, False))
+		dipoles_controls_layout.addWidget(self.dipoles_select_none_button)
+		self.dipoles_layout.addWidget(dipoles_controls)
 		self.transient_controls_layout.addWidget(self.dipoles_group)
 		
 		self.transient_layout.addWidget(self.transient_controls)
@@ -306,6 +332,17 @@ class GraphPanel(QWidget):
 		self.transient_stats_text = QTextEdit()
 		self.transient_stats_text.setReadOnly(True)
 		self.transient_stats_text.setMaximumHeight(130)
+		self.transient_stats_text.setStyleSheet(
+			"""
+			QTextEdit {
+				background-color: #f8fafc;
+				border: 1px solid #dbe2ea;
+				border-radius: 6px;
+				padding: 6px;
+				line-height: 1.25;
+			}
+			"""
+		)
 		self.transient_layout.addWidget(self.transient_stats_text)
 
 		layout.addWidget(self.transient_widget, 1)
@@ -337,22 +374,24 @@ class GraphPanel(QWidget):
 			start_time = float(time_values[-1])
 		return mask, start_time, end_time
 
-	def _create_node_checkbox(self, node_id: str, checked: bool = True) -> None:
+	def _create_node_checkbox(self, node_id: str, checked: bool = True) -> QCheckBox:
 		"""Crée une checkbox pour un dipôle (tension)."""
 		checkbox = QCheckBox(f"D{node_id}")
 		checkbox.setChecked(checked)
 		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
-		self.nodes_scroll_layout.addWidget(checkbox)
+		return checkbox
 
-	def _create_dipole_checkbox(self, dipole_id: str, checked: bool = True) -> None:
+	def _create_dipole_checkbox(self, dipole_id: str, checked: bool = True) -> QCheckBox:
 		"""Crée une checkbox pour un dipôle."""
 		checkbox = QCheckBox(f"D{dipole_id}")
 		checkbox.setChecked(checked)
 		checkbox.stateChanged.connect(lambda: self._on_selection_changed())
-		self.dipoles_scroll_layout.addWidget(checkbox)
+		return checkbox
 
 	def _clear_checkboxes(self) -> None:
 		"""Efface toutes les checkboxes existantes."""
+		self.node_checkboxes.clear()
+		self.dipole_checkboxes.clear()
 		while self.nodes_scroll_layout.count():
 			item = self.nodes_scroll_layout.takeAt(0)
 			if item and item.widget():
@@ -362,17 +401,71 @@ class GraphPanel(QWidget):
 			if item and item.widget():
 				item.widget().deleteLater()
 
-	def _set_group_selection(self, layout: QHBoxLayout, checked: bool) -> None:
-		"""Coche/decoches toutes les checkbox d'un groupe."""
-		for i in range(layout.count()):
-			item = layout.itemAt(i)
-			if not item or not item.widget():
+	def _reflow_checkboxes_grid(self, layout: QGridLayout, checkboxes: dict[str, QCheckBox], columns: int = 2) -> None:
+		"""Réorganise les checkboxes dans une grille compacte et lisible."""
+		while layout.count():
+			layout.takeAt(0)
+
+		sorted_ids = sorted(checkboxes.keys(), key=lambda value: (len(value), value))
+		for index, item_id in enumerate(sorted_ids):
+			row = index // columns
+			column = index % columns
+			layout.addWidget(checkboxes[item_id], row, column)
+
+	def _adaptive_columns(self, scroll_area: QScrollArea, min_cell_width: int = 76) -> int:
+		"""Calcule le nombre de colonnes en fonction de la largeur disponible."""
+		if scroll_area is None or scroll_area.viewport() is None:
+			return 2
+		available_width = max(1, scroll_area.viewport().width())
+		return max(1, available_width // min_cell_width)
+
+	def _sync_checkbox_group(
+		self,
+		layout: QGridLayout,
+		existing_checkboxes: dict[str, QCheckBox],
+		available_ids: set[str],
+		create_checkbox,
+	) -> None:
+		"""Met à jour un groupe de checkboxes sans les recréer inutilement."""
+		# Retire uniquement les cases obsolètes
+		for item_id in list(existing_checkboxes.keys()):
+			if item_id in available_ids:
 				continue
-			widget = item.widget()
-			if isinstance(widget, QCheckBox):
-				widget.blockSignals(True)
-				widget.setChecked(checked)
-				widget.blockSignals(False)
+			checkbox = existing_checkboxes.pop(item_id)
+			layout.removeWidget(checkbox)
+			checkbox.deleteLater()
+
+		# Ajoute uniquement les nouvelles cases
+		for item_id in sorted(available_ids, key=lambda value: (len(value), value)):
+			if item_id in existing_checkboxes:
+				continue
+			existing_checkboxes[item_id] = create_checkbox(item_id, checked=True)
+
+		columns = self._adaptive_columns(self.nodes_scroll if layout is self.nodes_scroll_layout else self.dipoles_scroll)
+		self._reflow_checkboxes_grid(layout, existing_checkboxes, columns=columns)
+
+	def resizeEvent(self, event) -> None:
+		"""Réadapte la grille des checkboxes lors du redimensionnement du panneau."""
+		super().resizeEvent(event)
+		if hasattr(self, "nodes_scroll_layout"):
+			self._reflow_checkboxes_grid(
+				self.nodes_scroll_layout,
+				self.node_checkboxes,
+				columns=self._adaptive_columns(self.nodes_scroll),
+			)
+		if hasattr(self, "dipoles_scroll_layout"):
+			self._reflow_checkboxes_grid(
+				self.dipoles_scroll_layout,
+				self.dipole_checkboxes,
+				columns=self._adaptive_columns(self.dipoles_scroll),
+			)
+
+	def _set_checkboxes_selection(self, checkboxes: dict[str, QCheckBox], checked: bool) -> None:
+		"""Coche/decoches toutes les checkboxes d'un groupe."""
+		for checkbox in checkboxes.values():
+			checkbox.blockSignals(True)
+			checkbox.setChecked(checked)
+			checkbox.blockSignals(False)
 		self._on_selection_changed()
 
 	def _on_plot_click(self, event) -> None:
@@ -399,24 +492,8 @@ class GraphPanel(QWidget):
 			return
 		
 		# Récupère la sélection actuelle
-		self.selected_nodes = set()
-		self.selected_dipoles = set()
-		
-		for i in range(self.nodes_scroll_layout.count()):
-			item = self.nodes_scroll_layout.itemAt(i)
-			if item and item.widget():
-				checkbox = item.widget()
-				if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-					node_id = checkbox.text().replace("D", "")
-					self.selected_nodes.add(node_id)
-		
-		for i in range(self.dipoles_scroll_layout.count()):
-			item = self.dipoles_scroll_layout.itemAt(i)
-			if item and item.widget():
-				checkbox = item.widget()
-				if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-					dipole_id = checkbox.text().replace("D", "")
-					self.selected_dipoles.add(dipole_id)
+		self.selected_nodes = {node_id for node_id, checkbox in self.node_checkboxes.items() if checkbox.isChecked()}
+		self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
 		
 		# Redessine les graphiques
 		if MATPLOTLIB_AVAILABLE:
@@ -510,29 +587,54 @@ class GraphPanel(QWidget):
 		# Stocke les résultats pour les mises à jour interactives
 		self.last_transient_result = result
 		self.last_circuit = circuit
-		previous_nodes = set(self.selected_nodes)
-		previous_dipoles = set(self.selected_dipoles)
-		self.selected_nodes = set()
-		self.selected_dipoles = set()
+		previous_node_states = {node_id: checkbox.isChecked() for node_id, checkbox in self.node_checkboxes.items()}
+		previous_dipole_states = {dipole_id: checkbox.isChecked() for dipole_id, checkbox in self.dipole_checkboxes.items()}
 
-		# Crée les checkboxes de sélection
-		self._clear_checkboxes()
+		# Met à jour les checkboxes de sélection sans recréer tout le groupe (évite le flicker)
 		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
+		available_node_ids = {str(node_id) for node_id in dipole_voltages.keys()}
+		available_dipole_ids = {str(dipole_id) for dipole_id in dipole_currents.keys()}
+		node_ids_changed = available_node_ids != set(self.node_checkboxes.keys())
+		dipole_ids_changed = available_dipole_ids != set(self.dipole_checkboxes.keys())
+
+		if node_ids_changed:
+			self._sync_checkbox_group(
+				self.nodes_scroll_layout,
+				self.node_checkboxes,
+				available_node_ids,
+				self._create_node_checkbox,
+			)
+		if dipole_ids_changed:
+			self._sync_checkbox_group(
+				self.dipoles_scroll_layout,
+				self.dipole_checkboxes,
+				available_dipole_ids,
+				self._create_dipole_checkbox,
+			)
 		
-		for node_id in sorted(dipole_voltages.keys()):
-			node_id_str = str(node_id)
-			is_checked = node_id_str in previous_nodes if previous_nodes else True
-			self._create_node_checkbox(node_id_str, checked=is_checked)
-			if is_checked:
-				self.selected_nodes.add(node_id_str)
-		
-		for dipole_id in sorted(dipole_currents.keys()):
-			dipole_id_str = str(dipole_id)
-			is_checked = dipole_id_str in previous_dipoles if previous_dipoles else True
-			self._create_dipole_checkbox(dipole_id_str, checked=is_checked)
-			if is_checked:
-				self.selected_dipoles.add(dipole_id_str)
+		# N'applique des etats que lorsque la liste des courbes change.
+		# Sinon, on conserve strictement la selection utilisateur en cours.
+		if node_ids_changed:
+			for node_id, checkbox in self.node_checkboxes.items():
+				target_checked = previous_node_states.get(node_id, True)
+				if checkbox.isChecked() == target_checked:
+					continue
+				checkbox.blockSignals(True)
+				checkbox.setChecked(target_checked)
+				checkbox.blockSignals(False)
+
+		if dipole_ids_changed:
+			for dipole_id, checkbox in self.dipole_checkboxes.items():
+				target_checked = previous_dipole_states.get(dipole_id, True)
+				if checkbox.isChecked() == target_checked:
+					continue
+				checkbox.blockSignals(True)
+				checkbox.setChecked(target_checked)
+				checkbox.blockSignals(False)
+
+		self.selected_nodes = {node_id for node_id, checkbox in self.node_checkboxes.items() if checkbox.isChecked()}
+		self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
 
 		if MATPLOTLIB_AVAILABLE:
 			self._plot_transient_results(result, circuit)
@@ -708,31 +810,47 @@ class GraphPanel(QWidget):
 		self._update_transient_stats(visible_time_values, selected_nodes, selected_dipoles)
 
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
-		"""Construit la ligne de stats pour une trace."""
+		"""Construit un bloc de stats lisible pour une trace."""
 		if values.size == 0:
-			return f"{label}: trace vide"
+			return f"{label}\n  Etat      : trace vide"
+
 		parts = [
 			f"{label}",
-			f"min={float(values.min()):.4g}{unit}",
-			f"max={float(values.max()):.4g}{unit}",
-			f"rms={_rms(values):.4g}{unit}",
-			f"fin={float(values[-1]):.4g}{unit}",
+			f"  Min       : {float(values.min()):.4g} {unit}",
+			f"  Max       : {float(values.max()):.4g} {unit}",
+			f"  RMS       : {_rms(values):.4g} {unit}",
+			f"  Final     : {float(values[-1]):.4g} {unit}",
 		]
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 		if cursor_time is not None and time_values.size:
-			idx, sample_time, sample_value = _trace_value_at_time(time_values, values, cursor_time)
-			parts.append(f"@t={sample_time:.4g}s -> {sample_value:.4g}{unit}")
-		return " | ".join(parts)
+			_, sample_time, sample_value = _trace_value_at_time(time_values, values, cursor_time)
+			parts.append(f"  Curseur   : t={sample_time:.4g} s -> {sample_value:.4g} {unit}")
+		return "\n".join(parts)
 
 	def _update_transient_stats(self, time_values: np.ndarray, selected_nodes: list, selected_dipoles: list) -> None:
 		"""Met a jour le panneau de mesures transitoires."""
-		lines = ["Mesures:"]
+		lines = ["MESURES TRANSITOIRES"]
+		if time_values.size:
+			lines.append(f"Fenetre: {float(time_values[0]):.4g} s -> {float(time_values[-1]):.4g} s ({len(time_values)} points)")
+		lines.append("")
+
+		if selected_nodes:
+			lines.append("TENSIONS")
 		for node_id, values in selected_nodes:
-			lines.append(self._build_trace_stats(f"N{node_id}", "V", time_values, values))
+			lines.append(self._build_trace_stats(f"D{node_id}", "V", time_values, values))
+			lines.append("")
+
+		if selected_dipoles:
+			lines.append("COURANTS")
 		for dipole_id, values in selected_dipoles:
 			lines.append(self._build_trace_stats(f"D{dipole_id}", "A", time_values, values))
-		if len(lines) == 1:
+			lines.append("")
+
+		if not selected_nodes and not selected_dipoles:
 			lines.append("Aucune mesure disponible.")
+
+		while lines and lines[-1] == "":
+			lines.pop()
 		self.transient_stats_text.setPlainText("\n".join(lines))
 
 	def _text_transient_results(self, result: dict) -> None:
