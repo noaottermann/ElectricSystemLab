@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC, Capacitor
-from view.graph_panel import GraphPanel, MATPLOTLIB_AVAILABLE
+from view.graphs_panel import GraphPanel, MATPLOTLIB_AVAILABLE
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

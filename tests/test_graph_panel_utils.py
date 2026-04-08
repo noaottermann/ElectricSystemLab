@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from view.graph_panel import _nearest_index, _pad_range, _rms, _trace_value_at_time
+from view.graphs_panel import _nearest_index, _pad_range, _rms, _trace_value_at_time
 
 
 class TestGraphPanelUtils(unittest.TestCase):

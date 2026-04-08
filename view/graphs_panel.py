@@ -306,17 +306,6 @@ class GraphPanel(QWidget):
 		self.transient_stats_text = QTextEdit()
 		self.transient_stats_text.setReadOnly(True)
 		self.transient_stats_text.setMaximumHeight(130)
-		self.transient_stats_text.setStyleSheet(
-			"""
-			QTextEdit {
-				background-color: #f8fafc;
-				border: 1px solid #dbe2ea;
-				border-radius: 6px;
-				padding: 6px;
-				line-height: 1.25;
-			}
-			"""
-		)
 		self.transient_layout.addWidget(self.transient_stats_text)
 
 		layout.addWidget(self.transient_widget, 1)
@@ -719,47 +708,31 @@ class GraphPanel(QWidget):
 		self._update_transient_stats(visible_time_values, selected_nodes, selected_dipoles)
 
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
-		"""Construit un bloc de stats lisible pour une trace."""
+		"""Construit la ligne de stats pour une trace."""
 		if values.size == 0:
-			return f"{label}\n  Etat      : trace vide"
-
+			return f"{label}: trace vide"
 		parts = [
 			f"{label}",
-			f"  Min       : {float(values.min()):.4g} {unit}",
-			f"  Max       : {float(values.max()):.4g} {unit}",
-			f"  RMS       : {_rms(values):.4g} {unit}",
-			f"  Final     : {float(values[-1]):.4g} {unit}",
+			f"min={float(values.min()):.4g}{unit}",
+			f"max={float(values.max()):.4g}{unit}",
+			f"rms={_rms(values):.4g}{unit}",
+			f"fin={float(values[-1]):.4g}{unit}",
 		]
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 		if cursor_time is not None and time_values.size:
-			_, sample_time, sample_value = _trace_value_at_time(time_values, values, cursor_time)
-			parts.append(f"  Curseur   : t={sample_time:.4g} s -> {sample_value:.4g} {unit}")
-		return "\n".join(parts)
+			idx, sample_time, sample_value = _trace_value_at_time(time_values, values, cursor_time)
+			parts.append(f"@t={sample_time:.4g}s -> {sample_value:.4g}{unit}")
+		return " | ".join(parts)
 
 	def _update_transient_stats(self, time_values: np.ndarray, selected_nodes: list, selected_dipoles: list) -> None:
 		"""Met a jour le panneau de mesures transitoires."""
-		lines = ["MESURES TRANSITOIRES"]
-		if time_values.size:
-			lines.append(f"Fenetre: {float(time_values[0]):.4g} s -> {float(time_values[-1]):.4g} s ({len(time_values)} points)")
-		lines.append("")
-
-		if selected_nodes:
-			lines.append("TENSIONS")
+		lines = ["Mesures:"]
 		for node_id, values in selected_nodes:
-			lines.append(self._build_trace_stats(f"D{node_id}", "V", time_values, values))
-			lines.append("")
-
-		if selected_dipoles:
-			lines.append("COURANTS")
+			lines.append(self._build_trace_stats(f"N{node_id}", "V", time_values, values))
 		for dipole_id, values in selected_dipoles:
 			lines.append(self._build_trace_stats(f"D{dipole_id}", "A", time_values, values))
-			lines.append("")
-
-		if not selected_nodes and not selected_dipoles:
+		if len(lines) == 1:
 			lines.append("Aucune mesure disponible.")
-
-		while lines and lines[-1] == "":
-			lines.pop()
 		self.transient_stats_text.setPlainText("\n".join(lines))
 
 	def _text_transient_results(self, result: dict) -> None:
