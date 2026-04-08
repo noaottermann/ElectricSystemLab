@@ -23,7 +23,7 @@ from utils.translator import Translator
 from utils.assets import get_asset_path, get_logo_icon, logo_exists
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
-from view.graphs_panel import GraphPanel
+from view.graph_panel import GraphPanel
 
 class MainWindow(QMainWindow):
     """
