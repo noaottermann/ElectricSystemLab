@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import QSize, Qt, QTimer
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
@@ -127,6 +127,11 @@ class MainWindow(QMainWindow):
             }
             """
         )
+        graphs_icon_path = get_asset_path("panels/graphs.png")
+        if graphs_icon_path.exists():
+            self.graphics_button.setIcon(QIcon(str(graphs_icon_path)))
+            self.graphics_button.setIconSize(QSize(72, 72))
+            self.graphics_button.setText("")
 
         central_widget = QWidget()
         central_layout = QHBoxLayout(central_widget)
@@ -925,7 +930,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, "toolbar_delete_action") and self.toolbar_delete_action is not None:
             self.toolbar_delete_action.setText(Translator.tr("action_delete"))
         if hasattr(self, "graphics_button") and self.graphics_button is not None:
-            self.graphics_button.setText(Translator.tr("action_show_graphs"))
+            if self.graphics_button.icon().isNull():
+                self.graphics_button.setText(Translator.tr("action_show_graphs"))
+            else:
+                self.graphics_button.setText("")
 
     def change_language(self, lang: str) -> None:
         """Change la langue et rafraichit l'interface."""

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt5.QtGui import QPainter, QPen, QColor
 from PyQt5.QtWidgets import (
-	QLabel, QTextEdit, QTabWidget, QVBoxLayout, QWidget,
+	QLabel, QTextEdit, QVBoxLayout, QWidget,
 	QCheckBox, QHBoxLayout, QScrollArea, QGroupBox, QPushButton
 )
 from PyQt5.QtCore import Qt
@@ -221,29 +221,13 @@ class GraphPanel(QWidget):
 		header_layout.setContentsMargins(0, 0, 0, 0)
 		header_layout.setSpacing(8)
 
-		title = QLabel("Résultats & Graphiques")
+		title = QLabel("Graphiques")
 		title.setObjectName("graphPanelTitle")
 		header_layout.addWidget(title, 1)
 
 		layout.addWidget(header)
 
-		self.tabs = QTabWidget()
-		
-		# ===== Onglet DC =====
-		self.dc_widget = QWidget()
-		self.dc_layout = QVBoxLayout(self.dc_widget)
-		self.dc_layout.setContentsMargins(0, 0, 0, 0)
-		
-		if MATPLOTLIB_AVAILABLE:
-			self.dc_figure = Figure(figsize=(4, 3), dpi=100)
-			self.dc_canvas = FigureCanvas(self.dc_figure)
-			self.dc_layout.addWidget(self.dc_canvas)
-		else:
-			self.dc_text = QTextEdit()
-			self.dc_text.setReadOnly(True)
-			self.dc_layout.addWidget(self.dc_text)
-		
-		# ===== Onglet Transitoire =====
+		# ===== Panneau Transitoire =====
 		self.transient_widget = QWidget()
 		self.transient_layout = QVBoxLayout(self.transient_widget)
 		self.transient_layout.setContentsMargins(0, 0, 0, 0)
@@ -323,10 +307,8 @@ class GraphPanel(QWidget):
 		self.transient_stats_text.setReadOnly(True)
 		self.transient_stats_text.setMaximumHeight(130)
 		self.transient_layout.addWidget(self.transient_stats_text)
-		
-		self.tabs.addTab(self.dc_widget, "DC")
-		self.tabs.addTab(self.transient_widget, "Transitoire")
-		layout.addWidget(self.tabs, 1)
+
+		layout.addWidget(self.transient_widget, 1)
 
 		self.clear_results()
 
@@ -453,29 +435,17 @@ class GraphPanel(QWidget):
 		self.transient_stats_text.setPlainText("Aucune mesure disponible.")
 		
 		if MATPLOTLIB_AVAILABLE:
-			self.dc_figure.clear()
-			self.dc_canvas.draw()
 			self.transient_figure.clear()
 			self.transient_canvas.draw()
 		else:
-			if hasattr(self, 'dc_text'):
-				self.dc_text.setPlainText("Aucun résultat DC disponible.")
 			if hasattr(self, 'transient_voltage_plot'):
 				self.transient_voltage_plot.set_series([])
 			if hasattr(self, 'transient_current_plot'):
 				self.transient_current_plot.set_series([])
 
 	def set_dc_results(self, circuit) -> None:
-		"""Affiche un resume des potentiels/courants apres simulation DC."""
-		if circuit is None:
-			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'dc_text'):
-				self.dc_text.setPlainText("Aucun circuit disponible.")
-			return
-
-		if MATPLOTLIB_AVAILABLE:
-			self._plot_dc_results(circuit)
-		else:
-			self._text_dc_results(circuit)
+		"""Compatibilite: les resultats DC ne sont plus affiches dans ce panneau."""
+		return
 
 	def _plot_dc_results(self, circuit) -> None:
 		"""Affiche les resultats DC avec matplotlib."""
