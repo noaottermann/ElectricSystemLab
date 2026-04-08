@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from utils.translator import Translator
 
 
 class ComponentsPanel(QWidget):
@@ -89,6 +90,42 @@ class ComponentsPanel(QWidget):
 		if self.category_list.count() > 0:
 			self.category_list.setCurrentRow(0)
 
+	def retranslate_ui(self) -> None:
+		"""Met a jour les textes visibles du panneau selon la langue active."""
+		current_category_key = None
+		current_item = self.category_list.currentItem()
+		if current_item is not None:
+			current_category_key = current_item.data(Qt.UserRole)
+		search_text = self.search_input.text() if hasattr(self, "search_input") else ""
+
+		self.category_list.blockSignals(True)
+		self.components_list.blockSignals(True)
+		self._category_data = self._build_default_categories()
+		self._component_data = self._build_default_components()
+		self._populate_categories()
+		self._populate_components_all()
+		self._sync_category_item_widths()
+
+		if current_category_key is not None:
+			for row in range(self.category_list.count()):
+				item = self.category_list.item(row)
+				if item.data(Qt.UserRole) == current_category_key:
+					self.category_list.setCurrentRow(row)
+					break
+
+		self.category_list.blockSignals(False)
+		self.components_list.blockSignals(False)
+
+		if hasattr(self, "search_input"):
+			self.search_input.setPlaceholderText(Translator.tr("components_search_placeholder"))
+			if search_text:
+				self.search_input.setText(search_text)
+			else:
+				self._apply_search_filter("")
+
+		if hasattr(self, "components_title_label"):
+			self.components_title_label.setText(Translator.tr("components_panel_title"))
+
 	def resizeEvent(self, event: object) -> None:
 		"""Reagit aux redimensionnements pour ajuster la liste des categories."""
 		super().resizeEvent(event)
@@ -129,12 +166,12 @@ class ComponentsPanel(QWidget):
 		layout = QVBoxLayout(frame)
 		layout.setContentsMargins(10, 8, 10, 8)
 
-		title = QLabel("Composants")
-		title.setObjectName("componentsTitle")
-		layout.addWidget(title)
+		self.components_title_label = QLabel(Translator.tr("components_panel_title"))
+		self.components_title_label.setObjectName("componentsTitle")
+		layout.addWidget(self.components_title_label)
 
 		self.search_input = QLineEdit()
-		self.search_input.setPlaceholderText("Rechercher des composants")
+		self.search_input.setPlaceholderText(Translator.tr("components_search_placeholder"))
 		self.search_input.textChanged.connect(self._apply_search_filter)
 		layout.addWidget(self.search_input)
 
@@ -189,19 +226,19 @@ class ComponentsPanel(QWidget):
 		return [
 			{
 				"key": "connections",
-				"label": "Connexions",
+				"label_key": "components_category_connections",
 				"icon": "categories/connections.png",
 				"color": "#7a6a3a",
 			},
 			{
 				"key": "sources",
-				"label": "Sources",
+				"label_key": "components_category_sources",
 				"icon": "categories/sources.png",
 				"color": "#f25f5c",
 			},
 			{
 				"key": "passive",
-				"label": "Passifs",
+				"label_key": "components_category_passive",
 				"icon": "categories/passive.png",
 				"color": "#247ba0",
 			},
@@ -213,36 +250,36 @@ class ComponentsPanel(QWidget):
 			"connections": [
 				{
 					"id": "wire",
-					"label": "Fil",
+					"label_key": "components_item_wire",
 					"icon": "components/placeholder.png",
 				},
 			],
 			"sources": [
 				{
 					"id": "source_dc",
-					"label": "Source DC",
+					"label_key": "components_item_source_dc",
 					"icon": "components/source_dc.png",
 				},
 				{
 					"id": "source_ac",
-					"label": "Source AC",
+					"label_key": "components_item_source_ac",
 					"icon": "components/source_ac.png",
 				},
 			],
 			"passive": [
 				{
 					"id": "resistor",
-					"label": "Resistance",
+					"label_key": "components_item_resistor",
 					"icon": "components/resistor.png",
 				},
 				{
 					"id": "capacitor",
-					"label": "Condensateur",
+					"label_key": "components_item_capacitor",
 					"icon": "components/capacitor.png",
 				},
 				{
 					"id": "inductor",
-					"label": "Inductance",
+					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
 				},
 			],
@@ -253,13 +290,14 @@ class ComponentsPanel(QWidget):
 		self.category_list.clear()
 		for category in self._category_data:
 			icon = self._load_icon(category["icon"], category["color"], QSize(24, 24))
+			label = Translator.tr(category["label_key"])
 			item = QListWidgetItem()
-			item.setToolTip(category["label"])
+			item.setToolTip(label)
 			item.setData(Qt.UserRole, category["key"])
 			item.setSizeHint(QSize(82, 72))
 			self.category_list.addItem(item)
 			self.category_list.setItemWidget(
-				item, self._build_category_widget(icon, category["label"])
+				item, self._build_category_widget(icon, label)
 			)
 
 		self._sync_category_item_widths()
@@ -305,7 +343,7 @@ class ComponentsPanel(QWidget):
 
 	def _add_category_header(self, category: dict) -> None:
 		"""Ajoute un en-tete de categorie dans la liste."""
-		header_item = QListWidgetItem(category["label"])
+		header_item = QListWidgetItem(Translator.tr(category["label_key"]))
 		header_item.setData(Qt.UserRole, f"header:{category['key']}")
 		header_item.setFlags(Qt.NoItemFlags)
 		header_item.setSizeHint(QSize(160, 26))
@@ -313,7 +351,7 @@ class ComponentsPanel(QWidget):
 
 	def _add_empty_category(self) -> None:
 		"""Ajoute une ligne vide lorsqu'une categorie n'a pas de composants."""
-		empty_item = QListWidgetItem("Aucun composant")
+		empty_item = QListWidgetItem(Translator.tr("components_empty_category"))
 		empty_item.setFlags(Qt.NoItemFlags)
 		empty_item.setSizeHint(QSize(160, 22))
 		self.components_list.addItem(empty_item)
@@ -321,7 +359,7 @@ class ComponentsPanel(QWidget):
 	def _add_component_row(self, component: dict, category_key: str) -> None:
 		"""Ajoute une ligne pour un composant."""
 		icon = self._load_icon(component["icon"], "#d7d7d7", QSize(28, 28))
-		item = QListWidgetItem(icon, component["label"])
+		item = QListWidgetItem(icon, Translator.tr(component["label_key"]))
 		item.setData(Qt.UserRole, component["id"])
 		item.setData(Qt.UserRole + 1, category_key)
 		item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)

@@ -10,6 +10,8 @@ from PyQt5.QtCore import Qt
 import numpy as np
 from typing import Optional
 
+from utils.translator import Translator
+
 try:
 	import matplotlib
 	matplotlib.use('Qt5Agg')
@@ -75,7 +77,7 @@ class TimeSeriesPlotWidget(QWidget):
 
 		if not self.series:
 			painter.setPen(QPen(QColor("#555555")))
-			painter.drawText(self.rect(), Qt.AlignCenter, "Aucune courbe disponible.")
+			painter.drawText(self.rect(), Qt.AlignCenter, Translator.tr("graph_no_curve"))
 			return
 
 		margin_left = 56
@@ -155,7 +157,7 @@ class TimeSeriesPlotWidget(QWidget):
 			info_lines = [f"t = {float(self.cursor_time):.4g} s"]
 			for index, sample_time, sample_value in cursor_points[:4]:
 				label = str(self.series[index].get("label", f"Trace {index + 1}"))
-				unit_label = str(self.series[index].get("unit_label", "Valeur"))
+				unit_label = str(self.series[index].get("unit_label", Translator.tr("graph_value_axis")))
 				info_lines.append(f"{label}: {sample_value:.4g} {unit_label.split('(')[-1].rstrip(')') if '(' in unit_label else ''}".rstrip())
 
 			box_width = min(220, plot_rect.width() - 20)
@@ -186,11 +188,11 @@ class TimeSeriesPlotWidget(QWidget):
 
 		# Étiquettes d'axes
 		painter.setPen(QPen(QColor("#374151")))
-		painter.drawText(plot_rect.center().x() - 18, self.height() - 8, "Temps (s)")
+		painter.drawText(plot_rect.center().x() - 18, self.height() - 8, Translator.tr("graph_time_axis"))
 		painter.save()
 		painter.translate(12, plot_rect.center().y() + 32)
 		painter.rotate(-90)
-		painter.drawText(0, 0, self.series[0].get("unit_label", "Valeur"))
+		painter.drawText(0, 0, self.series[0].get("unit_label", Translator.tr("graph_value_axis")))
 		painter.restore()
 
 		painter.end()
@@ -223,9 +225,9 @@ class GraphPanel(QWidget):
 		header_layout.setContentsMargins(0, 0, 0, 0)
 		header_layout.setSpacing(8)
 
-		title = QLabel("Graphiques")
-		title.setObjectName("graphPanelTitle")
-		header_layout.addWidget(title, 1)
+		self.title_label = QLabel(Translator.tr("graph_panel_title"))
+		self.title_label.setObjectName("graphPanelTitle")
+		header_layout.addWidget(self.title_label, 1)
 
 		layout.addWidget(header)
 
@@ -241,7 +243,7 @@ class GraphPanel(QWidget):
 		self.transient_controls_layout.setSpacing(8)
 		
 		# Sélection des dipôles pour les tensions
-		self.nodes_group = QGroupBox("Dipôles (tension)")
+		self.nodes_group = QGroupBox(Translator.tr("graph_voltage_group"))
 		self.nodes_layout = QVBoxLayout(self.nodes_group)
 		self.nodes_layout.setSpacing(4)
 		self.nodes_layout.setContentsMargins(5, 5, 5, 5)
@@ -260,14 +262,15 @@ class GraphPanel(QWidget):
 		nodes_controls_layout = QHBoxLayout(nodes_controls)
 		nodes_controls_layout.setContentsMargins(0, 0, 0, 0)
 		nodes_controls_layout.setSpacing(4)
-		nodes_controls_layout.addWidget(QLabel("Sélection"))
+		self.nodes_controls_label = QLabel(Translator.tr("graph_selection_label"))
+		nodes_controls_layout.addWidget(self.nodes_controls_label)
 		nodes_controls_layout.addStretch(1)
-		self.nodes_select_all_button = QPushButton("Tout")
+		self.nodes_select_all_button = QPushButton(Translator.tr("graph_select_all"))
 		self.nodes_select_all_button.setFixedSize(42, 20)
 		self.nodes_select_all_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
 		self.nodes_select_all_button.clicked.connect(lambda: self._set_checkboxes_selection(self.node_checkboxes, True))
 		nodes_controls_layout.addWidget(self.nodes_select_all_button)
-		self.nodes_select_none_button = QPushButton("Aucun")
+		self.nodes_select_none_button = QPushButton(Translator.tr("graph_select_none"))
 		self.nodes_select_none_button.setFixedSize(48, 20)
 		self.nodes_select_none_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
 		self.nodes_select_none_button.clicked.connect(lambda: self._set_checkboxes_selection(self.node_checkboxes, False))
@@ -276,7 +279,7 @@ class GraphPanel(QWidget):
 		self.transient_controls_layout.addWidget(self.nodes_group)
 		
 		# Sélection des dipôles
-		self.dipoles_group = QGroupBox("Dipôles")
+		self.dipoles_group = QGroupBox(Translator.tr("graph_current_group"))
 		self.dipoles_layout = QVBoxLayout(self.dipoles_group)
 		self.dipoles_layout.setSpacing(4)
 		self.dipoles_layout.setContentsMargins(5, 5, 5, 5)
@@ -295,14 +298,15 @@ class GraphPanel(QWidget):
 		dipoles_controls_layout = QHBoxLayout(dipoles_controls)
 		dipoles_controls_layout.setContentsMargins(0, 0, 0, 0)
 		dipoles_controls_layout.setSpacing(4)
-		dipoles_controls_layout.addWidget(QLabel("Sélection"))
+		self.dipoles_controls_label = QLabel(Translator.tr("graph_selection_label"))
+		dipoles_controls_layout.addWidget(self.dipoles_controls_label)
 		dipoles_controls_layout.addStretch(1)
-		self.dipoles_select_all_button = QPushButton("Tout")
+		self.dipoles_select_all_button = QPushButton(Translator.tr("graph_select_all"))
 		self.dipoles_select_all_button.setFixedSize(42, 20)
 		self.dipoles_select_all_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
 		self.dipoles_select_all_button.clicked.connect(lambda: self._set_checkboxes_selection(self.dipole_checkboxes, True))
 		dipoles_controls_layout.addWidget(self.dipoles_select_all_button)
-		self.dipoles_select_none_button = QPushButton("Aucun")
+		self.dipoles_select_none_button = QPushButton(Translator.tr("graph_select_none"))
 		self.dipoles_select_none_button.setFixedSize(48, 20)
 		self.dipoles_select_none_button.setStyleSheet("QPushButton { padding: 0 4px; font-size: 10px; }")
 		self.dipoles_select_none_button.clicked.connect(lambda: self._set_checkboxes_selection(self.dipole_checkboxes, False))
@@ -348,6 +352,27 @@ class GraphPanel(QWidget):
 		layout.addWidget(self.transient_widget, 1)
 
 		self.clear_results()
+
+	def retranslate_ui(self) -> None:
+		"""Met à jour les textes visibles selon la langue active."""
+		self.title_label.setText(Translator.tr("graph_panel_title"))
+		self.nodes_group.setTitle(Translator.tr("graph_voltage_group"))
+		self.dipoles_group.setTitle(Translator.tr("graph_current_group"))
+		self.nodes_controls_label.setText(Translator.tr("graph_selection_label"))
+		self.dipoles_controls_label.setText(Translator.tr("graph_selection_label"))
+		self.nodes_select_all_button.setText(Translator.tr("graph_select_all"))
+		self.nodes_select_none_button.setText(Translator.tr("graph_select_none"))
+		self.dipoles_select_all_button.setText(Translator.tr("graph_select_all"))
+		self.dipoles_select_none_button.setText(Translator.tr("graph_select_none"))
+		if not MATPLOTLIB_AVAILABLE:
+			if hasattr(self, "transient_voltage_plot"):
+				self.transient_voltage_plot.update()
+			if hasattr(self, "transient_current_plot"):
+				self.transient_current_plot.update()
+		if self.last_transient_result:
+			self.set_transient_results(self.last_transient_result, self.last_circuit)
+		else:
+			self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 
 	def set_transient_window(self, window_seconds: Optional[float]) -> None:
 		"""Definit la fenetre temporelle affichee pour le mode transitoire."""
@@ -509,7 +534,7 @@ class GraphPanel(QWidget):
 		self.selected_dipoles = set()
 		self.hover_time = None
 		self.cursor_time = None
-		self.transient_stats_text.setPlainText("Aucune mesure disponible.")
+		self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 		
 		if MATPLOTLIB_AVAILABLE:
 			self.transient_figure.clear()
@@ -544,8 +569,8 @@ class GraphPanel(QWidget):
 			ax1.bar(range(len(dipole_voltages)), dipole_voltages, color=colors, alpha=0.7)
 			ax1.set_xticks(range(len(dipole_names)))
 			ax1.set_xticklabels(dipole_names, fontsize=9)
-			ax1.set_ylabel('Tension (V)', fontsize=9)
-			ax1.set_title('Tensions des Dipôles', fontsize=10, fontweight='bold')
+			ax1.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
+			ax1.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
 			ax1.grid(True, alpha=0.3)
 		
 		# Courants des dipôles
@@ -554,8 +579,8 @@ class GraphPanel(QWidget):
 			ax2.bar(range(len(dipole_currents)), dipole_currents, color=colors, alpha=0.7)
 			ax2.set_xticks(range(len(dipole_names)))
 			ax2.set_xticklabels(dipole_names, fontsize=9)
-			ax2.set_ylabel('Courant (A)', fontsize=9)
-			ax2.set_title('Courants des Dipôles', fontsize=10, fontweight='bold')
+			ax2.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
+			ax2.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
 			ax2.grid(True, alpha=0.3)
 		
 		self.dc_figure.tight_layout()
@@ -563,14 +588,14 @@ class GraphPanel(QWidget):
 
 	def _text_dc_results(self, circuit) -> None:
 		"""Affiche les resultats DC en texte (fallback sans matplotlib)."""
-		lines = ["Simulation DC", "", "Dipoles (tensions):"]
+		lines = [Translator.tr("graph_dc_title"), "", Translator.tr("graph_dc_voltage_section")]
 		for dipole in sorted(circuit.dipoles.values(), key=lambda d: d.id):
-			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.voltage:.6g} V")
+			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.voltage:.6g} {Translator.tr('graph_voltage_unit')}")
 
 		lines.append("")
-		lines.append("Dipoles (courants):")
+		lines.append(Translator.tr("graph_dc_current_section"))
 		for dipole in sorted(circuit.dipoles.values(), key=lambda d: d.id):
-			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.current:.6g} A")
+			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.current:.6g} {Translator.tr('graph_current_unit')}")
 
 		self.dc_text.setPlainText("\n".join(lines))
 
@@ -582,6 +607,7 @@ class GraphPanel(QWidget):
 				self.transient_voltage_plot.set_series([])
 			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_current_plot'):
 				self.transient_current_plot.set_series([])
+			self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 			return
 
 		# Stocke les résultats pour les mises à jour interactives
@@ -645,25 +671,31 @@ class GraphPanel(QWidget):
 	def _build_native_transient_summary(self, result: dict) -> list[str]:
 		"""Construit un résumé texte court pour le mode natif sans matplotlib."""
 		time_values = np.asarray(result.get("time", []), dtype=float)
-		lines = ["Simulation transitoire"]
+		lines = [Translator.tr("graph_transient_title")]
 		if time_values.size:
-			lines.append(f"Points: {len(time_values)} | t0={float(time_values[0]):.6g}s | tfin={float(time_values[-1]):.6g}s")
+			lines.append(
+				Translator.tr("graph_points").format(
+					count=len(time_values),
+					start=float(time_values[0]),
+					end=float(time_values[-1]),
+				)
+			)
 		else:
-			lines.append("Aucun point temporel.")
+			lines.append(Translator.tr("graph_no_time_points"))
 		lines.append("")
 		if self.transient_window_seconds is not None and time_values.size:
 			mask, start_time, end_time = self._compute_time_window(time_values)
 			window_points = int(np.count_nonzero(mask))
 			lines.append(
-				f"Fenêtre affichée: [{start_time:.6g}s, {end_time:.6g}s] ({window_points} points)"
+				Translator.tr("graph_window_displayed").format(start=start_time, end=end_time, count=window_points)
 			)
 			lines.append("")
-		lines.append("Dipôles tension sélectionnés: " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else "aucun"))
-		lines.append("Dipôles courant sélectionnés: " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else "aucun"))
+		lines.append(Translator.tr("graph_voltage_selected") + ": " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else Translator.tr("graph_none")))
+		lines.append(Translator.tr("graph_current_selected") + ": " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else Translator.tr("graph_none")))
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 		if cursor_time is not None:
 			lines.append("")
-			lines.append(f"Repère temporel: {cursor_time:.6g}s")
+			lines.append(Translator.tr("graph_cursor_marker").format(time=cursor_time))
 		return lines
 
 	def _plot_transient_results_native(self, result: dict) -> None:
@@ -687,9 +719,9 @@ class GraphPanel(QWidget):
 				x_values = time_values[:trim_size]
 				y_values = values[:trim_size]
 				local_mask, _, _ = self._compute_time_window(x_values)
-				voltage_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{node_id}", "unit_label": "Tension (V)"})
+				voltage_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{node_id}", "unit_label": Translator.tr("graph_voltage_axis")})
 				continue
-			voltage_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{node_id}", "unit_label": "Tension (V)"})
+			voltage_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{node_id}", "unit_label": Translator.tr("graph_voltage_axis")})
 
 		current_series = []
 		for dipole_id in sorted(dipole_currents.keys()):
@@ -703,9 +735,9 @@ class GraphPanel(QWidget):
 				x_values = time_values[:trim_size]
 				y_values = values[:trim_size]
 				local_mask, _, _ = self._compute_time_window(x_values)
-				current_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{dipole_id}", "unit_label": "Courant (A)"})
+				current_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{dipole_id}", "unit_label": Translator.tr("graph_current_axis")})
 				continue
-			current_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{dipole_id}", "unit_label": "Courant (A)"})
+			current_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{dipole_id}", "unit_label": Translator.tr("graph_current_axis")})
 
 		if hasattr(self, 'transient_voltage_plot'):
 			self.transient_voltage_plot.set_series(voltage_series, cursor_time=cursor_time)
@@ -758,7 +790,7 @@ class GraphPanel(QWidget):
 						selected_dipoles.append((dipole_id, y_values[local_mask]))
 		
 		if len(selected_nodes) == 0 and len(selected_dipoles) == 0:
-			self.transient_stats_text.setPlainText("Aucune trace sélectionnée.")
+			self.transient_stats_text.setPlainText(Translator.tr("graph_no_trace_selected"))
 			self.transient_canvas.draw()
 			return
 
@@ -774,17 +806,17 @@ class GraphPanel(QWidget):
 				ax_voltage.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
 			if self.transient_window_seconds is not None:
 				ax_voltage.set_xlim(window_start, window_end)
-			ax_voltage.set_ylabel('Tension (V)', fontsize=9)
-			ax_voltage.set_xlabel('Temps (s)', fontsize=9)
-			ax_voltage.set_title('Tensions des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_voltage.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
+			ax_voltage.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
+			ax_voltage.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
 			ax_voltage.grid(True, alpha=0.3)
 			ax_voltage.legend(loc='best', fontsize=8)
 		else:
-			ax_voltage.set_title('Tensions des dipôles sélectionnés', fontsize=10, fontweight='bold')
-			ax_voltage.set_ylabel('Tension (V)', fontsize=9)
-			ax_voltage.set_xlabel('Temps (s)', fontsize=9)
+			ax_voltage.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
+			ax_voltage.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
+			ax_voltage.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
 			ax_voltage.grid(True, alpha=0.3)
-			ax_voltage.text(0.5, 0.5, 'Aucune tension sélectionnée', transform=ax_voltage.transAxes, ha='center', va='center')
+			ax_voltage.text(0.5, 0.5, Translator.tr("graph_no_voltage_selected"), transform=ax_voltage.transAxes, ha='center', va='center')
 
 		if selected_dipoles:
 			for dipole_id, values in selected_dipoles:
@@ -793,17 +825,17 @@ class GraphPanel(QWidget):
 				ax_current.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
 			if self.transient_window_seconds is not None:
 				ax_current.set_xlim(window_start, window_end)
-			ax_current.set_ylabel('Courant (A)', fontsize=9)
-			ax_current.set_xlabel('Temps (s)', fontsize=9)
-			ax_current.set_title('Courants des dipôles sélectionnés', fontsize=10, fontweight='bold')
+			ax_current.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
+			ax_current.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
+			ax_current.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
 			ax_current.grid(True, alpha=0.3)
 			ax_current.legend(loc='best', fontsize=8)
 		else:
-			ax_current.set_title('Courants des dipôles sélectionnés', fontsize=10, fontweight='bold')
-			ax_current.set_ylabel('Courant (A)', fontsize=9)
-			ax_current.set_xlabel('Temps (s)', fontsize=9)
+			ax_current.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
+			ax_current.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
+			ax_current.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
 			ax_current.grid(True, alpha=0.3)
-			ax_current.text(0.5, 0.5, 'Aucun courant sélectionné', transform=ax_current.transAxes, ha='center', va='center')
+			ax_current.text(0.5, 0.5, Translator.tr("graph_no_current_selected"), transform=ax_current.transAxes, ha='center', va='center')
 		
 		self.transient_figure.tight_layout()
 		self.transient_canvas.draw()
@@ -812,42 +844,42 @@ class GraphPanel(QWidget):
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
 		"""Construit un bloc de stats lisible pour une trace."""
 		if values.size == 0:
-			return f"{label}\n  Etat      : trace vide"
+			return f"{label}\n  {Translator.tr('graph_state')}      : {Translator.tr('graph_empty_trace')}"
 
 		parts = [
 			f"{label}",
-			f"  Min       : {float(values.min()):.4g} {unit}",
-			f"  Max       : {float(values.max()):.4g} {unit}",
-			f"  RMS       : {_rms(values):.4g} {unit}",
-			f"  Final     : {float(values[-1]):.4g} {unit}",
+			f"  {Translator.tr('graph_min')}       : {float(values.min()):.4g} {unit}",
+			f"  {Translator.tr('graph_max')}       : {float(values.max()):.4g} {unit}",
+			f"  {Translator.tr('graph_rms')}       : {_rms(values):.4g} {unit}",
+			f"  {Translator.tr('graph_final')}     : {float(values[-1]):.4g} {unit}",
 		]
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
 		if cursor_time is not None and time_values.size:
 			_, sample_time, sample_value = _trace_value_at_time(time_values, values, cursor_time)
-			parts.append(f"  Curseur   : t={sample_time:.4g} s -> {sample_value:.4g} {unit}")
+			parts.append(f"  {Translator.tr('graph_cursor')}   : t={sample_time:.4g} s -> {sample_value:.4g} {unit}")
 		return "\n".join(parts)
 
 	def _update_transient_stats(self, time_values: np.ndarray, selected_nodes: list, selected_dipoles: list) -> None:
 		"""Met a jour le panneau de mesures transitoires."""
-		lines = ["MESURES TRANSITOIRES"]
+		lines = [Translator.tr("graph_measurements_title")]
 		if time_values.size:
-			lines.append(f"Fenetre: {float(time_values[0]):.4g} s -> {float(time_values[-1]):.4g} s ({len(time_values)} points)")
+			lines.append(Translator.tr("graph_window").format(start=float(time_values[0]), end=float(time_values[-1]), count=len(time_values)))
 		lines.append("")
 
 		if selected_nodes:
-			lines.append("TENSIONS")
+			lines.append(Translator.tr("graph_voltage_section"))
 		for node_id, values in selected_nodes:
-			lines.append(self._build_trace_stats(f"D{node_id}", "V", time_values, values))
+			lines.append(self._build_trace_stats(f"D{node_id}", Translator.tr("graph_voltage_unit"), time_values, values))
 			lines.append("")
 
 		if selected_dipoles:
-			lines.append("COURANTS")
+			lines.append(Translator.tr("graph_current_section"))
 		for dipole_id, values in selected_dipoles:
-			lines.append(self._build_trace_stats(f"D{dipole_id}", "A", time_values, values))
+			lines.append(self._build_trace_stats(f"D{dipole_id}", Translator.tr("graph_current_unit"), time_values, values))
 			lines.append("")
 
 		if not selected_nodes and not selected_dipoles:
-			lines.append("Aucune mesure disponible.")
+			lines.append(Translator.tr("graph_no_measure"))
 
 		while lines and lines[-1] == "":
 			lines.pop()
@@ -859,28 +891,28 @@ class GraphPanel(QWidget):
 		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
 
-		lines = ["Simulation transitoire", ""]
+		lines = [Translator.tr("graph_transient_title"), ""]
 		if time_values:
 			lines.append(
-				f"Points: {len(time_values)} | t0={time_values[0]:.6g}s | tfin={time_values[-1]:.6g}s"
+				Translator.tr("graph_points").format(count=len(time_values), start=time_values[0], end=time_values[-1])
 			)
 		else:
-			lines.append("Aucun point temporel.")
+			lines.append(Translator.tr("graph_no_time_points"))
 
 		lines.append("")
-		lines.append("Dipoles (tensions, dernier point):")
+		lines.append(Translator.tr("graph_voltage_last_point"))
 		for node_id in sorted(dipole_voltages, key=lambda x: str(x)):
 			values = dipole_voltages.get(node_id, [])
 			if not values:
 				continue
-			lines.append(f"- D{node_id}: {values[-1]:.6g} V")
+			lines.append(f"- D{node_id}: {values[-1]:.6g} {Translator.tr('graph_voltage_unit')}")
 
 		lines.append("")
-		lines.append("Dipoles (dernier point):")
+		lines.append(Translator.tr("graph_current_last_point"))
 		for dipole_id in sorted(dipole_currents, key=lambda x: str(x)):
 			values = dipole_currents.get(dipole_id, [])
 			if not values:
 				continue
-			lines.append(f"- D{dipole_id}: {values[-1]:.6g} A")
+			lines.append(f"- D{dipole_id}: {values[-1]:.6g} {Translator.tr('graph_current_unit')}")
 
 		self.transient_text.setPlainText("\n".join(lines))

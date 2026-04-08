@@ -99,8 +99,8 @@ class MainWindow(QMainWindow):
         self.components_panel.setMaximumWidth(300)
         self.components_panel.tool_selected.connect(self.set_tool)
         self.graph_panel = GraphPanel()
-        self.graph_panel.setMinimumWidth(260)
-        self.graph_panel.setMaximumWidth(420)
+        self.graph_panel.setMinimumWidth(200)
+        self.graph_panel.setMaximumWidth(300)
         self.graph_panel.setVisible(False)
 
         # Crée le bouton Graphiques flottant
@@ -890,6 +890,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(Translator.tr("app_title"))
         self._retranslate_menus()
         self._retranslate_actions()
+        if hasattr(self, "components_panel") and self.components_panel is not None:
+            self.components_panel.retranslate_ui()
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            self.graph_panel.retranslate_ui()
+        if hasattr(self, "graph_collapse_button") and self.graph_collapse_button is not None:
+            self.graph_collapse_button.setText(Translator.tr("graph_collapse_button"))
         self.status_bar.showMessage(Translator.tr("status_ready"))
 
     def _retranslate_menus(self) -> None:
