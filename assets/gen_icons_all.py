@@ -1,17 +1,20 @@
 import os
-from PyQt5.QtGui import QFont, QImage, QPainter, QPen, QColor, QPolygonF, QPainterPath
+from PyQt5.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen, QColor, QPolygonF, QPainterPath
 from PyQt5.QtCore import Qt, QPointF, QRectF
 
 ROOT = os.path.dirname(__file__)
 COMP = os.path.join(ROOT, "components")
 CAT = os.path.join(ROOT, "categories")
+FAM = os.path.join(ROOT, "components_families")
 
 os.makedirs(COMP, exist_ok=True)
 os.makedirs(CAT, exist_ok=True)
+os.makedirs(FAM, exist_ok=True)
 
 SIZE = 64
 CENTER = SIZE / 2
 CENTER_I = int(CENTER)
+_APP = None
 
 
 def _pen(width: float = 2.0) -> QPen:
@@ -39,7 +42,10 @@ def save_icon(path, draw_func):
     painter.setRenderHint(QPainter.Antialiasing)
     draw_func(painter)
     painter.end()
-    image.save(path)
+    if not image.save(path):
+        raise RuntimeError(f"Failed to save icon: {path}")
+    if not os.path.exists(path):
+        raise RuntimeError(f"Icon not found after save: {path}")
 
 
 def _leads(p, left_end: int, right_start: int):
@@ -191,14 +197,11 @@ def draw_led(p):
 
 
 def draw_category_base(p, color, label):
-    p.setPen(QPen(_soft_color("#1f2937"), 2))
-    p.setBrush(_soft_color(color))
-    rect = QRectF(6, 6, SIZE - 12, SIZE - 12)
-    p.drawRoundedRect(rect, 12, 12)
-    font = QFont("Segoe UI", 10)
+    rect = QRectF(0, 0, SIZE, SIZE)
+    font = QFont("Segoe UI", 18)
     font.setBold(True)
     p.setFont(font)
-    p.setPen(QPen(QColor(255, 255, 255), 2))
+    p.setPen(QPen(_soft_color(color), 2))
     p.drawText(rect, Qt.AlignCenter, label)
 
 
@@ -219,6 +222,12 @@ def draw_category_nonlinear(p):
 
 
 def main():
+    global _APP
+    app_instance = QGuiApplication.instance()
+    if app_instance is None:
+        _APP = QGuiApplication([])
+    else:
+        _APP = app_instance
     save_icon(os.path.join(COMP, "wire.png"), draw_wire)
     save_icon(os.path.join(COMP, "resistor.png"), draw_resistor)
     save_icon(os.path.join(COMP, "capacitor.png"), draw_capacitor)
@@ -236,6 +245,11 @@ def main():
     save_icon(os.path.join(CAT, "sources.png"), draw_category_sources)
     save_icon(os.path.join(CAT, "passive.png"), draw_category_passive)
     save_icon(os.path.join(CAT, "nonlinear.png"), draw_category_nonlinear)
+
+    save_icon(os.path.join(FAM, "connections.png"), draw_category_connections)
+    save_icon(os.path.join(FAM, "sources.png"), draw_category_sources)
+    save_icon(os.path.join(FAM, "passive.png"), draw_category_passive)
+    save_icon(os.path.join(FAM, "nonlinear.png"), draw_category_nonlinear)
 
 
 if __name__ == "__main__":

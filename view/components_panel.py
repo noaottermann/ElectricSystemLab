@@ -42,7 +42,7 @@ class ComponentsPanel(QWidget):
 		self.category_list = QListWidget()
 		self.category_list.setObjectName("categoryList")
 		self.category_list.setViewMode(QListWidget.ListMode)
-		self.category_list.setFixedWidth(82)
+		self.category_list.setFixedWidth(96)
 		self.category_list.setSpacing(0)
 		self.category_list.setUniformItemSizes(True)
 		self.category_list.setSelectionMode(QListWidget.SingleSelection)
@@ -57,7 +57,7 @@ class ComponentsPanel(QWidget):
 		self.components_list = ComponentsListWidget()
 		self.components_list.setObjectName("componentsList")
 		self.components_list.setViewMode(QListWidget.ListMode)
-		self.components_list.setIconSize(QSize(28, 28))
+		self.components_list.setIconSize(QSize(36, 36))
 		self.components_list.setSpacing(4)
 		self.components_list.setUniformItemSizes(True)
 		self.components_list.setSelectionMode(QListWidget.SingleSelection)
@@ -227,25 +227,25 @@ class ComponentsPanel(QWidget):
 			{
 				"key": "connections",
 				"label_key": "components_category_connections",
-				"icon": "categories/connections.png",
+				"icon": "components_families/connections.png",
 				"color": "#7a6a3a",
 			},
 			{
 				"key": "sources",
 				"label_key": "components_category_sources",
-				"icon": "categories/sources.png",
+				"icon": "components_families/sources.png",
 				"color": "#f25f5c",
 			},
 			{
 				"key": "passive",
 				"label_key": "components_category_passive",
-				"icon": "categories/passive.png",
+				"icon": "components_families/passive.png",
 				"color": "#247ba0",
 			},
 			{
 				"key": "nonlinear",
 				"label_key": "components_category_nonlinear",
-				"icon": "categories/nonlinear.png",
+				"icon": "components_families/nonlinear.png",
 				"color": "#8b5cf6",
 			},
 		]
@@ -327,12 +327,12 @@ class ComponentsPanel(QWidget):
 		"""Remplit la liste des categories disponibles."""
 		self.category_list.clear()
 		for category in self._category_data:
-			icon = self._load_icon(category["icon"], category["color"], QSize(24, 24))
+			icon = self._load_icon(category["icon"], category["color"], QSize(32, 32))
 			label = Translator.tr(category["label_key"])
 			item = QListWidgetItem()
 			item.setToolTip(label)
 			item.setData(Qt.UserRole, category["key"])
-			item.setSizeHint(QSize(82, 72))
+			item.setSizeHint(QSize(96, 84))
 			self.category_list.addItem(item)
 			self.category_list.setItemWidget(
 				item, self._build_category_widget(icon, label)
@@ -384,7 +384,7 @@ class ComponentsPanel(QWidget):
 		header_item = QListWidgetItem(Translator.tr(category["label_key"]))
 		header_item.setData(Qt.UserRole, f"header:{category['key']}")
 		header_item.setFlags(Qt.NoItemFlags)
-		header_item.setSizeHint(QSize(160, 26))
+		header_item.setSizeHint(QSize(160, 30))
 		self.components_list.addItem(header_item)
 
 	def _add_empty_category(self) -> None:
@@ -396,12 +396,12 @@ class ComponentsPanel(QWidget):
 
 	def _add_component_row(self, component: dict, category_key: str) -> None:
 		"""Ajoute une ligne pour un composant."""
-		icon = self._load_icon(component["icon"], "#d7d7d7", QSize(28, 28))
+		icon = self._load_icon(component["icon"], "#d7d7d7", QSize(36, 36))
 		item = QListWidgetItem(icon, Translator.tr(component["label_key"]))
 		item.setData(Qt.UserRole, component["id"])
 		item.setData(Qt.UserRole + 1, category_key)
 		item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-		item.setSizeHint(QSize(160, 38))
+		item.setSizeHint(QSize(160, 46))
 		self.components_list.addItem(item)
 
 	def _scroll_to_category(self, category_key: str) -> None:
