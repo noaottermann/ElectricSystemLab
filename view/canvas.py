@@ -1071,8 +1071,14 @@ class CircuitScene(QGraphicsScene):
             "resistor",
             "source_dc",
             "source_ac",
+            "current_source_dc",
+            "current_source_ac",
+            "source_vccs",
+            "source_cccs",
             "capacitor",
             "inductor",
+            "diode",
+            "led",
         ]:
             self.add_component_at(self.current_tool, grid_x, grid_y)
             event.accept()

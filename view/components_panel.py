@@ -257,7 +257,7 @@ class ComponentsPanel(QWidget):
 				{
 					"id": "wire",
 					"label_key": "components_item_wire",
-					"icon": "components/placeholder.png",
+					"icon": "components/wire.png",
 				},
 			],
 			"sources": [

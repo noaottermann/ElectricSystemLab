@@ -206,9 +206,8 @@ class ComponentItem(QGraphicsItem):
             painter.drawRect(self.boundingRect())
         self.draw_symbol(painter)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(Qt.red)
+        painter.setBrush(QColor("#1f2937"))
         painter.drawEllipse(QPointF(-30, 0), 2, 2)
-        painter.setBrush(Qt.black)
         painter.drawEllipse(QPointF(30, 0), 2, 2)
 
 
@@ -233,6 +232,20 @@ class ComponentItem(QGraphicsItem):
         """Retourne la valeur affichee pour l'item."""
         return ""
 
+    @staticmethod
+    def _pen(width: float = 2.0) -> QPen:
+        pen = QPen(QColor("#181818"), width)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        return pen
+
+    @staticmethod
+    def _pen_light(width: float = 1.4) -> QPen:
+        pen = QPen(QColor("#181818"), width)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        return pen
+
     # Dessin des symboles
 
 class ResistorItem(ComponentItem):
@@ -240,23 +253,22 @@ class ResistorItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole de la resistance."""
-        pen = QPen(QColor("black"), 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
 
         # Style europeen (rectangle)
         # Lignes de connexion
-        painter.drawLine(-30, 0, -15, 0)  # Gauche
-        painter.drawLine(15, 0, 30, 0)    # Droite
+        painter.drawLine(-30, 0, -15, 0)
+        painter.drawLine(15, 0, 30, 0)
         
         # Corps (rectangle)
-        rect = QRectF(-15, -8, 30, 16)
-        painter.drawRect(rect)
+        rect = QRectF(-15, -7, 30, 14)
+        painter.drawRoundedRect(rect, 3, 3)
     
     def get_value_text(self) -> str:
         """Retourne la valeur de resistance a afficher."""
         if hasattr(self.component, "resistance"):
-            return f"{self.component.resistance} "
+            return f"{self.component.resistance} Ohm"
         return ""
 
 class VoltageSourceItem(ComponentItem):
@@ -264,8 +276,7 @@ class VoltageSourceItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole de la source de tension."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
 
         # Lignes
@@ -276,18 +287,17 @@ class VoltageSourceItem(ComponentItem):
         painter.drawEllipse(QPointF(0, 0), 15, 15)
         
         # Symboles +/- ou ~
-        painter.setPen(QPen(Qt.black, 1.5))
+        painter.setPen(self._pen_light())
         
         if isinstance(self.component, VoltageSourceDC):
             painter.drawLine(-10, 0, -4, 0)
             painter.drawLine(-7, -3, -7, 3)
-            
             painter.drawLine(4, 0, 10, 0)
         elif isinstance(self.component, VoltageSourceAC):
             # Tilde (~)
             path = QPainterPath()
-            path.moveTo(-7, 2)
-            path.cubicTo(-2, -5, 2, 5, 7, -2)
+            path.moveTo(-10, 4)
+            path.cubicTo(-4, -10, 4, 10, 10, -4)
             painter.drawPath(path)
 
     def get_value_text(self) -> str:
@@ -304,23 +314,25 @@ class CurrentSourceItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole de la source de courant."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
 
         painter.drawLine(-30, 0, -15, 0)
         painter.drawLine(15, 0, 30, 0)
         painter.drawEllipse(QPointF(0, 0), 15, 15)
 
-        painter.setPen(QPen(Qt.black, 1.5))
+        painter.setPen(self._pen_light())
         if isinstance(self.component, CurrentSourceDC):
-            painter.drawLine(0, -8, 0, 6)
-            painter.drawLine(-4, 2, 0, 6)
-            painter.drawLine(4, 2, 0, 6)
+            painter.drawLine(-6, 0, 6, 0)
+            painter.drawLine(6, 0, 2, -3)
+            painter.drawLine(6, 0, 2, 3)
         elif isinstance(self.component, CurrentSourceAC):
+            painter.drawLine(-6, 4, 6, 4)
+            painter.drawLine(6, 4, 2, 1)
+            painter.drawLine(6, 4, 2, 7)
             path = QPainterPath()
-            path.moveTo(-7, 2)
-            path.cubicTo(-2, -5, 2, 5, 7, -2)
+            path.moveTo(-9, -6)
+            path.cubicTo(-3, -14, 3, 2, 9, -6)
             painter.drawPath(path)
 
     def get_value_text(self) -> str:
@@ -337,8 +349,7 @@ class DependentCurrentSourceItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole d'une source dependante."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
 
         painter.drawLine(-30, 0, -16, 0)
@@ -352,10 +363,15 @@ class DependentCurrentSourceItem(ComponentItem):
         diamond.closeSubpath()
         painter.drawPath(diamond)
 
-        painter.setPen(QPen(Qt.black, 1.5))
-        painter.drawLine(0, -6, 0, 6)
-        painter.drawLine(-4, 2, 0, 6)
-        painter.drawLine(4, 2, 0, 6)
+        painter.setPen(self._pen_light())
+        if isinstance(self.component, VoltageControlledCurrentSource):
+            painter.drawLine(-10, 0, -4, 0)
+            painter.drawLine(-7, -3, -7, 3)
+            painter.drawLine(4, 0, 10, 0)
+        else:
+            painter.drawLine(-6, 0, 6, 0)
+            painter.drawLine(6, 0, 2, -3)
+            painter.drawLine(6, 0, 2, 3)
 
     def get_value_text(self) -> str:
         """Retourne la valeur de gain a afficher."""
@@ -370,8 +386,7 @@ class CapacitorItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole du condensateur."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         
         # Lignes
         painter.drawLine(-30, 0, -5, 0)
@@ -390,18 +405,19 @@ class InductorItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole de l'inductance."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
         
         # Lignes
-        painter.drawLine(-30, 0, -15, 0)
-        painter.drawLine(15, 0, 30, 0)
+        painter.drawLine(-30, 0, -18, 0)
+        painter.drawLine(18, 0, 30, 0)
         
         # Arcs
-        painter.drawArc(-15, -5, 10, 10, 0, 180 * 16)
-        painter.drawArc(-5, -5, 10, 10, 0, 180 * 16)
-        painter.drawArc(5, -5, 10, 10, 0, 180 * 16)
+        radius = 6
+        start_x = -18
+        for i in range(3):
+            x = start_x + i * (radius * 2)
+            painter.drawArc(x, -radius, radius * 2, radius * 2, 0, 180 * 16)
 
     def get_value_text(self) -> str:
         """Retourne la valeur d'inductance a afficher."""
@@ -413,8 +429,7 @@ class DiodeItem(ComponentItem):
 
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole d'une diode."""
-        pen = QPen(Qt.black, 2)
-        painter.setPen(pen)
+        painter.setPen(self._pen())
         painter.setBrush(Qt.NoBrush)
 
         painter.drawLine(-30, 0, -12, 0)
@@ -439,12 +454,13 @@ class LedItem(DiodeItem):
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole d'une LED."""
         super().draw_symbol(painter)
-        pen = QPen(Qt.black, 1.5)
-        painter.setPen(pen)
-        painter.drawLine(10, -14, 18, -22)
-        painter.drawLine(14, -10, 22, -18)
-        painter.drawLine(10, -14, 10, -20)
-        painter.drawLine(14, -10, 14, -16)
+        painter.setPen(self._pen_light())
+        painter.drawLine(12, -8, 20, -16)
+        painter.drawLine(20, -16, 16, -16)
+        painter.drawLine(20, -16, 20, -12)
+        painter.drawLine(16, -4, 24, -12)
+        painter.drawLine(24, -12, 20, -12)
+        painter.drawLine(24, -12, 24, -8)
 
     def get_value_text(self) -> str:
         """Retourne un libelle court."""
