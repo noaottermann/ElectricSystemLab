@@ -11,8 +11,11 @@ os.makedirs(COMP, exist_ok=True)
 os.makedirs(CAT, exist_ok=True)
 os.makedirs(FAM, exist_ok=True)
 
-SIZE = 64
-CENTER = SIZE / 2
+BASE_SIZE = 64
+SIZE = 96
+SCALE = SIZE / BASE_SIZE
+CANVAS = BASE_SIZE
+CENTER = CANVAS / 2
 CENTER_I = int(CENTER)
 _APP = None
 
@@ -40,6 +43,7 @@ def save_icon(path, draw_func):
     image.fill(Qt.transparent)
     painter = QPainter(image)
     painter.setRenderHint(QPainter.Antialiasing)
+    painter.scale(SCALE, SCALE)
     draw_func(painter)
     painter.end()
     if not image.save(path):
@@ -50,30 +54,30 @@ def save_icon(path, draw_func):
 
 def _leads(p, left_end: int, right_start: int):
     p.drawLine(8, CENTER_I, left_end, CENTER_I)
-    p.drawLine(right_start, CENTER_I, SIZE - 8, CENTER_I)
+    p.drawLine(right_start, CENTER_I, CANVAS - 8, CENTER_I)
 
 
 def draw_wire(p):
     p.setPen(_pen())
-    _leads(p, SIZE - 8, 8)
+    _leads(p, CANVAS - 8, 8)
     p.setPen(QPen(QColor("#181818"), 3))
     p.drawPoint(8, CENTER_I)
-    p.drawPoint(SIZE - 8, CENTER_I)
+    p.drawPoint(CANVAS - 8, CENTER_I)
 
 
 def draw_resistor(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 20, SIZE - 20)
-    rect = QRectF(20, CENTER - 7, SIZE - 40, 14)
+    _leads(p, 20, CANVAS - 20)
+    rect = QRectF(20, CENTER - 7, CANVAS - 40, 14)
     p.drawRoundedRect(rect, 3, 3)
 
 
 def draw_capacitor(p):
     p.setPen(_pen())
-    _leads(p, 22, SIZE - 22)
+    _leads(p, 22, CANVAS - 22)
     p.drawLine(22, CENTER_I - 14, 22, CENTER_I + 14)
-    p.drawLine(SIZE - 22, CENTER_I - 14, SIZE - 22, CENTER_I + 14)
+    p.drawLine(CANVAS - 22, CENTER_I - 14, CANVAS - 22, CENTER_I + 14)
 
 
 def draw_inductor(p):
@@ -92,7 +96,7 @@ def draw_inductor(p):
 def draw_voltage_source_dc(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     p.drawEllipse(QPointF(CENTER, CENTER), 18, 18)
     p.setPen(_pen_light())
     p.drawLine(CENTER_I - 12, CENTER_I, CENTER_I - 6, CENTER_I)
@@ -103,7 +107,7 @@ def draw_voltage_source_dc(p):
 def draw_voltage_source_ac(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     p.drawEllipse(QPointF(CENTER, CENTER), 18, 18)
     p.setPen(_pen_light())
     path = QPainterPath()
@@ -115,7 +119,7 @@ def draw_voltage_source_ac(p):
 def draw_current_source_dc(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     p.drawEllipse(QPointF(CENTER, CENTER), 18, 18)
     p.setPen(_pen_light())
     p.drawLine(CENTER_I - 6, CENTER_I, CENTER_I + 6, CENTER_I)
@@ -126,7 +130,7 @@ def draw_current_source_dc(p):
 def draw_current_source_ac(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     p.drawEllipse(QPointF(CENTER, CENTER), 18, 18)
     p.setPen(_pen_light())
     p.drawLine(CENTER_I - 6, CENTER_I + 6, CENTER_I + 6, CENTER_I + 6)
@@ -141,7 +145,7 @@ def draw_current_source_ac(p):
 def draw_dependent_source_vccs(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     diamond = QPolygonF([
         QPointF(CENTER, CENTER - 18),
         QPointF(CENTER + 18, CENTER),
@@ -158,7 +162,7 @@ def draw_dependent_source_vccs(p):
 def draw_dependent_source_cccs(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 14, SIZE - 14)
+    _leads(p, 14, CANVAS - 14)
     diamond = QPolygonF([
         QPointF(CENTER, CENTER - 18),
         QPointF(CENTER + 18, CENTER),
@@ -175,7 +179,7 @@ def draw_dependent_source_cccs(p):
 def draw_diode(p):
     p.setPen(_pen())
     p.setBrush(Qt.NoBrush)
-    _leads(p, 20, SIZE - 20)
+    _leads(p, 20, CANVAS - 20)
     triangle = QPolygonF([
         QPointF(CENTER - 10, CENTER - 12),
         QPointF(CENTER + 6, CENTER),
@@ -197,7 +201,7 @@ def draw_led(p):
 
 
 def draw_category_base(p, color, label):
-    rect = QRectF(0, 0, SIZE, SIZE)
+    rect = QRectF(0, 0, CANVAS, CANVAS)
     font = QFont("Segoe UI", 18)
     font.setBold(True)
     p.setFont(font)
