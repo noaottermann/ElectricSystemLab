@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC, Capacitor
-from view.graphs_panel import GraphPanel, MATPLOTLIB_AVAILABLE
+from view.graphs_panel import GraphPanel
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -75,14 +75,7 @@ Nouvelles Fonctionnalités:
    • Tous cochés par défaut
    • Les graphiques se mettent à jour instantanément
 
-2. 🔍 Toolbar Zoom/Pan
-   • Bouton Home : Réinitialiser la vue
-   • Bouton Back/Forward : Navigation historique
-   • Zoom : Sélectionner une région
-   • Pan : Déplacer avec la souris
-   • Save : Exporter en PNG/PDF
-
-3. 📈 Graphiques Adaptatifs
+2. 📈 Graphiques Adaptatifs
    • Nombre de courbes = nœuds sélectionnés + dipôles sélectionnés
    • Layout automatique (1, 2 ou 4 graphiques)
    • Chaque courbe a titre, légende et grille
@@ -112,7 +105,7 @@ Instructions:
     # Affiche les résultats
     print("\n✅ GraphPanel Interactif Créé")
     print("=" * 50)
-    print(f"Matplotlib disponible: {MATPLOTLIB_AVAILABLE}")
+    print("Graphiques natifs actifs (sans matplotlib)")
     print(f"Nœuds du circuit: N0 (ground), N1, N2")
     print(f"Dipôles: V1, R1, R2, C1")
     print("=" * 50)
@@ -129,7 +122,6 @@ Instructions:
     
     print("\n💡 Testez les fonctionnalités:")
     print("  1. Décochez des checkboxes pour voir les graphiques se mettre à jour")
-    print("  2. Utilisez la toolbar pour zoomer/pan")
-    print("  3. Cliquez 'Save' pour exporter en image")
+    print("  2. Les stats se mettent a jour avec la selection")
     
     sys.exit(app.exec_())

@@ -12,17 +12,6 @@ from typing import Optional
 
 from utils.translator import Translator
 
-try:
-	import matplotlib
-	matplotlib.use('Qt5Agg')
-	from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-	from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-	from matplotlib.figure import Figure
-	MATPLOTLIB_AVAILABLE = True
-except ImportError:
-	MATPLOTLIB_AVAILABLE = False
-
-
 def _rms(values: np.ndarray) -> float:
 	"""Retourne la valeur efficace d'un signal."""
 	if values.size == 0:
@@ -56,7 +45,7 @@ def _pad_range(min_value: float, max_value: float) -> tuple[float, float]:
 
 
 class TimeSeriesPlotWidget(QWidget):
-	"""Rendu de courbes temporelles sans dépendre de matplotlib."""
+	"""Rendu de courbes temporelles natif Qt."""
 
 	def __init__(self, parent=None) -> None:
 		super().__init__(parent)
@@ -317,21 +306,10 @@ class GraphPanel(QWidget):
 		self.transient_layout.addWidget(self.transient_controls)
 		
 		# Graphique transitoire
-		if MATPLOTLIB_AVAILABLE:
-			self.transient_figure = Figure(figsize=(4, 3), dpi=100)
-			self.transient_canvas = FigureCanvas(self.transient_figure)
-			self.transient_layout.addWidget(self.transient_canvas, 1)
-			self.transient_canvas.mpl_connect("motion_notify_event", self._on_plot_motion)
-			self.transient_canvas.mpl_connect("button_press_event", self._on_plot_click)
-			
-			# Toolbar zoom/pan
-			self.transient_toolbar = NavigationToolbar2QT(self.transient_canvas, self.transient_widget)
-			self.transient_layout.addWidget(self.transient_toolbar)
-		else:
-			self.transient_voltage_plot = TimeSeriesPlotWidget()
-			self.transient_current_plot = TimeSeriesPlotWidget()
-			self.transient_layout.addWidget(self.transient_voltage_plot, 1)
-			self.transient_layout.addWidget(self.transient_current_plot, 1)
+		self.transient_voltage_plot = TimeSeriesPlotWidget()
+		self.transient_current_plot = TimeSeriesPlotWidget()
+		self.transient_layout.addWidget(self.transient_voltage_plot, 1)
+		self.transient_layout.addWidget(self.transient_current_plot, 1)
 
 		self.transient_stats_text = QTextEdit()
 		self.transient_stats_text.setReadOnly(True)
@@ -364,11 +342,10 @@ class GraphPanel(QWidget):
 		self.nodes_select_none_button.setText(Translator.tr("graph_select_none"))
 		self.dipoles_select_all_button.setText(Translator.tr("graph_select_all"))
 		self.dipoles_select_none_button.setText(Translator.tr("graph_select_none"))
-		if not MATPLOTLIB_AVAILABLE:
-			if hasattr(self, "transient_voltage_plot"):
-				self.transient_voltage_plot.update()
-			if hasattr(self, "transient_current_plot"):
-				self.transient_current_plot.update()
+		if hasattr(self, "transient_voltage_plot"):
+			self.transient_voltage_plot.update()
+		if hasattr(self, "transient_current_plot"):
+			self.transient_current_plot.update()
 		if self.last_transient_result:
 			self.set_transient_results(self.last_transient_result, self.last_circuit)
 		else:
@@ -493,24 +470,6 @@ class GraphPanel(QWidget):
 			checkbox.blockSignals(False)
 		self._on_selection_changed()
 
-	def _on_plot_click(self, event) -> None:
-		"""Place un curseur temporel sur clic dans un graphe transitoire."""
-		if event is None or event.xdata is None:
-			return
-		self.cursor_time = float(event.xdata)
-		if self.last_transient_result:
-			self._plot_transient_results(self.last_transient_result, self.last_circuit)
-
-	def _on_plot_motion(self, event) -> None:
-		"""Met à jour le repère temporaire au survol du graphe."""
-		if event is None or event.xdata is None or event.inaxes is None:
-			return
-		if self.cursor_time is not None:
-			return
-		self.hover_time = float(event.xdata)
-		if self.last_transient_result:
-			self._plot_transient_results(self.last_transient_result, self.last_circuit)
-
 	def _on_selection_changed(self) -> None:
 		"""Callback quand la sélection change."""
 		if not self.last_transient_result:
@@ -521,11 +480,9 @@ class GraphPanel(QWidget):
 		self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
 		
 		# Redessine les graphiques
-		if MATPLOTLIB_AVAILABLE:
-			self._plot_transient_results(self.last_transient_result, self.last_circuit)
-		else:
-			self._plot_transient_results_native(self.last_transient_result)
-			self.transient_stats_text.setPlainText("\n".join(self._build_native_transient_summary(self.last_transient_result)))
+		self._plot_transient_results_native(self.last_transient_result)
+		window_time, selected_nodes, selected_dipoles = self._collect_selected_traces(self.last_transient_result)
+		self._update_transient_stats(window_time, selected_nodes, selected_dipoles)
 
 	def clear_results(self) -> None:
 		"""Reinitialise le contenu affiche."""
@@ -536,76 +493,22 @@ class GraphPanel(QWidget):
 		self.cursor_time = None
 		self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 		
-		if MATPLOTLIB_AVAILABLE:
-			self.transient_figure.clear()
-			self.transient_canvas.draw()
-		else:
-			if hasattr(self, 'transient_voltage_plot'):
-				self.transient_voltage_plot.set_series([])
-			if hasattr(self, 'transient_current_plot'):
-				self.transient_current_plot.set_series([])
+		if hasattr(self, "transient_voltage_plot"):
+			self.transient_voltage_plot.set_series([])
+		if hasattr(self, "transient_current_plot"):
+			self.transient_current_plot.set_series([])
 
 	def set_dc_results(self, circuit) -> None:
 		"""Compatibilite: les resultats DC ne sont plus affiches dans ce panneau."""
 		return
 
-	def _plot_dc_results(self, circuit) -> None:
-		"""Affiche les resultats DC avec matplotlib."""
-		self.dc_figure.clear()
-		
-		# Récupère les données par dipôle
-		dipoles = sorted(circuit.dipoles.values(), key=lambda d: d.id)
-		dipole_names = [f"D{d.id}" for d in dipoles]
-		dipole_voltages = [d.voltage for d in dipoles]
-		dipole_currents = [d.current for d in dipoles]
-		
-		# Crée la figure avec 2 subplots
-		ax1 = self.dc_figure.add_subplot(211)
-		ax2 = self.dc_figure.add_subplot(212)
-		
-		# Tensions des dipôles
-		if dipole_voltages:
-			colors = ['#3498db' if v >= 0 else '#e74c3c' for v in dipole_voltages]
-			ax1.bar(range(len(dipole_voltages)), dipole_voltages, color=colors, alpha=0.7)
-			ax1.set_xticks(range(len(dipole_names)))
-			ax1.set_xticklabels(dipole_names, fontsize=9)
-			ax1.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
-			ax1.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
-			ax1.grid(True, alpha=0.3)
-		
-		# Courants des dipôles
-		if dipole_currents:
-			colors = ['#2ecc71' if i >= 0 else '#e67e22' for i in dipole_currents]
-			ax2.bar(range(len(dipole_currents)), dipole_currents, color=colors, alpha=0.7)
-			ax2.set_xticks(range(len(dipole_names)))
-			ax2.set_xticklabels(dipole_names, fontsize=9)
-			ax2.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
-			ax2.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
-			ax2.grid(True, alpha=0.3)
-		
-		self.dc_figure.tight_layout()
-		self.dc_canvas.draw()
-
-	def _text_dc_results(self, circuit) -> None:
-		"""Affiche les resultats DC en texte (fallback sans matplotlib)."""
-		lines = [Translator.tr("graph_dc_title"), "", Translator.tr("graph_dc_voltage_section")]
-		for dipole in sorted(circuit.dipoles.values(), key=lambda d: d.id):
-			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.voltage:.6g} {Translator.tr('graph_voltage_unit')}")
-
-		lines.append("")
-		lines.append(Translator.tr("graph_dc_current_section"))
-		for dipole in sorted(circuit.dipoles.values(), key=lambda d: d.id):
-			lines.append(f"- D{dipole.id} {dipole.__class__.__name__}: {dipole.current:.6g} {Translator.tr('graph_current_unit')}")
-
-		self.dc_text.setPlainText("\n".join(lines))
-
 	def set_transient_results(self, result: dict | None, circuit=None) -> None:
 		"""Affiche les traces transitoires avec graphiques."""
 		if not result:
 			self._clear_checkboxes()
-			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_voltage_plot'):
+			if hasattr(self, "transient_voltage_plot"):
 				self.transient_voltage_plot.set_series([])
-			if not MATPLOTLIB_AVAILABLE and hasattr(self, 'transient_current_plot'):
+			if hasattr(self, "transient_current_plot"):
 				self.transient_current_plot.set_series([])
 			self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 			return
@@ -662,184 +565,87 @@ class GraphPanel(QWidget):
 		self.selected_nodes = {node_id for node_id, checkbox in self.node_checkboxes.items() if checkbox.isChecked()}
 		self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
 
-		if MATPLOTLIB_AVAILABLE:
-			self._plot_transient_results(result, circuit)
-		else:
-			self._plot_transient_results_native(result)
-			self.transient_stats_text.setPlainText("\n".join(self._build_native_transient_summary(result)))
+		self._plot_transient_results_native(result)
+		window_time, selected_nodes, selected_dipoles = self._collect_selected_traces(result)
+		self._update_transient_stats(window_time, selected_nodes, selected_dipoles)
 
-	def _build_native_transient_summary(self, result: dict) -> list[str]:
-		"""Construit un résumé texte court pour le mode natif sans matplotlib."""
-		time_values = np.asarray(result.get("time", []), dtype=float)
-		lines = [Translator.tr("graph_transient_title")]
-		if time_values.size:
-			lines.append(
-				Translator.tr("graph_points").format(
-					count=len(time_values),
-					start=float(time_values[0]),
-					end=float(time_values[-1]),
-				)
-			)
-		else:
-			lines.append(Translator.tr("graph_no_time_points"))
-		lines.append("")
-		if self.transient_window_seconds is not None and time_values.size:
-			mask, start_time, end_time = self._compute_time_window(time_values)
-			window_points = int(np.count_nonzero(mask))
-			lines.append(
-				Translator.tr("graph_window_displayed").format(start=start_time, end=end_time, count=window_points)
-			)
-			lines.append("")
-		lines.append(Translator.tr("graph_voltage_selected") + ": " + (", ".join(sorted(self.selected_nodes)) if self.selected_nodes else Translator.tr("graph_none")))
-		lines.append(Translator.tr("graph_current_selected") + ": " + (", ".join(sorted(self.selected_dipoles)) if self.selected_dipoles else Translator.tr("graph_none")))
-		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
-		if cursor_time is not None:
-			lines.append("")
-			lines.append(Translator.tr("graph_cursor_marker").format(time=cursor_time))
-		return lines
-
-	def _plot_transient_results_native(self, result: dict) -> None:
-		"""Prépare un rendu natif Qt quand matplotlib n'est pas disponible."""
+	def _collect_selected_traces(
+		self,
+		result: dict,
+	) -> tuple[np.ndarray, list[tuple[str, np.ndarray, np.ndarray]], list[tuple[str, np.ndarray, np.ndarray]]]:
+		"""Retourne les traces selectionnees avec leur grille temporelle visible."""
 		time_values = np.asarray(result.get("time", []), dtype=float)
 		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
-		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
+		if time_values.size == 0:
+			return time_values, [], []
+
 		window_mask, _, _ = self._compute_time_window(time_values)
 		visible_time_values = time_values[window_mask]
 
-		voltage_series = []
-		for node_id in sorted(dipole_voltages.keys()):
+		selected_nodes: list[tuple[str, np.ndarray, np.ndarray]] = []
+		for node_id in sorted(dipole_voltages.keys(), key=lambda value: str(value)):
 			if str(node_id) not in self.selected_nodes:
 				continue
 			values = np.asarray(dipole_voltages.get(node_id, []), dtype=float)
 			if values.size == 0:
 				continue
-			if values.size != time_values.size:
-				trim_size = min(values.size, time_values.size)
-				x_values = time_values[:trim_size]
-				y_values = values[:trim_size]
-				local_mask, _, _ = self._compute_time_window(x_values)
-				voltage_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{node_id}", "unit_label": Translator.tr("graph_voltage_axis")})
+			if values.size == time_values.size:
+				selected_nodes.append((str(node_id), visible_time_values, values[window_mask]))
 				continue
-			voltage_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{node_id}", "unit_label": Translator.tr("graph_voltage_axis")})
+			trim_size = min(values.size, time_values.size)
+			x_values = time_values[:trim_size]
+			y_values = values[:trim_size]
+			local_mask, _, _ = self._compute_time_window(x_values)
+			selected_nodes.append((str(node_id), x_values[local_mask], y_values[local_mask]))
 
-		current_series = []
-		for dipole_id in sorted(dipole_currents.keys()):
+		selected_dipoles: list[tuple[str, np.ndarray, np.ndarray]] = []
+		for dipole_id in sorted(dipole_currents.keys(), key=lambda value: str(value)):
 			if str(dipole_id) not in self.selected_dipoles:
 				continue
 			values = np.asarray(dipole_currents.get(dipole_id, []), dtype=float)
 			if values.size == 0:
 				continue
-			if values.size != time_values.size:
-				trim_size = min(values.size, time_values.size)
-				x_values = time_values[:trim_size]
-				y_values = values[:trim_size]
-				local_mask, _, _ = self._compute_time_window(x_values)
-				current_series.append({"x": x_values[local_mask], "y": y_values[local_mask], "label": f"D{dipole_id}", "unit_label": Translator.tr("graph_current_axis")})
+			if values.size == time_values.size:
+				selected_dipoles.append((str(dipole_id), visible_time_values, values[window_mask]))
 				continue
-			current_series.append({"x": visible_time_values, "y": values[window_mask], "label": f"D{dipole_id}", "unit_label": Translator.tr("graph_current_axis")})
+			trim_size = min(values.size, time_values.size)
+			x_values = time_values[:trim_size]
+			y_values = values[:trim_size]
+			local_mask, _, _ = self._compute_time_window(x_values)
+			selected_dipoles.append((str(dipole_id), x_values[local_mask], y_values[local_mask]))
+
+		return visible_time_values, selected_nodes, selected_dipoles
+
+	def _plot_transient_results_native(self, result: dict) -> None:
+		"""Prépare un rendu natif Qt des courbes transitoires."""
+		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
+		_, selected_nodes, selected_dipoles = self._collect_selected_traces(result)
+
+		voltage_series = [
+			{
+				"x": time_values,
+				"y": values,
+				"label": f"D{node_id}",
+				"unit_label": Translator.tr("graph_voltage_axis"),
+			}
+			for node_id, time_values, values in selected_nodes
+		]
+
+		current_series = [
+			{
+				"x": time_values,
+				"y": values,
+				"label": f"D{dipole_id}",
+				"unit_label": Translator.tr("graph_current_axis"),
+			}
+			for dipole_id, time_values, values in selected_dipoles
+		]
 
 		if hasattr(self, 'transient_voltage_plot'):
 			self.transient_voltage_plot.set_series(voltage_series, cursor_time=cursor_time)
 		if hasattr(self, 'transient_current_plot'):
 			self.transient_current_plot.set_series(current_series, cursor_time=cursor_time)
-
-	def _plot_transient_results(self, result: dict, circuit=None) -> None:
-		"""Affiche les resultats transitoires avec matplotlib."""
-		self.transient_figure.clear()
-		
-		time_values = np.array(result.get("time", []))
-		dipole_voltages = result.get("dipole_voltages", {})
-		dipole_currents = result.get("dipole_currents", {})
-		
-		if len(time_values) == 0:
-			return
-
-		window_mask, window_start, window_end = self._compute_time_window(time_values)
-		visible_time_values = time_values[window_mask]
-		
-		# Filtre selon la sélection des tensions
-		selected_nodes = []
-		for node_id in sorted(dipole_voltages.keys()):
-			if str(node_id) in self.selected_nodes:
-				values = np.array(dipole_voltages.get(node_id, []))
-				if len(values) > 0:
-					if len(values) == len(time_values):
-						selected_nodes.append((node_id, values[window_mask]))
-					else:
-						trim_size = min(len(values), len(time_values))
-						x_values = time_values[:trim_size]
-						y_values = values[:trim_size]
-						local_mask, _, _ = self._compute_time_window(x_values)
-						visible_time_values = x_values[local_mask]
-						selected_nodes.append((node_id, y_values[local_mask]))
-		
-		selected_dipoles = []
-		for dipole_id in sorted(dipole_currents.keys()):
-			if str(dipole_id) in self.selected_dipoles:
-				values = np.array(dipole_currents.get(dipole_id, []))
-				if len(values) > 0:
-					if len(values) == len(time_values):
-						selected_dipoles.append((dipole_id, values[window_mask]))
-					else:
-						trim_size = min(len(values), len(time_values))
-						x_values = time_values[:trim_size]
-						y_values = values[:trim_size]
-						local_mask, _, _ = self._compute_time_window(x_values)
-						visible_time_values = x_values[local_mask]
-						selected_dipoles.append((dipole_id, y_values[local_mask]))
-		
-		if len(selected_nodes) == 0 and len(selected_dipoles) == 0:
-			self.transient_stats_text.setPlainText(Translator.tr("graph_no_trace_selected"))
-			self.transient_canvas.draw()
-			return
-
-		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
-
-		ax_voltage = self.transient_figure.add_subplot(211)
-		ax_current = self.transient_figure.add_subplot(212)
-
-		if selected_nodes:
-			for node_id, values in selected_nodes:
-				ax_voltage.plot(visible_time_values, values, linewidth=2, label=f'D{node_id}')
-			if cursor_time is not None:
-				ax_voltage.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
-			if self.transient_window_seconds is not None:
-				ax_voltage.set_xlim(window_start, window_end)
-			ax_voltage.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
-			ax_voltage.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
-			ax_voltage.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
-			ax_voltage.grid(True, alpha=0.3)
-			ax_voltage.legend(loc='best', fontsize=8)
-		else:
-			ax_voltage.set_title(Translator.tr("graph_voltage_title"), fontsize=10, fontweight='bold')
-			ax_voltage.set_ylabel(Translator.tr("graph_voltage_axis"), fontsize=9)
-			ax_voltage.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
-			ax_voltage.grid(True, alpha=0.3)
-			ax_voltage.text(0.5, 0.5, Translator.tr("graph_no_voltage_selected"), transform=ax_voltage.transAxes, ha='center', va='center')
-
-		if selected_dipoles:
-			for dipole_id, values in selected_dipoles:
-				ax_current.plot(visible_time_values, values, linewidth=2, label=f'D{dipole_id}')
-			if cursor_time is not None:
-				ax_current.axvline(cursor_time, color="#7f8c8d", linestyle="--", linewidth=1.0)
-			if self.transient_window_seconds is not None:
-				ax_current.set_xlim(window_start, window_end)
-			ax_current.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
-			ax_current.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
-			ax_current.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
-			ax_current.grid(True, alpha=0.3)
-			ax_current.legend(loc='best', fontsize=8)
-		else:
-			ax_current.set_title(Translator.tr("graph_current_title"), fontsize=10, fontweight='bold')
-			ax_current.set_ylabel(Translator.tr("graph_current_axis"), fontsize=9)
-			ax_current.set_xlabel(Translator.tr("graph_time_axis"), fontsize=9)
-			ax_current.grid(True, alpha=0.3)
-			ax_current.text(0.5, 0.5, Translator.tr("graph_no_current_selected"), transform=ax_current.transAxes, ha='center', va='center')
-		
-		self.transient_figure.tight_layout()
-		self.transient_canvas.draw()
-		self._update_transient_stats(visible_time_values, selected_nodes, selected_dipoles)
 
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
 		"""Construit un bloc de stats lisible pour une trace."""
@@ -859,7 +665,12 @@ class GraphPanel(QWidget):
 			parts.append(f"  {Translator.tr('graph_cursor')}   : t={sample_time:.4g} s -> {sample_value:.4g} {unit}")
 		return "\n".join(parts)
 
-	def _update_transient_stats(self, time_values: np.ndarray, selected_nodes: list, selected_dipoles: list) -> None:
+	def _update_transient_stats(
+		self,
+		time_values: np.ndarray,
+		selected_nodes: list[tuple[str, np.ndarray, np.ndarray]],
+		selected_dipoles: list[tuple[str, np.ndarray, np.ndarray]],
+	) -> None:
 		"""Met a jour le panneau de mesures transitoires."""
 		lines = [Translator.tr("graph_measurements_title")]
 		if time_values.size:
@@ -868,14 +679,14 @@ class GraphPanel(QWidget):
 
 		if selected_nodes:
 			lines.append(Translator.tr("graph_voltage_section"))
-		for node_id, values in selected_nodes:
-			lines.append(self._build_trace_stats(f"D{node_id}", Translator.tr("graph_voltage_unit"), time_values, values))
+		for node_id, node_time, values in selected_nodes:
+			lines.append(self._build_trace_stats(f"D{node_id}", Translator.tr("graph_voltage_unit"), node_time, values))
 			lines.append("")
 
 		if selected_dipoles:
 			lines.append(Translator.tr("graph_current_section"))
-		for dipole_id, values in selected_dipoles:
-			lines.append(self._build_trace_stats(f"D{dipole_id}", Translator.tr("graph_current_unit"), time_values, values))
+		for dipole_id, dipole_time, values in selected_dipoles:
+			lines.append(self._build_trace_stats(f"D{dipole_id}", Translator.tr("graph_current_unit"), dipole_time, values))
 			lines.append("")
 
 		if not selected_nodes and not selected_dipoles:
@@ -885,34 +696,3 @@ class GraphPanel(QWidget):
 			lines.pop()
 		self.transient_stats_text.setPlainText("\n".join(lines))
 
-	def _text_transient_results(self, result: dict) -> None:
-		"""Affiche les resultats transitoires en texte (fallback sans matplotlib)."""
-		time_values = result.get("time", [])
-		dipole_voltages = result.get("dipole_voltages", {})
-		dipole_currents = result.get("dipole_currents", {})
-
-		lines = [Translator.tr("graph_transient_title"), ""]
-		if time_values:
-			lines.append(
-				Translator.tr("graph_points").format(count=len(time_values), start=time_values[0], end=time_values[-1])
-			)
-		else:
-			lines.append(Translator.tr("graph_no_time_points"))
-
-		lines.append("")
-		lines.append(Translator.tr("graph_voltage_last_point"))
-		for node_id in sorted(dipole_voltages, key=lambda x: str(x)):
-			values = dipole_voltages.get(node_id, [])
-			if not values:
-				continue
-			lines.append(f"- D{node_id}: {values[-1]:.6g} {Translator.tr('graph_voltage_unit')}")
-
-		lines.append("")
-		lines.append(Translator.tr("graph_current_last_point"))
-		for dipole_id in sorted(dipole_currents, key=lambda x: str(x)):
-			values = dipole_currents.get(dipole_id, [])
-			if not values:
-				continue
-			lines.append(f"- D{dipole_id}: {values[-1]:.6g} {Translator.tr('graph_current_unit')}")
-
-		self.transient_text.setPlainText("\n".join(lines))
