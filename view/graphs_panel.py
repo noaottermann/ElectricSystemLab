@@ -672,6 +672,11 @@ class GraphPanel(QWidget):
 		selected_dipoles: list[tuple[str, np.ndarray, np.ndarray]],
 	) -> None:
 		"""Met a jour le panneau de mesures transitoires."""
+		scroll_bar = self.transient_stats_text.verticalScrollBar()
+		previous_value = scroll_bar.value()
+		previous_max = scroll_bar.maximum()
+		was_at_bottom = previous_value >= previous_max
+
 		lines = [Translator.tr("graph_measurements_title")]
 		if time_values.size:
 			lines.append(Translator.tr("graph_window").format(start=float(time_values[0]), end=float(time_values[-1]), count=len(time_values)))
@@ -695,4 +700,10 @@ class GraphPanel(QWidget):
 		while lines and lines[-1] == "":
 			lines.pop()
 		self.transient_stats_text.setPlainText("\n".join(lines))
+
+		new_max = scroll_bar.maximum()
+		if was_at_bottom:
+			scroll_bar.setValue(new_max)
+		else:
+			scroll_bar.setValue(min(previous_value, new_max))
 
