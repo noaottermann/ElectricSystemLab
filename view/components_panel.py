@@ -194,7 +194,7 @@ class ComponentsPanel(QWidget):
 				background: transparent;
 			}
 			QListWidget::item {
-				padding: 6px;
+				padding: 6px 6px 6px 0px;
 				border-radius: 8px;
 				color: #2a2a2a;
 			}
