@@ -134,6 +134,10 @@ class EditController:
 			return isinstance(item, ComponentItem) and item.component.__class__.__name__ in {
 				"VoltageSourceDC",
 				"VoltageSourceAC",
+				"CurrentSourceDC",
+				"CurrentSourceAC",
+				"VoltageControlledCurrentSource",
+				"CurrentControlledCurrentSource",
 			}
 
 		self._filter_selection(_predicate)

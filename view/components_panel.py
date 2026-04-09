@@ -242,6 +242,12 @@ class ComponentsPanel(QWidget):
 				"icon": "categories/passive.png",
 				"color": "#247ba0",
 			},
+			{
+				"key": "nonlinear",
+				"label_key": "components_category_nonlinear",
+				"icon": "categories/nonlinear.png",
+				"color": "#8b5cf6",
+			},
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
@@ -265,6 +271,26 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_source_ac",
 					"icon": "components/source_ac.png",
 				},
+				{
+					"id": "current_source_dc",
+					"label_key": "components_item_current_source_dc",
+					"icon": "components/current_source_dc.png",
+				},
+				{
+					"id": "current_source_ac",
+					"label_key": "components_item_current_source_ac",
+					"icon": "components/current_source_ac.png",
+				},
+				{
+					"id": "source_vccs",
+					"label_key": "components_item_source_vccs",
+					"icon": "components/source_vccs.png",
+				},
+				{
+					"id": "source_cccs",
+					"label_key": "components_item_source_cccs",
+					"icon": "components/source_cccs.png",
+				},
 			],
 			"passive": [
 				{
@@ -281,6 +307,18 @@ class ComponentsPanel(QWidget):
 					"id": "inductor",
 					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
+				},
+			],
+			"nonlinear": [
+				{
+					"id": "diode",
+					"label_key": "components_item_diode",
+					"icon": "components/diode.png",
+				},
+				{
+					"id": "led",
+					"label_key": "components_item_led",
+					"icon": "components/led.png",
 				},
 			],
 		}

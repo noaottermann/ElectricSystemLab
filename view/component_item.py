@@ -4,7 +4,19 @@ from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
 
-from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
+from model.components import (
+    Capacitor,
+    CurrentControlledCurrentSource,
+    CurrentSourceAC,
+    CurrentSourceDC,
+    Diode,
+    Inductor,
+    LED,
+    Resistor,
+    VoltageControlledCurrentSource,
+    VoltageSourceAC,
+    VoltageSourceDC,
+)
 
 class ComponentItem(QGraphicsItem):
     """Element graphique de base pour tous les dipoles"""
@@ -286,6 +298,73 @@ class VoltageSourceItem(ComponentItem):
             return f"{self.component.amplitude} V"
         return ""
 
+
+class CurrentSourceItem(ComponentItem):
+    """Item graphique pour les sources de courant."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de la source de courant."""
+        pen = QPen(Qt.black, 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -15, 0)
+        painter.drawLine(15, 0, 30, 0)
+        painter.drawEllipse(QPointF(0, 0), 15, 15)
+
+        painter.setPen(QPen(Qt.black, 1.5))
+        if isinstance(self.component, CurrentSourceDC):
+            painter.drawLine(0, -8, 0, 6)
+            painter.drawLine(-4, 2, 0, 6)
+            painter.drawLine(4, 2, 0, 6)
+        elif isinstance(self.component, CurrentSourceAC):
+            path = QPainterPath()
+            path.moveTo(-7, 2)
+            path.cubicTo(-2, -5, 2, 5, 7, -2)
+            painter.drawPath(path)
+
+    def get_value_text(self) -> str:
+        """Retourne la valeur de courant a afficher."""
+        if isinstance(self.component, CurrentSourceDC):
+            return f"{self.component.dc_current} A"
+        if isinstance(self.component, CurrentSourceAC):
+            return f"{self.component.amplitude} A"
+        return ""
+
+
+class DependentCurrentSourceItem(ComponentItem):
+    """Item graphique pour les sources de courant dependantes."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une source dependante."""
+        pen = QPen(Qt.black, 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -16, 0)
+        painter.drawLine(16, 0, 30, 0)
+
+        diamond = QPainterPath()
+        diamond.moveTo(0, -16)
+        diamond.lineTo(16, 0)
+        diamond.lineTo(0, 16)
+        diamond.lineTo(-16, 0)
+        diamond.closeSubpath()
+        painter.drawPath(diamond)
+
+        painter.setPen(QPen(Qt.black, 1.5))
+        painter.drawLine(0, -6, 0, 6)
+        painter.drawLine(-4, 2, 0, 6)
+        painter.drawLine(4, 2, 0, 6)
+
+    def get_value_text(self) -> str:
+        """Retourne la valeur de gain a afficher."""
+        if isinstance(self.component, VoltageControlledCurrentSource):
+            return f"{self.component.transconductance} S"
+        if isinstance(self.component, CurrentControlledCurrentSource):
+            return f"{self.component.gain} A/A"
+        return ""
+
 class CapacitorItem(ComponentItem):
     """Item graphique pour un condensateur."""
 
@@ -328,16 +407,67 @@ class InductorItem(ComponentItem):
         """Retourne la valeur d'inductance a afficher."""
         return f"{self.component.inductance} H"
 
+
+class DiodeItem(ComponentItem):
+    """Item graphique pour une diode."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une diode."""
+        pen = QPen(Qt.black, 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -12, 0)
+        painter.drawLine(12, 0, 30, 0)
+
+        triangle = QPainterPath()
+        triangle.moveTo(-12, -10)
+        triangle.lineTo(6, 0)
+        triangle.lineTo(-12, 10)
+        triangle.closeSubpath()
+        painter.drawPath(triangle)
+        painter.drawLine(8, -12, 8, 12)
+
+    def get_value_text(self) -> str:
+        """Retourne un libelle court."""
+        return "D"
+
+
+class LedItem(DiodeItem):
+    """Item graphique pour une LED."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une LED."""
+        super().draw_symbol(painter)
+        pen = QPen(Qt.black, 1.5)
+        painter.setPen(pen)
+        painter.drawLine(10, -14, 18, -22)
+        painter.drawLine(14, -10, 22, -18)
+        painter.drawLine(10, -14, 10, -20)
+        painter.drawLine(14, -10, 14, -16)
+
+    def get_value_text(self) -> str:
+        """Retourne un libelle court."""
+        return "LED"
+
 def create_component_item(component_model) -> ComponentItem:
     """Retourne l'element graphique adapte a un objet modele."""
     if isinstance(component_model, Resistor):
         return ResistorItem(component_model)
     elif isinstance(component_model, (VoltageSourceDC, VoltageSourceAC)):
         return VoltageSourceItem(component_model)
+    elif isinstance(component_model, (CurrentSourceDC, CurrentSourceAC)):
+        return CurrentSourceItem(component_model)
+    elif isinstance(component_model, (VoltageControlledCurrentSource, CurrentControlledCurrentSource)):
+        return DependentCurrentSourceItem(component_model)
     elif isinstance(component_model, Capacitor):
         return CapacitorItem(component_model)
     elif isinstance(component_model, Inductor):
         return InductorItem(component_model)
+    elif isinstance(component_model, LED):
+        return LedItem(component_model)
+    elif isinstance(component_model, Diode):
+        return DiodeItem(component_model)
     else:
         # Repli pour les composants inconnus
         return ComponentItem(component_model)

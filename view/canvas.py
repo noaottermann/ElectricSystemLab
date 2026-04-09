@@ -12,7 +12,19 @@ from PyQt5.QtWidgets import (
 )
 
 # Modele et elements graphiques
-from model.components import Resistor, VoltageSourceDC, VoltageSourceAC, Capacitor, Inductor
+from model.components import (
+    Capacitor,
+    CurrentControlledCurrentSource,
+    CurrentSourceAC,
+    CurrentSourceDC,
+    Diode,
+    Inductor,
+    LED,
+    Resistor,
+    VoltageControlledCurrentSource,
+    VoltageSourceAC,
+    VoltageSourceDC,
+)
 from .component_item import ComponentItem, create_component_item
 from .wire_item import WireItem
 from .node_item import NodeItem
@@ -275,8 +287,14 @@ class CircuitScene(QGraphicsScene):
             "Resistor": Resistor,
             "VoltageSourceDC": VoltageSourceDC,
             "VoltageSourceAC": VoltageSourceAC,
+            "CurrentSourceDC": CurrentSourceDC,
+            "CurrentSourceAC": CurrentSourceAC,
+            "VoltageControlledCurrentSource": VoltageControlledCurrentSource,
+            "CurrentControlledCurrentSource": CurrentControlledCurrentSource,
             "Capacitor": Capacitor,
             "Inductor": Inductor,
+            "Diode": Diode,
+            "LED": LED,
         }
         self._clipboard_payload: Optional[dict] = None
 
@@ -1234,6 +1252,12 @@ class CircuitScene(QGraphicsScene):
         dipole = None
         d_id = self.model.get_next_dipole_id()
 
+        def _default_control_id() -> int:
+            if self.model is None or not getattr(self.model, "dipoles", None):
+                return 0
+            existing_ids = sorted(self.model.dipoles.keys())
+            return int(existing_ids[0]) if existing_ids else 0
+
         # Creation du modele
         if tool_type == "resistor":
             dipole = Resistor(d_id, node_a, node_b, x, y, name=f"R{d_id}")
@@ -1241,10 +1265,38 @@ class CircuitScene(QGraphicsScene):
             dipole = VoltageSourceDC(d_id, node_a, node_b, x, y, name=f"V{d_id}")
         elif tool_type == "source_ac":
             dipole = VoltageSourceAC(d_id, node_a, node_b, x, y, name=f"V{d_id}")
+        elif tool_type == "current_source_dc":
+            dipole = CurrentSourceDC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
+        elif tool_type == "current_source_ac":
+            dipole = CurrentSourceAC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
+        elif tool_type == "source_vccs":
+            dipole = VoltageControlledCurrentSource(
+                d_id,
+                node_a,
+                node_b,
+                x,
+                y,
+                name=f"G{d_id}",
+                control_dipole_id=_default_control_id(),
+            )
+        elif tool_type == "source_cccs":
+            dipole = CurrentControlledCurrentSource(
+                d_id,
+                node_a,
+                node_b,
+                x,
+                y,
+                name=f"F{d_id}",
+                control_dipole_id=_default_control_id(),
+            )
         elif tool_type == "capacitor":
             dipole = Capacitor(d_id, node_a, node_b, x, y, name=f"C{d_id}")
         elif tool_type == "inductor":
             dipole = Inductor(d_id, node_a, node_b, x, y, name=f"L{d_id}")
+        elif tool_type == "diode":
+            dipole = Diode(d_id, node_a, node_b, x, y, name=f"D{d_id}")
+        elif tool_type == "led":
+            dipole = LED(d_id, node_a, node_b, x, y, name=f"LED{d_id}")
 
         if dipole:
             self.model.add_dipole(dipole)

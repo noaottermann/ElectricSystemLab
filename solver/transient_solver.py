@@ -4,13 +4,28 @@ from typing import Optional
 
 import numpy as np
 
-from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
+from model.components import (
+	Capacitor,
+	CurrentControlledCurrentSource,
+	CurrentSourceAC,
+	CurrentSourceDC,
+	Diode,
+	Inductor,
+	LED,
+	Resistor,
+	VoltageControlledCurrentSource,
+	VoltageSourceAC,
+	VoltageSourceDC,
+)
 from solver.base_solver import BaseSolver
 from solver.utils import build_group_index, group_connected_nodes, matrix_index_for_node
 
 
 class TransientSolver(BaseSolver):
 	"""Solveur transitoire simple (sources DC/AC et reseau resistif)."""
+
+	_MAX_ITERATIONS = 30
+	_CONVERGENCE_TOL = 1e-6
 
 	def solve(self, circuit, duration: float, time_step: float, start_time: float = 0.0) -> dict[str, object]:
 		"""Resout le circuit pour chaque pas de temps et retourne les traces."""
@@ -39,7 +54,22 @@ class TransientSolver(BaseSolver):
 		dipole_currents: dict[int, list[float]] = {
 			dipole.id: []
 			for dipole in circuit.dipoles.values()
-			if isinstance(dipole, (Resistor, Capacitor, Inductor, VoltageSourceDC, VoltageSourceAC))
+			if isinstance(
+				dipole,
+				(
+					Resistor,
+					Capacitor,
+					Inductor,
+					VoltageSourceDC,
+					VoltageSourceAC,
+					CurrentSourceDC,
+					CurrentSourceAC,
+					VoltageControlledCurrentSource,
+					CurrentControlledCurrentSource,
+					Diode,
+					LED,
+				),
+			)
 		}
 		capacitor_prev_voltage = {
 			dipole.id: float(dipole.voltage)
@@ -52,37 +82,80 @@ class TransientSolver(BaseSolver):
 			if isinstance(dipole, Inductor)
 		}
 
+		voltage_source_indices = {
+			source.id: num_v_vars + i for i, source in enumerate(voltage_sources)
+		}
+		last_solution = np.zeros(total_vars)
+		for node_id, node in circuit.nodes.items():
+			gid = node_groups[node_id]
+			if gid == ground_group_id:
+				continue
+			idx = group_to_idx.get(gid)
+			if idx is not None:
+				last_solution[idx] = float(node.potential)
+
+		has_nonlinear = any(isinstance(d, (Diode, LED)) for d in circuit.dipoles.values())
+		iterations = self._MAX_ITERATIONS if has_nonlinear else 1
+
 		for t in time_values:
-			A = np.zeros((total_vars, total_vars))
-			Z = np.zeros(total_vars)
+			x = last_solution.copy()
+			for _ in range(iterations):
+				A = np.zeros((total_vars, total_vars))
+				Z = np.zeros(total_vars)
 
-			self._assemble_resistors(circuit, node_groups, group_to_idx, ground_group_id, A)
-			self._assemble_dynamic_elements(
-				circuit,
-				node_groups,
-				group_to_idx,
-				ground_group_id,
-				A,
-				Z,
-				time_step,
-				capacitor_prev_voltage,
-				inductor_prev_current,
-			)
-			self._assemble_voltage_sources(
-				voltage_sources,
-				node_groups,
-				group_to_idx,
-				ground_group_id,
-				A,
-				Z,
-				num_v_vars,
-				t,
-			)
+				self._assemble_resistors(circuit, node_groups, group_to_idx, ground_group_id, A)
+				self._assemble_dynamic_elements(
+					circuit,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					A,
+					Z,
+					time_step,
+					capacitor_prev_voltage,
+					inductor_prev_current,
+				)
+				self._assemble_current_sources(
+					circuit,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					Z,
+					t,
+				)
+				self._assemble_vccs_sources(circuit, node_groups, group_to_idx, ground_group_id, A)
+				self._assemble_cccs_sources(
+					circuit,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					A,
+					voltage_source_indices,
+				)
+				self._assemble_diodes(circuit, node_groups, group_to_idx, ground_group_id, A, Z, x)
+				self._assemble_voltage_sources(
+					voltage_sources,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					A,
+					Z,
+					num_v_vars,
+					t,
+				)
 
-			try:
-				x = np.linalg.solve(A, Z)
-			except np.linalg.LinAlgError as exc:
-				raise ValueError("Erreur de resolution transitoire: matrice singuliere") from exc
+				try:
+					x_next = np.linalg.solve(A, Z)
+				except np.linalg.LinAlgError as exc:
+					raise ValueError("Erreur de resolution transitoire: matrice singuliere") from exc
+
+				if not has_nonlinear:
+					x = x_next
+					break
+				delta = np.max(np.abs(x_next - x))
+				x = x_next
+				if delta <= self._CONVERGENCE_TOL:
+					break
 
 			self._store_solution(
 				circuit,
@@ -98,8 +171,11 @@ class TransientSolver(BaseSolver):
 				node_potentials,
 				dipole_voltages,
 				dipole_currents,
+				time_value=t,
+				voltage_source_indices=voltage_source_indices,
 			)
 			self._update_dynamic_histories(circuit, capacitor_prev_voltage, inductor_prev_current)
+			last_solution = x
 
 		return {
 			"time": time_values,
@@ -189,6 +265,93 @@ class TransientSolver(BaseSolver):
 				self._stamp_conductance(idx_a, idx_b, matrix_a, g_eq)
 				self._stamp_current_source(idx_a, idx_b, vector_z, i_hist)
 
+	def _assemble_current_sources(
+		self,
+		circuit,
+		node_groups,
+		group_to_idx,
+		ground_group_id,
+		vector_z,
+		time_value: float,
+	) -> None:
+		for dipole in circuit.dipoles.values():
+			if isinstance(dipole, CurrentSourceDC):
+				current = float(dipole.dc_current)
+			elif isinstance(dipole, CurrentSourceAC):
+				current = float(dipole.get_value_at_time(time_value))
+			else:
+				continue
+			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
+			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
+			self._stamp_current_source(idx_a, idx_b, vector_z, current)
+
+	def _assemble_vccs_sources(self, circuit, node_groups, group_to_idx, ground_group_id, matrix_a) -> None:
+		for dipole in circuit.dipoles.values():
+			if not isinstance(dipole, VoltageControlledCurrentSource):
+				continue
+			control = circuit.dipoles.get(dipole.control_dipole_id)
+			if control is None:
+				continue
+			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
+			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
+			idx_c = matrix_index_for_node(control.node_a, node_groups, group_to_idx, ground_group_id)
+			idx_d = matrix_index_for_node(control.node_b, node_groups, group_to_idx, ground_group_id)
+			g = float(dipole.transconductance)
+			if idx_a is not None and idx_c is not None:
+				matrix_a[idx_a, idx_c] += g
+			if idx_a is not None and idx_d is not None:
+				matrix_a[idx_a, idx_d] -= g
+			if idx_b is not None and idx_c is not None:
+				matrix_a[idx_b, idx_c] -= g
+			if idx_b is not None and idx_d is not None:
+				matrix_a[idx_b, idx_d] += g
+
+	def _assemble_cccs_sources(
+		self,
+		circuit,
+		node_groups,
+		group_to_idx,
+		ground_group_id,
+		matrix_a,
+		voltage_source_indices: dict[int, int],
+	) -> None:
+		for dipole in circuit.dipoles.values():
+			if not isinstance(dipole, CurrentControlledCurrentSource):
+				continue
+			ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
+			if ctrl_idx is None:
+				continue
+			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
+			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
+			gain = float(dipole.gain)
+			if idx_a is not None:
+				matrix_a[idx_a, ctrl_idx] += gain
+			if idx_b is not None:
+				matrix_a[idx_b, ctrl_idx] -= gain
+
+	def _assemble_diodes(
+		self,
+		circuit,
+		node_groups,
+		group_to_idx,
+		ground_group_id,
+		matrix_a,
+		vector_z,
+		state_vector,
+	) -> None:
+		for dipole in circuit.dipoles.values():
+			if not isinstance(dipole, (Diode, LED)):
+				continue
+			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
+			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
+			v_a = 0.0 if idx_a is None else float(state_vector[idx_a])
+			v_b = 0.0 if idx_b is None else float(state_vector[idx_b])
+			v_d = v_a - v_b
+			current, conductance = self._diode_current_and_conductance(v_d, dipole)
+			i_eq = current - conductance * v_d
+			self._stamp_conductance(idx_a, idx_b, matrix_a, conductance)
+			self._stamp_current_source(idx_a, idx_b, vector_z, i_eq)
+
 	def _assemble_voltage_sources(
 		self,
 		voltage_sources,
@@ -232,6 +395,8 @@ class TransientSolver(BaseSolver):
 		node_potentials,
 		dipole_voltages,
 		dipole_currents,
+		time_value: float,
+		voltage_source_indices: dict[int, int],
 	) -> None:
 		for node_id, node in circuit.nodes.items():
 			gid = node_groups[node_id]
@@ -261,12 +426,51 @@ class TransientSolver(BaseSolver):
 				dipole.current = i_prev + (time_step / dipole.inductance) * dipole.voltage
 				if dipole.id in dipole_currents:
 					dipole_currents[dipole.id].append(float(dipole.current))
+			elif isinstance(dipole, CurrentSourceDC):
+				dipole.current = dipole.dc_current
+				if dipole.id in dipole_currents:
+					dipole_currents[dipole.id].append(float(dipole.current))
+			elif isinstance(dipole, CurrentSourceAC):
+				dipole.current = dipole.get_value_at_time(time_value)
+				if dipole.id in dipole_currents:
+					dipole_currents[dipole.id].append(float(dipole.current))
+			elif isinstance(dipole, VoltageControlledCurrentSource):
+				control = circuit.dipoles.get(dipole.control_dipole_id)
+				if control is not None:
+					dipole.current = dipole.transconductance * float(control.voltage)
+				else:
+					dipole.current = 0.0
+				if dipole.id in dipole_currents:
+					dipole_currents[dipole.id].append(float(dipole.current))
+			elif isinstance(dipole, CurrentControlledCurrentSource):
+				ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
+				if ctrl_idx is not None:
+					dipole.current = dipole.gain * (-float(solution[ctrl_idx]))
+				else:
+					dipole.current = 0.0
+				if dipole.id in dipole_currents:
+					dipole_currents[dipole.id].append(float(dipole.current))
+			elif isinstance(dipole, (Diode, LED)):
+				current, _ = self._diode_current_and_conductance(dipole.voltage, dipole)
+				dipole.current = current
+				if dipole.id in dipole_currents:
+					dipole_currents[dipole.id].append(float(dipole.current))
 
 		for i, source in enumerate(voltage_sources):
 			idx_src = current_var_offset + i
 			source.current = -float(solution[idx_src])
 			if source.id in dipole_currents:
 				dipole_currents[source.id].append(float(source.current))
+
+	def _diode_current_and_conductance(self, voltage: float, dipole: Diode) -> tuple[float, float]:
+		isrc = float(dipole.saturation_current)
+		n = max(float(dipole.ideality_factor), 1e-6)
+		vt = max(float(dipole.thermal_voltage), 1e-6)
+		exp_arg = max(-40.0, min(40.0, voltage / (n * vt)))
+		exp_val = float(np.exp(exp_arg))
+		current = isrc * (exp_val - 1.0)
+		conductance = (isrc / (n * vt)) * exp_val
+		return current, conductance
 
 	def _update_dynamic_histories(self, circuit, capacitor_prev_voltage, inductor_prev_current) -> None:
 		for dipole in circuit.dipoles.values():

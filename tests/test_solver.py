@@ -5,7 +5,19 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.circuit import Circuit
-from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
+from model.components import (
+    Capacitor,
+    CurrentControlledCurrentSource,
+    CurrentSourceAC,
+    CurrentSourceDC,
+    Diode,
+    Inductor,
+    LED,
+    Resistor,
+    VoltageControlledCurrentSource,
+    VoltageSourceAC,
+    VoltageSourceDC,
+)
 from solver.dc_solver import DCSolver
 from solver.transient_solver import TransientSolver
 
@@ -91,6 +103,97 @@ class TestDCSolver(unittest.TestCase):
             
         diff = abs(n1.potential - n2.potential)
         self.assertAlmostEqual(diff, 10.0, places=5)
+
+    def test_current_source_dc_sets_node_voltage(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        source = CurrentSourceDC(self.circuit.get_next_dipole_id(), n_gnd, n_pos, dc_current=0.001)
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_pos, n_gnd, resistance=1000.0)
+        self.circuit.add_dipole(resistor)
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(n_pos.potential, 1.0, places=4)
+        self.assertAlmostEqual(source.current, 0.001, places=6)
+
+    def test_vccs_current_matches_control_voltage(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_ctrl = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        ctrl_source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, dc_voltage=2.0)
+        self.circuit.add_dipole(ctrl_source)
+        vccs = VoltageControlledCurrentSource(
+            self.circuit.get_next_dipole_id(),
+            n_out,
+            n_gnd,
+            transconductance=1e-3,
+            control_dipole_id=ctrl_source.id,
+        )
+        self.circuit.add_dipole(vccs)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_out, n_gnd, resistance=1000.0))
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(vccs.current, 0.002, places=5)
+
+    def test_cccs_current_matches_control_current(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_ctrl = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        ctrl_source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, dc_voltage=1.0)
+        self.circuit.add_dipole(ctrl_source)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, resistance=1000.0))
+
+        cccs = CurrentControlledCurrentSource(
+            self.circuit.get_next_dipole_id(),
+            n_out,
+            n_gnd,
+            gain=2.0,
+            control_dipole_id=ctrl_source.id,
+        )
+        self.circuit.add_dipole(cccs)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_out, n_gnd, resistance=1000.0))
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(cccs.current, 2.0 * ctrl_source.current, places=5)
+
+    def test_diode_forward_conduction(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_pos, n_gnd, dc_voltage=1.0)
+        self.circuit.add_dipole(source)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_pos, n_out, resistance=1000.0))
+        diode = Diode(self.circuit.get_next_dipole_id(), n_out, n_gnd)
+        self.circuit.add_dipole(diode)
+
+        self.solver.solve(self.circuit)
+
+        self.assertGreater(diode.current, 0.0)
+        self.assertGreater(diode.voltage, 0.3)
+        self.assertLess(diode.voltage, 0.9)
+
+    def test_led_forward_conduction(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_pos, n_gnd, dc_voltage=3.0)
+        self.circuit.add_dipole(source)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_pos, n_out, resistance=220.0))
+        led = LED(self.circuit.get_next_dipole_id(), n_out, n_gnd)
+        self.circuit.add_dipole(led)
+
+        self.solver.solve(self.circuit)
+
+        self.assertGreater(led.current, 0.0)
+        self.assertGreater(led.voltage, 1.2)
+        self.assertLess(led.voltage, 3.0)
 
 
 class TestTransientSolver(unittest.TestCase):
@@ -206,6 +309,30 @@ class TestTransientSolver(unittest.TestCase):
         self.assertEqual(result["time"], [0.25, 0.5])
         self.assertAlmostEqual(result["dipole_voltages"][resistor.id][0], 10.0, places=5)
         self.assertAlmostEqual(result["dipole_voltages"][resistor.id][1], 0.0, places=5)
+
+    def test_transient_current_source_ac_trace(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_pos = self.circuit.create_node(0, 100)
+        source = CurrentSourceAC(
+            self.circuit.get_next_dipole_id(),
+            n_gnd,
+            n_pos,
+            amplitude=0.001,
+            frequency=1.0,
+            phase=0.0,
+            offset=0.0,
+        )
+        self.circuit.add_dipole(source)
+        resistor = Resistor(self.circuit.get_next_dipole_id(), n_pos, n_gnd, resistance=1000.0)
+        self.circuit.add_dipole(resistor)
+
+        result = self.solver.solve(self.circuit, duration=0.5, time_step=0.25)
+
+        self.assertEqual(result["time"], [0.0, 0.25, 0.5])
+        self.assertAlmostEqual(result["dipole_currents"][source.id][0], 0.0, places=6)
+        self.assertAlmostEqual(result["dipole_currents"][source.id][1], 0.001, places=6)
+        self.assertAlmostEqual(result["dipole_currents"][source.id][2], 0.0, places=6)
+        self.assertAlmostEqual(result["dipole_voltages"][resistor.id][1], 1.0, places=4)
 
 if __name__ == '__main__':
     unittest.main()
