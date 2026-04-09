@@ -294,10 +294,10 @@ class VoltageSourceItem(ComponentItem):
             painter.drawLine(-7, -3, -7, 3)
             painter.drawLine(4, 0, 10, 0)
         elif isinstance(self.component, VoltageSourceAC):
-            # Tilde (~)
+            # Sinusoidal curve
             path = QPainterPath()
-            path.moveTo(-10, 4)
-            path.cubicTo(-4, -10, 4, 10, 10, -4)
+            path.moveTo(-8, 0)
+            path.cubicTo(-3, -14, 3, 14, 8, 0)
             painter.drawPath(path)
 
     def get_value_text(self) -> str:
@@ -327,12 +327,12 @@ class CurrentSourceItem(ComponentItem):
             painter.drawLine(6, 0, 2, -3)
             painter.drawLine(6, 0, 2, 3)
         elif isinstance(self.component, CurrentSourceAC):
-            painter.drawLine(-6, 4, 6, 4)
-            painter.drawLine(6, 4, 2, 1)
-            painter.drawLine(6, 4, 2, 7)
+            painter.drawLine(-6, 6, 6, 6)
+            painter.drawLine(6, 6, 2, 3)
+            painter.drawLine(6, 6, 2, 9)
             path = QPainterPath()
-            path.moveTo(-9, -6)
-            path.cubicTo(-3, -14, 3, 2, 9, -6)
+            path.moveTo(-8, -5)
+            path.cubicTo(-3, -19, 3, 9, 8, -5)
             painter.drawPath(path)
 
     def get_value_text(self) -> str:
