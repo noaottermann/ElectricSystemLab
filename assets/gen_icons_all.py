@@ -5,11 +5,9 @@ from PyQt5.QtCore import Qt, QPointF, QRectF
 ROOT = os.path.dirname(__file__)
 COMP = os.path.join(ROOT, "components")
 CAT = os.path.join(ROOT, "categories")
-FAM = os.path.join(ROOT, "components_families")
 
 os.makedirs(COMP, exist_ok=True)
 os.makedirs(CAT, exist_ok=True)
-os.makedirs(FAM, exist_ok=True)
 
 BASE_SIZE = 64
 SIZE = 96
@@ -202,7 +200,7 @@ def draw_led(p):
 
 def draw_category_base(p, color, label):
     rect = QRectF(0, 0, CANVAS, CANVAS)
-    font = QFont("Segoe UI", 18)
+    font = QFont("Segoe UI", 40)
     font.setBold(True)
     p.setFont(font)
     p.setPen(QPen(_soft_color(color), 2))
@@ -249,11 +247,6 @@ def main():
     save_icon(os.path.join(CAT, "sources.png"), draw_category_sources)
     save_icon(os.path.join(CAT, "passive.png"), draw_category_passive)
     save_icon(os.path.join(CAT, "nonlinear.png"), draw_category_nonlinear)
-
-    save_icon(os.path.join(FAM, "connections.png"), draw_category_connections)
-    save_icon(os.path.join(FAM, "sources.png"), draw_category_sources)
-    save_icon(os.path.join(FAM, "passive.png"), draw_category_passive)
-    save_icon(os.path.join(FAM, "nonlinear.png"), draw_category_nonlinear)
 
 
 if __name__ == "__main__":

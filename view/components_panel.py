@@ -227,25 +227,25 @@ class ComponentsPanel(QWidget):
 			{
 				"key": "connections",
 				"label_key": "components_category_connections",
-				"icon": "components_families/connections.png",
+				"icon": "categories/connections.png",
 				"color": "#7a6a3a",
 			},
 			{
 				"key": "sources",
 				"label_key": "components_category_sources",
-				"icon": "components_families/sources.png",
+				"icon": "categories/sources.png",
 				"color": "#f25f5c",
 			},
 			{
 				"key": "passive",
 				"label_key": "components_category_passive",
-				"icon": "components_families/passive.png",
+				"icon": "categories/passive.png",
 				"color": "#247ba0",
 			},
 			{
 				"key": "nonlinear",
 				"label_key": "components_category_nonlinear",
-				"icon": "components_families/nonlinear.png",
+				"icon": "categories/nonlinear.png",
 				"color": "#8b5cf6",
 			},
 		]
