@@ -1332,8 +1332,6 @@ class MainWindow(QMainWindow):
                     self.scene.update_overlay_indicators()
             if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
                 self.graph_panel.set_dc_results(self.model)
-                if not self.graph_panel.isVisible():
-                    self._set_graph_panel_visible(True)
 
     def on_run_simulation_transient(self) -> None:
         """Lance la simulation transitoire avec des parametres par defaut."""
