@@ -361,7 +361,13 @@ class ComponentsPanel(QWidget):
 		component_id = item.data(Qt.UserRole)
 		if not component_id or (isinstance(component_id, str) and component_id.startswith("header:")):
 			return
-		self.tool_selected.emit(component_id)
+		self._emit_tool_request(component_id)
+
+	def _emit_tool_request(self, component_id: object) -> None:
+		"""Demande la selection de l'outil associe a un composant."""
+		if not component_id:
+			return
+		self.tool_selected.emit(str(component_id))
 
 	def _populate_components_all(self) -> None:
 		"""Remplit la liste des composants pour toutes les categories."""
@@ -576,8 +582,8 @@ class ComponentsListWidget(QListWidget):
 		component_id = item.data(Qt.UserRole)
 		if not component_id or (isinstance(component_id, str) and component_id.startswith("header:")):
 			return
+		self.tool_requested.emit(str(component_id))
 		if component_id in self.NON_DRAGGABLE_COMPONENT_IDS:
-			self.tool_requested.emit(str(component_id))
 			return
 
 		mime = QMimeData()
