@@ -69,11 +69,7 @@ class TimeSeriesPlotWidget(QWidget):
 			painter.drawText(self.rect(), Qt.AlignCenter, Translator.tr("graph_no_curve"))
 			return
 
-		margin_left = 56
-		margin_top = 18
-		margin_right = 18
-		margin_bottom = 34
-		plot_rect = self.rect().adjusted(margin_left, margin_top, -margin_right, -margin_bottom)
+		plot_rect = self.rect()
 		if plot_rect.width() <= 0 or plot_rect.height() <= 0:
 			return
 
@@ -95,13 +91,6 @@ class TimeSeriesPlotWidget(QWidget):
 				return float(plot_rect.center().y())
 			return plot_rect.bottom() - (value - y_min) * plot_rect.height() / (y_max - y_min)
 
-		painter.setPen(QPen(QColor("#777777"), 1))
-		painter.drawRect(plot_rect)
-
-		# Axes simples
-		painter.drawLine(plot_rect.left(), plot_rect.bottom(), plot_rect.right(), plot_rect.bottom())
-		painter.drawLine(plot_rect.left(), plot_rect.top(), plot_rect.left(), plot_rect.bottom())
-
 		# Grille légère
 		painter.setPen(QPen(QColor("#e0e0e0"), 1, Qt.DashLine))
 		for step in range(1, 5):
@@ -109,6 +98,18 @@ class TimeSeriesPlotWidget(QWidget):
 			painter.drawLine(int(x), plot_rect.top(), int(x), plot_rect.bottom())
 			y = plot_rect.top() + plot_rect.height() * step / 5.0
 			painter.drawLine(plot_rect.left(), int(y), plot_rect.right(), int(y))
+
+		# Axes et labels (plein cadre, sans marges)
+		painter.setPen(QPen(QColor("#777777"), 1))
+		painter.drawLine(plot_rect.left(), plot_rect.bottom(), plot_rect.right(), plot_rect.bottom())
+		painter.drawLine(plot_rect.left(), plot_rect.top(), plot_rect.left(), plot_rect.bottom())
+		painter.setPen(QPen(QColor("#374151")))
+		painter.drawText(plot_rect.center().x() - 18, plot_rect.bottom() - 4, Translator.tr("graph_time_axis"))
+		painter.save()
+		painter.translate(plot_rect.left() + 10, plot_rect.center().y() + 24)
+		painter.rotate(-90)
+		painter.drawText(0, 0, self.series[0].get("unit_label", Translator.tr("graph_value_axis")))
+		painter.restore()
 
 		# Courbes
 		colors = [QColor("#2563eb"), QColor("#16a34a"), QColor("#dc2626"), QColor("#7c3aed"), QColor("#ea580c")]
@@ -162,28 +163,6 @@ class TimeSeriesPlotWidget(QWidget):
 				painter.drawText(box_left + 10, text_y, line)
 				text_y += 14
 
-		# Légende
-		legend_x = plot_rect.right() - 150
-		legend_y = plot_rect.top() + 8
-		painter.setPen(QPen(QColor("#111827")))
-		for index, entry in enumerate(self.series):
-			label = str(entry.get("label", f"Trace {index + 1}"))
-			color = colors[index % len(colors)]
-			painter.setPen(QPen(color, 3))
-			painter.drawLine(legend_x, legend_y + 8, legend_x + 18, legend_y + 8)
-			painter.setPen(QPen(QColor("#111827")))
-			painter.drawText(legend_x + 24, legend_y + 12, label)
-			legend_y += 18
-
-		# Étiquettes d'axes
-		painter.setPen(QPen(QColor("#374151")))
-		painter.drawText(plot_rect.center().x() - 18, self.height() - 8, Translator.tr("graph_time_axis"))
-		painter.save()
-		painter.translate(12, plot_rect.center().y() + 32)
-		painter.rotate(-90)
-		painter.drawText(0, 0, self.series[0].get("unit_label", Translator.tr("graph_value_axis")))
-		painter.restore()
-
 		painter.end()
 
 
@@ -220,7 +199,7 @@ class GraphPanel(QWidget):
 
 		layout.addWidget(header)
 
-		# ===== Panneau Transitoire =====
+		# Panneau Transitoire
 		self.transient_widget = QWidget()
 		self.transient_layout = QVBoxLayout(self.transient_widget)
 		self.transient_layout.setContentsMargins(0, 0, 0, 0)
