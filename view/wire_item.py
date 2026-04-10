@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QLineF, QPointF, Qt
-from PyQt5.QtGui import QColor, QPainterPath, QPainterPathStroker, QPen
+from PyQt5.QtCore import QLineF, QPointF, QRectF, Qt
+from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPainterPathStroker, QPen
 from PyQt5.QtWidgets import QGraphicsItem, QGraphicsLineItem
 from typing import Optional
 
@@ -36,6 +36,80 @@ class WireItem(QGraphicsLineItem):
 
         # Place la ligne a ces coordonnees
         self.setLine(QLineF(p1, p2))
+
+    def paint(self, painter: QPainter, option, widget=None) -> None:
+        """Dessine le fil et, si actif, la fleche de courant."""
+        super().paint(painter, option, widget)
+        scene = self.scene()
+        if scene is None or not getattr(scene, "show_current_arrows", False):
+            return
+        if self.wire.node_a is None or self.wire.node_b is None:
+            return
+        v_a = float(getattr(self.wire.node_a, "potential", 0.0))
+        v_b = float(getattr(self.wire.node_b, "potential", 0.0))
+        current_value = self._compute_wire_current()
+        line = self.line()
+        p1 = line.p1()
+        p2 = line.p2()
+        if abs(current_value) > 1e-9:
+            if current_value < 0:
+                p1, p2 = p2, p1
+        elif v_a < v_b:
+            p1, p2 = p2, p1
+        elif abs(v_a - v_b) < 1e-9:
+            # Potentiels egaux sur un fil ideal : garde une direction stable.
+            p1, p2 = line.p1(), line.p2()
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
+        length = max((dx * dx + dy * dy) ** 0.5, 1e-6)
+        ux = dx / length
+        uy = dy / length
+        mid_x = (p1.x() + p2.x()) / 2
+        mid_y = (p1.y() + p2.y()) / 2
+        arrow_len = min(18.0, length * 0.4)
+        start = QPointF(mid_x - ux * arrow_len / 2, mid_y - uy * arrow_len / 2)
+        end = QPointF(mid_x + ux * arrow_len / 2, mid_y + uy * arrow_len / 2)
+
+        painter.save()
+        pen = QPen(QColor("#2a2a2a"), 1.2)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        painter.drawLine(start, end)
+        head_size = 4.0
+        left = QPointF(
+            end.x() - ux * head_size - uy * head_size,
+            end.y() - uy * head_size + ux * head_size,
+        )
+        right = QPointF(
+            end.x() - ux * head_size + uy * head_size,
+            end.y() - uy * head_size - ux * head_size,
+        )
+        painter.drawLine(end, left)
+        painter.drawLine(end, right)
+
+        font = QFont("Arial", 7)
+        painter.setFont(font)
+        label = f"{current_value:.3g} A"
+        offset = 8.0
+        text_x = mid_x - uy * offset
+        text_y = mid_y + ux * offset
+        text_rect = QRectF(text_x - 20, text_y - 6, 40, 12)
+        painter.drawText(text_rect, Qt.AlignCenter, label)
+        painter.restore()
+
+    def _compute_wire_current(self) -> float:
+        """Estime un courant pour le fil a partir des dipoles connectes."""
+        node_a = self.wire.node_a
+        if node_a is None:
+            return 0.0
+        total = 0.0
+        for dipole in getattr(node_a, "connected_dipoles", []):
+            current = float(getattr(dipole, "current", 0.0))
+            if getattr(dipole, "node_a", None) is node_a:
+                total += current
+            elif getattr(dipole, "node_b", None) is node_a:
+                total -= current
+        return total
 
     def shape(self) -> QPainterPath:
         """Retourne une zone de clic plus epaisse pour faciliter la selection."""

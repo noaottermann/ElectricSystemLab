@@ -79,6 +79,11 @@ class CircuitController:
 			self.app_controller.not_implemented("Etiquettes")
 
 	def toggle_wire_direction(self) -> None:
+		if self.scene is None:
+			return
+		if hasattr(self.scene, "toggle_wire_direction"):
+			self.scene.toggle_wire_direction()
+			return
 		if self.app_controller is not None:
 			self.app_controller.not_implemented("Direction du courant")
 

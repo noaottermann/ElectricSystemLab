@@ -294,6 +294,8 @@ class CircuitScene(QGraphicsScene):
         self.show_grid = True
         self.snap_enabled = True
         self.nodes_visible = True
+        self.show_voltage_arrows = True
+        self.show_current_arrows = True
 
         # Etat d'annulation (stocke des instantanes complets du circuit avant edition)
         self._undo_stack: list[dict] = []
@@ -329,6 +331,17 @@ class CircuitScene(QGraphicsScene):
         for item in self.items():
             if isinstance(item, NodeItem):
                 item.setCursor(cursor)
+
+    def toggle_wire_direction(self) -> None:
+        """Bascule l'affichage des fleches de courant sur les fils."""
+        self.show_current_arrows = not self.show_current_arrows
+        self.update_overlay_indicators()
+
+    def update_overlay_indicators(self) -> None:
+        """Redessine les indicateurs de tension et de courant."""
+        for item in self.items():
+            if isinstance(item, (ComponentItem, WireItem)):
+                item.update()
 
     def _clear_item_cursors(self) -> None:
         """Reinitialise les curseurs des items graphiques."""
@@ -2002,3 +2015,4 @@ class CircuitScene(QGraphicsScene):
             self.addItem(wire_item)
 
         self._refresh_free_node_items()
+        self.update_overlay_indicators()

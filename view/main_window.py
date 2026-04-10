@@ -1327,6 +1327,9 @@ class MainWindow(QMainWindow):
             if self.simulation_controller.is_realtime_running:
                 self.on_stop_simulation_realtime()
             self.simulation_controller.run_dc()
+            if hasattr(self, "scene") and self.scene is not None:
+                if hasattr(self.scene, "update_overlay_indicators"):
+                    self.scene.update_overlay_indicators()
             if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
                 self.graph_panel.set_dc_results(self.model)
                 if not self.graph_panel.isVisible():
@@ -1365,6 +1368,9 @@ class MainWindow(QMainWindow):
             return
 
         result = self.simulation_controller.run_transient(duration=duration, time_step=time_step)
+        if hasattr(self, "scene") and self.scene is not None:
+            if hasattr(self.scene, "update_overlay_indicators"):
+                self.scene.update_overlay_indicators()
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.set_transient_results(result, circuit=self.model)
             if result and not self.graph_panel.isVisible():
@@ -1401,6 +1407,9 @@ class MainWindow(QMainWindow):
             if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
                 self.realtime_timer.stop()
             self._set_realtime_actions_state(False)
+        if hasattr(self, "scene") and self.scene is not None:
+            if hasattr(self.scene, "update_overlay_indicators"):
+                self.scene.update_overlay_indicators()
 
     def on_run_simulation_realtime(self) -> None:
         """Lance une simulation transitoire avec rafraichissement temps reel du graphe."""

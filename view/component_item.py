@@ -205,6 +205,7 @@ class ComponentItem(QGraphicsItem):
             painter.setPen(pen)
             painter.drawRect(self.boundingRect())
         self.draw_symbol(painter)
+        self._draw_voltage_indicator(painter)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor("#1f2937"))
         painter.drawEllipse(QPointF(-30, 0), 2, 2)
@@ -227,6 +228,39 @@ class ComponentItem(QGraphicsItem):
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole du composant (a surcharger)."""
         pass
+
+    def _draw_voltage_indicator(self, painter: QPainter) -> None:
+        """Dessine la fleche de tension au-dessus du dipole."""
+        scene = self.scene()
+        if scene is None or not getattr(scene, "show_voltage_arrows", False):
+            return
+        voltage = float(getattr(self.component, "voltage", 0.0))
+        arrow_length = 26
+        arrow_offset = -self.height / 2 - 8
+        start_x = -arrow_length / 2
+        end_x = arrow_length / 2
+        if voltage < 0:
+            start_x, end_x = end_x, start_x
+        painter.save()
+        painter.setPen(QPen(QColor("#2a2a2a"), 1.4))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawLine(QPointF(start_x, arrow_offset), QPointF(end_x, arrow_offset))
+        head_size = 4
+        head_dir = 1 if end_x >= start_x else -1
+        painter.drawLine(
+            QPointF(end_x, arrow_offset),
+            QPointF(end_x - head_dir * head_size, arrow_offset - head_size),
+        )
+        painter.drawLine(
+            QPointF(end_x, arrow_offset),
+            QPointF(end_x - head_dir * head_size, arrow_offset + head_size),
+        )
+        font = QFont("Arial", 7)
+        painter.setFont(font)
+        text = f"{voltage:.3g} V"
+        text_rect = QRectF(-30, arrow_offset - 12, 60, 10)
+        painter.drawText(text_rect, Qt.AlignCenter, text)
+        painter.restore()
 
     def get_value_text(self) -> str:
         """Retourne la valeur affichee pour l'item."""
