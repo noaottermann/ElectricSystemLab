@@ -55,6 +55,8 @@ class CircuitView(QGraphicsView):
         self._is_panning = False
         self._pan_start_x = 0
         self._pan_start_y = 0
+        self._pressed_on_item = False
+        self._saved_drag_mode = None
 
     def set_tool_mode(self, tool_name: str) -> None:
         """Configure le comportement de la souris selon l'outil actif."""
@@ -89,6 +91,14 @@ class CircuitView(QGraphicsView):
         """Gere le debut des interactions souris."""
         if self._handle_pan_press(event):
             return
+
+        # Evite la selection par rectangle quand un glisser commence sur un item.
+        if event.button() == Qt.LeftButton and self.dragMode() == QGraphicsView.RubberBandDrag:
+            item_under_cursor = self.itemAt(event.pos())
+            if item_under_cursor is not None:
+                self._pressed_on_item = True
+                self._saved_drag_mode = self.dragMode()
+                self.setDragMode(QGraphicsView.NoDrag)
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: object) -> None:
@@ -96,6 +106,12 @@ class CircuitView(QGraphicsView):
         if self._handle_pan_release(event):
             return
         super().mouseReleaseEvent(event)
+
+        if event.button() == Qt.LeftButton and self._pressed_on_item:
+            if self._saved_drag_mode is not None:
+                self.setDragMode(self._saved_drag_mode)
+            self._pressed_on_item = False
+            self._saved_drag_mode = None
 
     def mouseMoveEvent(self, event: object) -> None:
         """Gere les mouvements de souris et le panoramique."""
@@ -1049,6 +1065,14 @@ class CircuitScene(QGraphicsScene):
         if isinstance(item, ComponentItem):
             if item.isSelected() and not (event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier)):
                 # Conserve la selection courante et evite de lancer une selection par zone
+                self._drag_started_on_item = True
+                self._suppress_move_until_release = False
+                event.accept()
+                return True
+            if not item.isSelected() and not (event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier)):
+                # Clic sur un autre dipole: le rendre selectionne immediatement pour deplacer celui-ci.
+                self.clearSelection()
+                item.setSelected(True)
                 self._drag_started_on_item = True
                 self._suppress_move_until_release = False
                 event.accept()
