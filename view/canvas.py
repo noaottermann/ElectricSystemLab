@@ -488,6 +488,93 @@ class CircuitScene(QGraphicsScene):
             or self._clipboard_payload.get("nodes")
         )
 
+    def _clipboard_key(self, x: float, y: float, decimals: int = 6) -> tuple[float, float]:
+        """Normalise une position pour l'index du presse-papiers."""
+        return round(float(x), decimals), round(float(y), decimals)
+
+    def copy_selection(self) -> bool:
+        """Copie la selection courante dans le presse-papiers interne."""
+        if self.model is None:
+            return False
+        items = self.selectedItems()
+        if not items:
+            self._clipboard_payload = None
+            return False
+
+        components: list[dict] = []
+        wires: list[dict] = []
+        free_nodes: list[dict] = []
+
+        selected_nodes = set()
+        selected_wire_ids = set()
+
+        for item in items:
+            if isinstance(item, ComponentItem):
+                component = item.component
+                if component is None:
+                    continue
+                data = component.to_dict()
+                cx, cy = component.position
+                data["position"] = [float(cx), float(cy)]
+                data["rotation"] = float(component.rotation)
+                data["params"] = dict(component.get_params())
+                components.append(data)
+                if component.node_a is not None:
+                    selected_nodes.add(component.node_a)
+                if component.node_b is not None:
+                    selected_nodes.add(component.node_b)
+            elif isinstance(item, WireItem):
+                wire = item.wire
+                if wire is None:
+                    continue
+                selected_wire_ids.add(wire.id)
+                if wire.node_a is not None:
+                    selected_nodes.add(wire.node_a)
+                if wire.node_b is not None:
+                    selected_nodes.add(wire.node_b)
+            elif isinstance(item, NodeItem):
+                node = item.node
+                if node is None or self._is_node_attached_to_dipole(node):
+                    continue
+                nx, ny = node.position
+                free_nodes.append(
+                    {
+                        "position": [float(nx), float(ny)],
+                        "is_ground": bool(node.is_ground),
+                    }
+                )
+                selected_nodes.add(node)
+
+        for wire in self.model.wires.values():
+            if wire.id not in selected_wire_ids:
+                if wire.node_a not in selected_nodes or wire.node_b not in selected_nodes:
+                    continue
+            if wire.node_a is None or wire.node_b is None:
+                continue
+            ax, ay = wire.node_a.position
+            bx, by = wire.node_b.position
+            wires.append(
+                {
+                    "node_a": [float(ax), float(ay)],
+                    "node_b": [float(bx), float(by)],
+                    "color": wire.color,
+                }
+            )
+
+        self._clipboard_payload = {
+            "components": components,
+            "wires": wires,
+            "nodes": free_nodes,
+        }
+        return bool(components or wires or free_nodes)
+
+    def cut_selection(self) -> bool:
+        """Coupe la selection (copie puis supprime)."""
+        if not self.copy_selection():
+            return False
+        self.delete_selection()
+        return True
+
     def _clipboard_payload_bounds(
         self, components: list[dict], wires: list[dict], free_nodes: list[dict]
     ) -> Optional[tuple[float, float, float, float]]:
