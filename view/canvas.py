@@ -492,6 +492,34 @@ class CircuitScene(QGraphicsScene):
         """Normalise une position pour l'index du presse-papiers."""
         return round(float(x), decimals), round(float(y), decimals)
 
+    def _component_terminal_positions(
+        self, center_x: float, center_y: float, rotation: float
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Calcule les positions des bornes d'un composant."""
+        offset = 30
+        rad = math.radians(rotation)
+        dx = offset * math.cos(rad)
+        dy = offset * math.sin(rad)
+        return (
+            (float(center_x - dx), float(center_y - dy)),
+            (float(center_x + dx), float(center_y + dy)),
+        )
+
+    def _serialize_component_for_clipboard(self, component_model) -> dict:
+        """Serialise un composant pour le presse-papiers."""
+        params = {}
+        if hasattr(component_model, "get_params"):
+            params = dict(component_model.get_params())
+
+        cx, cy = component_model.position
+        return {
+            "type": component_model.__class__.__name__,
+            "name": component_model.name,
+            "position": [float(cx), float(cy)],
+            "rotation": float(component_model.rotation),
+            "params": params,
+        }
+
     def copy_selection(self) -> bool:
         """Copie la selection courante dans le presse-papiers interne."""
         if self.model is None:
@@ -513,12 +541,7 @@ class CircuitScene(QGraphicsScene):
                 component = item.component
                 if component is None:
                     continue
-                data = component.to_dict()
-                cx, cy = component.position
-                data["position"] = [float(cx), float(cy)]
-                data["rotation"] = float(component.rotation)
-                data["params"] = dict(component.get_params())
-                components.append(data)
+                components.append(self._serialize_component_for_clipboard(component))
                 if component.node_a is not None:
                     selected_nodes.add(component.node_a)
                 if component.node_b is not None:
