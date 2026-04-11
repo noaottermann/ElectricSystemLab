@@ -101,8 +101,12 @@ class TimeSeriesPlotWidget(QWidget):
 
 		# Axes et labels (plein cadre, sans marges)
 		painter.setPen(QPen(QColor("#777777"), 1))
-		painter.drawLine(plot_rect.left(), plot_rect.bottom(), plot_rect.right(), plot_rect.bottom())
-		painter.drawLine(plot_rect.left(), plot_rect.top(), plot_rect.left(), plot_rect.bottom())
+		x_axis_y = map_y(0.0)
+		y_axis_x = map_x(0.0)
+		if plot_rect.top() <= x_axis_y <= plot_rect.bottom():
+			painter.drawLine(plot_rect.left(), int(x_axis_y), plot_rect.right(), int(x_axis_y))
+		if plot_rect.left() <= y_axis_x <= plot_rect.right():
+			painter.drawLine(int(y_axis_x), plot_rect.top(), int(y_axis_x), plot_rect.bottom())
 		painter.setPen(QPen(QColor("#374151")))
 		painter.drawText(plot_rect.center().x() - 18, plot_rect.bottom() - 4, Translator.tr("graph_time_axis"))
 		painter.save()

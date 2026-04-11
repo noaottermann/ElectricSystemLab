@@ -1,3 +1,4 @@
+
 from PyQt5.QtCore import QSize, Qt, QTimer
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (

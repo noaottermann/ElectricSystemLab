@@ -1,5 +1,8 @@
 import math
+from collections import deque
 from typing import Optional
+
+import numpy as np
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QBrush, QColor, QPainter, QPen, QTransform
@@ -296,6 +299,7 @@ class CircuitScene(QGraphicsScene):
         self.nodes_visible = True
         self.show_voltage_arrows = True
         self.show_current_arrows = True
+        self._wire_current_cache: dict[int, float] = {}
 
         # Etat d'annulation (stocke des instantanes complets du circuit avant edition)
         self._undo_stack: list[dict] = []
@@ -315,6 +319,49 @@ class CircuitScene(QGraphicsScene):
             "LED": LED,
         }
         self._clipboard_payload: Optional[dict] = None
+
+    def _capture_snapshot(self) -> Optional[str]:
+        """Capture un instantane JSON du circuit."""
+        if self.model is None:
+            return None
+        return self.model.to_json()
+
+    def _restore_snapshot(self, snapshot: str) -> None:
+        """Restaure un instantane JSON du circuit."""
+        if self.model is None:
+            return
+        self.model.load_from_json(snapshot, self._component_classes)
+        self.refresh_from_model()
+
+    def _push_undo_snapshot(self) -> None:
+        """Empile un instantane pour annulation et invalide le redo."""
+        snapshot = self._capture_snapshot()
+        if snapshot is None:
+            return
+        self._undo_stack.append(snapshot)
+        if len(self._undo_stack) > self._max_undo_steps:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+
+    def undo_last_action(self) -> None:
+        """Annule la derniere action modifiant le circuit."""
+        if not self._undo_stack:
+            return
+        current = self._capture_snapshot()
+        snapshot = self._undo_stack.pop()
+        if current is not None:
+            self._redo_stack.append(current)
+        self._restore_snapshot(snapshot)
+
+    def redo_last_action(self) -> None:
+        """Retablit la derniere action annulee."""
+        if not self._redo_stack:
+            return
+        current = self._capture_snapshot()
+        snapshot = self._redo_stack.pop()
+        if current is not None:
+            self._undo_stack.append(current)
+        self._restore_snapshot(snapshot)
 
     def set_tool(self, tool_name: str) -> None:
         """Definit le nom de l'outil actif."""
@@ -339,170 +386,98 @@ class CircuitScene(QGraphicsScene):
 
     def update_overlay_indicators(self) -> None:
         """Redessine les indicateurs de tension et de courant."""
+        self._wire_current_cache = self._compute_wire_current_map()
         for item in self.items():
             if isinstance(item, (ComponentItem, WireItem)):
                 item.update()
 
-    def _clear_item_cursors(self) -> None:
-        """Reinitialise les curseurs des items graphiques."""
-        for item in self.items():
-            item.unsetCursor()
+    def get_wire_current(self, wire_id: int) -> float:
+        """Retourne le courant calcule pour un fil."""
+        return float(self._wire_current_cache.get(int(wire_id), 0.0))
 
-    def _push_undo_snapshot(self) -> None:
-        """Enregistre l'etat courant du circuit avant modification."""
+    def _compute_wire_current_map(self) -> dict[int, float]:
+        """Calcule un courant pour chaque fil a partir des dipoles connectes."""
         if self.model is None:
-            return
-        snapshot = self.model.to_json()
-        if self._undo_stack and self._undo_stack[-1] == snapshot:
-            return
-        # Les nouvelles editions utilisateur invalident l'historique de retablissement
-        self._redo_stack.clear()
-        self._undo_stack.append(snapshot)
-        if len(self._undo_stack) > self._max_undo_steps:
-            self._undo_stack.pop(0)
+            return {}
 
-    def undo_last_action(self) -> bool:
-        """Restaure l'instantane le plus recent de la pile d'annulation."""
-        if self.model is None or not self._undo_stack:
-            return False
+        wires = [wire for wire in self.model.wires.values() if wire.node_a is not None and wire.node_b is not None]
+        if not wires:
+            return {}
 
-        current_snapshot = self.model.to_json()
-        previous_snapshot = self._undo_stack.pop()
-        self._redo_stack.append(current_snapshot)
-        self.model.load_from_json(previous_snapshot, self._component_classes)
-        self.refresh_from_model()
+        adjacency: dict[object, list[object]] = {}
+        for wire in wires:
+            adjacency.setdefault(wire.node_a, []).append(wire.node_b)
+            adjacency.setdefault(wire.node_b, []).append(wire.node_a)
 
-        # Reinitialise l'etat d'interaction transitoire apres restauration
-        self.cancel_wire_drawing()
-        self._reset_press_state()
-        self.clearSelection()
-        self._group_move_active = False
-        return True
+        def _dipole_current_for_kcl(dipole: object) -> float:
+            current = float(getattr(dipole, "current", 0.0))
+            if isinstance(dipole, (VoltageSourceDC, VoltageSourceAC)):
+                return -current
+            return current
 
-    def redo_last_action(self) -> bool:
-        """Reapplique l'instantane annule le plus recent."""
-        if self.model is None or not self._redo_stack:
-            return False
+        wire_current: dict[int, float] = {}
+        eps = 1e-9
+        unvisited = set(adjacency.keys())
 
-        current_snapshot = self.model.to_json()
-        next_snapshot = self._redo_stack.pop()
-        self._undo_stack.append(current_snapshot)
-        if len(self._undo_stack) > self._max_undo_steps:
-            self._undo_stack.pop(0)
+        while unvisited:
+            start_node = unvisited.pop()
+            stack = [start_node]
+            nodes = [start_node]
+            while stack:
+                node = stack.pop()
+                for neighbor in adjacency.get(node, []):
+                    if neighbor in unvisited:
+                        unvisited.remove(neighbor)
+                        stack.append(neighbor)
+                        nodes.append(neighbor)
 
-        self.model.load_from_json(next_snapshot, self._component_classes)
-        self.refresh_from_model()
-
-        self.cancel_wire_drawing()
-        self._reset_press_state()
-        self.clearSelection()
-        self._group_move_active = False
-        return True
-
-    def _clipboard_key(self, x: float, y: float) -> tuple[float, float]:
-        """Retourne la cle de grille pour le cache du presse-papiers."""
-        return (round(float(x), 6), round(float(y), 6))
-
-    def _component_terminal_positions(
-        self, center_x: float, center_y: float, rotation: float
-    ) -> tuple[tuple[float, float], tuple[float, float]]:
-        """Calcule les positions des bornes d'un composant."""
-        offset = 30
-        rad = math.radians(rotation)
-        dx = offset * math.cos(rad)
-        dy = offset * math.sin(rad)
-        return (
-            (float(center_x - dx), float(center_y - dy)),
-            (float(center_x + dx), float(center_y + dy)),
-        )
-
-    def _serialize_component_for_clipboard(self, component_model) -> dict:
-        """Serialize un composant pour le presse-papiers."""
-        params = {}
-        if hasattr(component_model, "get_params"):
-            params = dict(component_model.get_params())
-
-        cx, cy = component_model.position
-        return {
-            "type": component_model.__class__.__name__,
-            "name": component_model.name,
-            "position": [float(cx), float(cy)],
-            "rotation": float(component_model.rotation),
-            "params": params,
-        }
-
-    def copy_selection(self) -> bool:
-        """Copie les elements selectionnes dans le presse-papiers interne."""
-        selected_items = self.selectedItems()
-        if not selected_items:
-            return False
-
-        components = []
-        wires = []
-        free_nodes = []
-
-        seen_component_ids = set()
-        seen_wire_ids = set()
-        seen_node_ids = set()
-
-        for item in selected_items:
-            if isinstance(item, ComponentItem):
-                component = getattr(item, "component", None)
-                if component is None or component.id in seen_component_ids:
-                    continue
-                components.append(self._serialize_component_for_clipboard(component))
-                seen_component_ids.add(component.id)
+            node_set = set(nodes)
+            component_wires = [
+                wire for wire in wires if wire.node_a in node_set and wire.node_b in node_set
+            ]
+            if not component_wires:
                 continue
 
-            if isinstance(item, WireItem):
-                wire = getattr(item, "wire", None)
-                if wire is None or wire.id in seen_wire_ids:
+            node_index = {node: i for i, node in enumerate(nodes)}
+            node_count = len(nodes)
+            edge_count = len(component_wires)
+
+            B = np.zeros((node_count, edge_count))
+            for e_idx, wire in enumerate(component_wires):
+                idx_a = node_index.get(wire.node_a)
+                idx_b = node_index.get(wire.node_b)
+                if idx_a is None or idx_b is None:
                     continue
-                if wire.node_a is None or wire.node_b is None:
-                    continue
-                ax, ay = wire.node_a.position
-                bx, by = wire.node_b.position
-                wires.append(
-                    {
-                        "node_a": [float(ax), float(ay)],
-                        "node_b": [float(bx), float(by)],
-                    }
-                )
-                seen_wire_ids.add(wire.id)
+                B[idx_a, e_idx] = 1.0
+                B[idx_b, e_idx] = -1.0
+
+            b = np.zeros(node_count)
+            for node, idx in node_index.items():
+                total = 0.0
+                for dipole in getattr(node, "connected_dipoles", []):
+                    current = _dipole_current_for_kcl(dipole)
+                    if getattr(dipole, "node_a", None) is node:
+                        total += current
+                    elif getattr(dipole, "node_b", None) is node:
+                        total -= current
+                b[idx] = -total
+
+            if np.all(np.abs(b) <= eps):
+                for wire in component_wires:
+                    wire_current[wire.id] = 0.0
                 continue
 
-            if isinstance(item, NodeItem):
-                node = getattr(item, "node", None)
-                if node is None or node.id in seen_node_ids:
-                    continue
-                if self._is_node_attached_to_dipole(node):
-                    continue
-                nx, ny = node.position
-                free_nodes.append(
-                    {
-                        "position": [float(nx), float(ny)],
-                        "is_ground": bool(node.is_ground),
-                    }
-                )
-                seen_node_ids.add(node.id)
+            bb_t = B @ B.T
+            bb_t_inv = np.linalg.pinv(bb_t)
+            currents = B.T @ (bb_t_inv @ b)
 
-        if not components and not wires and not free_nodes:
-            return False
+            for e_idx, wire in enumerate(component_wires):
+                value = float(currents[e_idx])
+                if abs(value) < 1e-9:
+                    value = 0.0
+                wire_current[wire.id] = value
 
-        self._clipboard_payload = {
-            "components": components,
-            "wires": wires,
-            "nodes": free_nodes,
-        }
-        return True
-
-    def cut_selection(self) -> bool:
-        """Coupe la selection courante."""
-        if not self.copy_selection():
-            return False
-        self.delete_selection()
-        return True
-
+        return wire_current
     def has_clipboard_content(self) -> bool:
         """Indique si le presse-papiers contient des elements."""
         if not self._clipboard_payload:

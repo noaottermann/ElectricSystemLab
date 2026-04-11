@@ -47,7 +47,7 @@ class WireItem(QGraphicsLineItem):
             return
         v_a = float(getattr(self.wire.node_a, "potential", 0.0))
         v_b = float(getattr(self.wire.node_b, "potential", 0.0))
-        current_value = self._compute_wire_current()
+        current_value = self._get_wire_current(scene)
         line = self.line()
         p1 = line.p1()
         p2 = line.p2()
@@ -89,7 +89,7 @@ class WireItem(QGraphicsLineItem):
 
         font = QFont("Arial", 7)
         painter.setFont(font)
-        label = f"{current_value:.3g} A"
+        label = f"{abs(current_value):.3g} A"
         offset = 8.0
         text_x = mid_x - uy * offset
         text_y = mid_y + ux * offset
@@ -97,19 +97,13 @@ class WireItem(QGraphicsLineItem):
         painter.drawText(text_rect, Qt.AlignCenter, label)
         painter.restore()
 
-    def _compute_wire_current(self) -> float:
-        """Estime un courant pour le fil a partir des dipoles connectes."""
-        node_a = self.wire.node_a
-        if node_a is None:
+    def _get_wire_current(self, scene) -> float:
+        """Recupere le courant associe au fil depuis la scene."""
+        if scene is None:
             return 0.0
-        total = 0.0
-        for dipole in getattr(node_a, "connected_dipoles", []):
-            current = float(getattr(dipole, "current", 0.0))
-            if getattr(dipole, "node_a", None) is node_a:
-                total += current
-            elif getattr(dipole, "node_b", None) is node_a:
-                total -= current
-        return total
+        if hasattr(scene, "get_wire_current"):
+            return float(scene.get_wire_current(self.wire.id))
+        return 0.0
 
     def shape(self) -> QPainterPath:
         """Retourne une zone de clic plus epaisse pour faciliter la selection."""
