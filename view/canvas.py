@@ -902,7 +902,7 @@ class CircuitScene(QGraphicsScene):
 
     def snap_to_grid(self, pos: QPointF) -> tuple[float, float]:
         """Arrondit une position (x, y) au point de grille le plus proche."""
-        if not self.snap_enabled:
+        if not self.is_snapping_active():
             return pos.x(), pos.y()
         gs = self.GRID_SIZE
         x = round(pos.x() / gs) * gs
@@ -915,6 +915,8 @@ class CircuitScene(QGraphicsScene):
         Priorite 1 : noeud existant
         Priorite 2 : grille
         """
+        if not self.is_snapping_active():
+            return scene_pos.x(), scene_pos.y()
         # Seuil d'aimantation en unites de scene
         THRESHOLD = 15.0
         
@@ -935,18 +937,24 @@ class CircuitScene(QGraphicsScene):
         if closest_node_pos and min_dist < THRESHOLD:
             return closest_node_pos
 
-        if self.snap_enabled:
-            return self.snap_to_grid(scene_pos)
-        return scene_pos.x(), scene_pos.y()
+        return self.snap_to_grid(scene_pos)
 
     def toggle_grid(self) -> None:
         """Active ou desactive l'affichage de la grille."""
         self.show_grid = not self.show_grid
+        if not self.show_grid:
+            self._clear_snap_candidates()
         self.update()
 
     def toggle_snap(self) -> None:
         """Active ou desactive l'aimantation a la grille."""
         self.snap_enabled = not self.snap_enabled
+        if not self.snap_enabled:
+            self._clear_snap_candidates()
+
+    def is_snapping_active(self) -> bool:
+        """Indique si l'aimantation est active (grille visible et aimantation active)."""
+        return bool(self.show_grid and self.snap_enabled)
 
     def toggle_nodes(self) -> None:
         """Affiche ou masque les noeuds libres."""
@@ -1014,6 +1022,8 @@ class CircuitScene(QGraphicsScene):
         extremite libre de fil), ajuste le centre pour que la borne tombe exactement
         sur la cible pendant le glisser
         """
+        if not self.is_snapping_active():
+            return proposed_pos
         if component_model is None:
             return proposed_pos
         if self._group_move_active and len(self.selectedItems()) > 1:
@@ -1806,18 +1816,22 @@ class CircuitScene(QGraphicsScene):
         current_x = node_item.pos().x()
         current_y = node_item.pos().y()
 
-        # Priorite : conserver un rattachement exact a un noeud connectable proche
-        snapped_node = self._find_nearest_connectable_node_for_wire(
-            node,
-            current_x,
-            current_y,
-            self.WIRE_SNAP_THRESHOLD,
-        )
-        if snapped_node is not None:
-            node = self._reattach_wire_node(node, snapped_node)
-            x, y = node.position
+        if self.is_snapping_active():
+            # Priorite : conserver un rattachement exact a un noeud connectable proche
+            snapped_node = self._find_nearest_connectable_node_for_wire(
+                node,
+                current_x,
+                current_y,
+                self.WIRE_SNAP_THRESHOLD,
+            )
+            if snapped_node is not None:
+                node = self._reattach_wire_node(node, snapped_node)
+                x, y = node.position
+            else:
+                x, y = self.snap_to_grid(node_item.pos())
+                node.position = (x, y)
         else:
-            x, y = self.snap_to_grid(node_item.pos())
+            x, y = current_x, current_y
             node.position = (x, y)
         node_item.setPos(QPointF(x, y))
         self._merge_overlaps_and_refresh()
@@ -1886,6 +1900,9 @@ class CircuitScene(QGraphicsScene):
         source_pos: Optional[tuple[float, float]] = None,
     ) -> QPointF:
         """Retourne la position d'aimantation pour un bout de fil pendant le drag."""
+        if not self.is_snapping_active():
+            self._clear_snap_candidates()
+            return QPointF(float(x), float(y))
         if threshold is None:
             threshold = self.WIRE_SNAP_THRESHOLD
         target_node = self._find_nearest_connectable_node_for_wire(

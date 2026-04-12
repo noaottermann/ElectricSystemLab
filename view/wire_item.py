@@ -154,7 +154,8 @@ class WireItem(QGraphicsLineItem):
         x_pos, y_pos = node.position
         x_pos += delta.x()
         y_pos += delta.y()
-        if should_snap:
+        is_snapping = getattr(scene, "is_snapping_active", None)
+        if should_snap and callable(is_snapping) and scene.is_snapping_active():
             if hasattr(scene, "get_wire_snap_position"):
                 snapped_point = scene.get_wire_snap_position(node, x_pos, y_pos)
                 node.position = (snapped_point.x(), snapped_point.y())
@@ -242,7 +243,8 @@ class WireItem(QGraphicsLineItem):
             if self._locked:
                 return self.pos()
             new_pos = value
-            if getattr(self.scene(), "snap_enabled", True):
+            is_snapping = getattr(self.scene(), "is_snapping_active", None)
+            if callable(is_snapping) and self.scene().is_snapping_active():
                 grid_size = self.scene().GRID_SIZE
                 x = round(new_pos.x() / grid_size) * grid_size
                 y = round(new_pos.y() / grid_size) * grid_size

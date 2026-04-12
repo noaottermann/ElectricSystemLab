@@ -59,6 +59,8 @@
     "action_rotate": "Rotate",
     "action_flip": "Flip",
     "action_toggle_grid": "Toggle Grid On/Off",
+    "action_show_grid": "Show Grid",
+    "action_hide_grid": "Hide Grid",
     "action_snap_grid": "Snap to Grid",
     "action_grid_size": "Grid Size...",
     "action_show_labels": "Show/Hide Labels",

@@ -1002,6 +1002,8 @@ class MainWindow(QMainWindow):
         for key, action in self.custom_actions.items():
             action.setText(Translator.tr(key))
 
+        self._update_grid_toggle_label()
+
         if hasattr(self, "toolbar_cut_action") and self.toolbar_cut_action is not None:
             self.toolbar_cut_action.setText(Translator.tr("action_cut"))
         if hasattr(self, "toolbar_copy_action") and self.toolbar_copy_action is not None:
@@ -1023,6 +1025,17 @@ class MainWindow(QMainWindow):
                 self.graphics_button.setText(Translator.tr("action_show_graphs"))
             else:
                 self.graphics_button.setText("")
+
+    def _update_grid_toggle_label(self) -> None:
+        """Met a jour le libelle de l'action grille selon l'etat courant."""
+        action = self.custom_actions.get("action_toggle_grid")
+        if action is None:
+            return
+        is_visible = True
+        if hasattr(self, "scene") and self.scene is not None:
+            is_visible = bool(getattr(self.scene, "show_grid", True))
+        label_key = "action_hide_grid" if is_visible else "action_show_grid"
+        action.setText(Translator.tr(label_key))
 
     def change_language(self, lang: str) -> None:
         """Change la langue et rafraichit l'interface."""
@@ -1256,6 +1269,7 @@ class MainWindow(QMainWindow):
         """Bascule l'affichage de la grille."""
         if hasattr(self, "circuit_controller") and self.circuit_controller is not None:
             self.circuit_controller.toggle_grid()
+        self._update_grid_toggle_label()
 
     def on_snap_grid(self) -> None:
         """Bascule l'aimantation a la grille."""

@@ -82,13 +82,14 @@ class ComponentItem(QGraphicsItem):
             scene = self.scene()
             new_pos = value
             snapped_pos = new_pos
-            if getattr(scene, "snap_enabled", True):
+            is_snapping = getattr(scene, "is_snapping_active", None)
+            if callable(is_snapping) and scene.is_snapping_active():
                 grid_size = scene.GRID_SIZE
                 x = round(new_pos.x() / grid_size) * grid_size
                 y = round(new_pos.y() / grid_size) * grid_size
                 snapped_pos = QPointF(x, y)
 
-            if hasattr(scene, "get_smart_snapped_component_position"):
+            if callable(is_snapping) and scene.is_snapping_active() and hasattr(scene, "get_smart_snapped_component_position"):
                 snapped_pos = scene.get_smart_snapped_component_position(
                     self.component,
                     snapped_pos,

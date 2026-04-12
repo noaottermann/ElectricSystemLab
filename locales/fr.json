@@ -59,6 +59,8 @@
     "action_rotate": "Pivoter",
     "action_flip": "Retourner",
     "action_toggle_grid": "Afficher la grille",
+    "action_show_grid": "Afficher la grille",
+    "action_hide_grid": "Cacher la grille",
     "action_snap_grid": "Aimanter à la grille",
     "action_grid_size": "Taille de la grille...",
     "action_show_labels": "Afficher les étiquettes",
