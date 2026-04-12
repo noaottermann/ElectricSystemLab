@@ -902,7 +902,7 @@ class CircuitScene(QGraphicsScene):
 
     def snap_to_grid(self, pos: QPointF) -> tuple[float, float]:
         """Arrondit une position (x, y) au point de grille le plus proche."""
-        if not self.is_snapping_active():
+        if not self.snap_enabled:
             return pos.x(), pos.y()
         gs = self.GRID_SIZE
         x = round(pos.x() / gs) * gs
@@ -937,7 +937,9 @@ class CircuitScene(QGraphicsScene):
         if closest_node_pos and min_dist < THRESHOLD:
             return closest_node_pos
 
-        return self.snap_to_grid(scene_pos)
+        if self.snap_enabled:
+            return self.snap_to_grid(scene_pos)
+        return scene_pos.x(), scene_pos.y()
 
     def toggle_grid(self) -> None:
         """Active ou desactive l'affichage de la grille."""
@@ -953,8 +955,8 @@ class CircuitScene(QGraphicsScene):
             self._clear_snap_candidates()
 
     def is_snapping_active(self) -> bool:
-        """Indique si l'aimantation est active (grille visible et aimantation active)."""
-        return bool(self.show_grid and self.snap_enabled)
+        """Indique si l'aimantation est active."""
+        return True
 
     def toggle_nodes(self) -> None:
         """Affiche ou masque les noeuds libres."""
@@ -1022,8 +1024,6 @@ class CircuitScene(QGraphicsScene):
         extremite libre de fil), ajuste le centre pour que la borne tombe exactement
         sur la cible pendant le glisser
         """
-        if not self.is_snapping_active():
-            return proposed_pos
         if component_model is None:
             return proposed_pos
         if self._group_move_active and len(self.selectedItems()) > 1:
@@ -1128,6 +1128,7 @@ class CircuitScene(QGraphicsScene):
         """Memorise l'etat du clic pour les gestes suivants."""
         self._press_scene_pos = scene_pos
         self._last_grid_pos = QPointF(grid_x, grid_y)
+        self._last_drag_pos = QPointF(scene_pos)
         self._group_move_active = False
         self._drag_started_on_item = False
 
@@ -1135,6 +1136,7 @@ class CircuitScene(QGraphicsScene):
         """Reinitialise l'etat du clic apres un geste."""
         self._drag_started_on_item = False
         self._press_scene_pos = None
+        self._last_drag_pos = None
         self._suppress_move_until_release = False
         if self._selection_snapshot is not None:
             for item in self._selection_snapshot:
@@ -1237,6 +1239,8 @@ class CircuitScene(QGraphicsScene):
 
     def _handle_group_move(self, event: object) -> bool:
         """Gere le deplacement de groupe en mode pointeur."""
+        if getattr(self, "_wire_drag_active", False):
+            return False
         if self.current_tool != "pointer" or not self.selectedItems() or not (event.buttons() & Qt.LeftButton):
             return False
         if not self._drag_started_on_item:
@@ -1287,11 +1291,18 @@ class CircuitScene(QGraphicsScene):
                 preserve_internal_nodes.add(node)
         preserve_node_model_ids = {node.id for node in preserve_internal_nodes if node is not None}
 
+        use_grid_snap = bool(self.snap_enabled)
+        if self._last_drag_pos is None:
+            self._last_drag_pos = event.scenePos()
+        drag_delta = event.scenePos() - self._last_drag_pos
+
         current_grid_x, current_grid_y = self.snap_to_grid(event.scenePos())
         current_grid_pos = QPointF(current_grid_x, current_grid_y)
         grid_delta = current_grid_pos - self._last_grid_pos
 
-        if grid_delta.manhattanLength() > 0:
+        move_delta = grid_delta if use_grid_snap else drag_delta
+
+        if move_delta.manhattanLength() > 0:
             if not self._group_move_active:
                 self._push_undo_snapshot()
             self._group_move_active = True
@@ -1303,7 +1314,7 @@ class CircuitScene(QGraphicsScene):
                 if isinstance(item, NodeItem):
                     if hasattr(item, "is_locked") and item.is_locked():
                         continue
-                    item.setPos(item.pos() + grid_delta)
+                    item.setPos(item.pos() + move_delta)
                     item.node.position = (item.pos().x(), item.pos().y())
                     moved_wire_node_ids.add(id(item.node))
 
@@ -1311,7 +1322,7 @@ class CircuitScene(QGraphicsScene):
                 if isinstance(item, ComponentItem):
                     if hasattr(item, "is_locked") and item.is_locked():
                         continue
-                    item.setPos(item.pos() + grid_delta)
+                    item.setPos(item.pos() + move_delta)
                 elif isinstance(item, WireItem):
                     if hasattr(item, "is_locked") and item.is_locked():
                         continue
@@ -1321,16 +1332,18 @@ class CircuitScene(QGraphicsScene):
                             detach = False
                     snap_endpoints = detach and not selected_component_nodes
                     item.apply_scene_delta(
-                        grid_delta,
+                        move_delta,
                         detach_shared_nodes=detach,
                         moved_node_ids=moved_wire_node_ids,
-                        snap_endpoints=snap_endpoints,
+                        snap_endpoints=False,
+                        allow_grid_snap=use_grid_snap,
                         preserve_node_model_ids=preserve_node_model_ids,
                     )
 
             self._sync_free_node_items_from_model()
 
             self._last_grid_pos = current_grid_pos
+            self._last_drag_pos = event.scenePos()
 
         event.accept()
         return True
@@ -1816,20 +1829,19 @@ class CircuitScene(QGraphicsScene):
         current_x = node_item.pos().x()
         current_y = node_item.pos().y()
 
-        if self.is_snapping_active():
-            # Priorite : conserver un rattachement exact a un noeud connectable proche
-            snapped_node = self._find_nearest_connectable_node_for_wire(
-                node,
-                current_x,
-                current_y,
-                self.WIRE_SNAP_THRESHOLD,
-            )
-            if snapped_node is not None:
-                node = self._reattach_wire_node(node, snapped_node)
-                x, y = node.position
-            else:
-                x, y = self.snap_to_grid(node_item.pos())
-                node.position = (x, y)
+        # Priorite : conserver un rattachement exact a un noeud connectable proche
+        snapped_node = self._find_nearest_connectable_node_for_wire(
+            node,
+            current_x,
+            current_y,
+            self.WIRE_SNAP_THRESHOLD,
+        )
+        if snapped_node is not None:
+            node = self._reattach_wire_node(node, snapped_node)
+            x, y = node.position
+        elif self.snap_enabled:
+            x, y = self.snap_to_grid(node_item.pos())
+            node.position = (x, y)
         else:
             x, y = current_x, current_y
             node.position = (x, y)
@@ -1898,11 +1910,9 @@ class CircuitScene(QGraphicsScene):
         y: float,
         threshold: Optional[float] = None,
         source_pos: Optional[tuple[float, float]] = None,
+        allow_grid_snap: bool = True,
     ) -> QPointF:
         """Retourne la position d'aimantation pour un bout de fil pendant le drag."""
-        if not self.is_snapping_active():
-            self._clear_snap_candidates()
-            return QPointF(float(x), float(y))
         if threshold is None:
             threshold = self.WIRE_SNAP_THRESHOLD
         target_node = self._find_nearest_connectable_node_for_wire(
@@ -1916,8 +1926,10 @@ class CircuitScene(QGraphicsScene):
             tx, ty = target_node.position
             return QPointF(tx, ty)
         self._clear_snap_candidates()
-        snapped_x, snapped_y = self.snap_to_grid(QPointF(x, y))
-        return QPointF(snapped_x, snapped_y)
+        if allow_grid_snap and self.snap_enabled:
+            snapped_x, snapped_y = self.snap_to_grid(QPointF(x, y))
+            return QPointF(snapped_x, snapped_y)
+        return QPointF(float(x), float(y))
 
     def _reattach_wire_node(self, old_node, target_node) -> object:
         """Rattache un noeud de fil vers une cible."""
@@ -2022,7 +2034,12 @@ class CircuitScene(QGraphicsScene):
         delta = wire_item.pos()
         if delta.manhattanLength() > 0.1:
             wire_item.setPos(0, 0)
-            wire_item.apply_scene_delta(delta, detach_shared_nodes=True, snap_endpoints=True)
+            wire_item.apply_scene_delta(
+                delta,
+                detach_shared_nodes=True,
+                snap_endpoints=False,
+                allow_grid_snap=True,
+            )
             wire_item.refresh_geometry()
         else:
             wire_item.refresh_geometry()

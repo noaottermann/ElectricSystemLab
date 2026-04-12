@@ -12,11 +12,14 @@ class WireItem(QGraphicsLineItem):
         self.wire = wire_model
         self._is_selected = False
         self._locked = False
+        self._drag_last_scene_pos = None
+        self._drag_last_grid_pos = None
         
         self.setPen(QPen(Qt.black, 2))
-        self.setFlags(QGraphicsItem.ItemIsSelectable | 
-                      QGraphicsItem.ItemIsMovable | 
-                      QGraphicsItem.ItemSendsGeometryChanges)
+        self.setFlags(
+            QGraphicsItem.ItemIsSelectable
+            | QGraphicsItem.ItemSendsGeometryChanges
+        )
         self.setZValue(0)
         
         self.refresh_geometry()
@@ -147,6 +150,7 @@ class WireItem(QGraphicsLineItem):
         delta: QPointF,
         scene,
         should_snap: bool,
+        allow_grid_snap: bool,
     ) -> None:
         """Deplace un noeud et applique l'aimantation si demandee."""
         if node is None:
@@ -157,7 +161,12 @@ class WireItem(QGraphicsLineItem):
         is_snapping = getattr(scene, "is_snapping_active", None)
         if should_snap and callable(is_snapping) and scene.is_snapping_active():
             if hasattr(scene, "get_wire_snap_position"):
-                snapped_point = scene.get_wire_snap_position(node, x_pos, y_pos)
+                snapped_point = scene.get_wire_snap_position(
+                    node,
+                    x_pos,
+                    y_pos,
+                    allow_grid_snap=allow_grid_snap,
+                )
                 node.position = (snapped_point.x(), snapped_point.y())
             else:
                 snapped = scene.get_snapped_position(QPointF(x_pos, y_pos))
@@ -171,6 +180,7 @@ class WireItem(QGraphicsLineItem):
         detach_shared_nodes: bool = False,
         moved_node_ids: Optional[set[int]] = None,
         snap_endpoints: bool = True,
+        allow_grid_snap: bool = True,
         preserve_node_model_ids: Optional[set[int]] = None,
     ) -> None:
         """Deplace un fil via ses noeuds avec aimantation optionnelle des extremites."""
@@ -218,7 +228,13 @@ class WireItem(QGraphicsLineItem):
                 # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_a_id)
             else:
-                self._move_node_endpoint(self.wire.node_a, delta, scene, should_snap_endpoints)
+                self._move_node_endpoint(
+                    self.wire.node_a,
+                    delta,
+                    scene,
+                    should_snap_endpoints,
+                    allow_grid_snap,
+                )
                 moved_node_ids.add(node_a_id)
 
         node_b_id = id(self.wire.node_b)
@@ -227,7 +243,13 @@ class WireItem(QGraphicsLineItem):
                 # Conserve l'attache : le dipole selectionne met a jour ce noeud.
                 moved_node_ids.add(node_b_id)
             else:
-                self._move_node_endpoint(self.wire.node_b, delta, scene, should_snap_endpoints)
+                self._move_node_endpoint(
+                    self.wire.node_b,
+                    delta,
+                    scene,
+                    should_snap_endpoints,
+                    allow_grid_snap,
+                )
                 moved_node_ids.add(node_b_id)
 
         self.refresh_geometry()
@@ -243,8 +265,7 @@ class WireItem(QGraphicsLineItem):
             if self._locked:
                 return self.pos()
             new_pos = value
-            is_snapping = getattr(self.scene(), "is_snapping_active", None)
-            if callable(is_snapping) and self.scene().is_snapping_active():
+            if getattr(self.scene(), "snap_enabled", True):
                 grid_size = self.scene().GRID_SIZE
                 x = round(new_pos.x() / grid_size) * grid_size
                 y = round(new_pos.y() / grid_size) * grid_size
@@ -274,7 +295,6 @@ class WireItem(QGraphicsLineItem):
     def set_locked(self, locked: bool) -> None:
         """Verrouille ou deverrouille le fil."""
         self._locked = bool(locked)
-        self.setFlag(QGraphicsItem.ItemIsMovable, not self._locked)
 
     def is_locked(self) -> bool:
         """Indique si le fil est verrouille."""
@@ -283,8 +303,73 @@ class WireItem(QGraphicsLineItem):
     def mouseReleaseEvent(self, event) -> None:
         """Finalise le glisser d'un fil entier."""
         super().mouseReleaseEvent(event)
+
+        self._drag_last_scene_pos = None
+        self._drag_last_grid_pos = None
+        scene = self.scene()
+        if scene is not None:
+            setattr(scene, "_wire_drag_active", False)
         
         # Si le fil entier a ete deplace
         if self.pos().manhattanLength() > 0.1:
              if self.scene():
                  self.scene().handle_wire_move(self)
+
+    def mousePressEvent(self, event) -> None:
+        """Prepare un glisser de fil entier."""
+        if self._locked:
+            super().mousePressEvent(event)
+            return
+        if event.button() == Qt.LeftButton:
+            self._drag_last_scene_pos = event.scenePos()
+            scene = self.scene()
+            if scene is not None:
+                setattr(scene, "_wire_drag_active", True)
+            if scene is not None and getattr(scene, "snap_enabled", True):
+                grid_x, grid_y = scene.snap_to_grid(event.scenePos())
+                self._drag_last_grid_pos = QPointF(grid_x, grid_y)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        """Met a jour les extremites pendant le glisser."""
+        if self._locked:
+            super().mouseMoveEvent(event)
+            return
+        if self._drag_last_scene_pos is None:
+            super().mouseMoveEvent(event)
+            return
+
+        scene = self.scene()
+        if scene is None:
+            super().mouseMoveEvent(event)
+            return
+
+        if getattr(scene, "snap_enabled", True):
+            grid_x, grid_y = scene.snap_to_grid(event.scenePos())
+            current_grid_pos = QPointF(grid_x, grid_y)
+            if self._drag_last_grid_pos is None:
+                self._drag_last_grid_pos = current_grid_pos
+            delta = current_grid_pos - self._drag_last_grid_pos
+            if delta.manhattanLength() <= 0:
+                return
+            self.apply_scene_delta(
+                delta,
+                detach_shared_nodes=True,
+                snap_endpoints=False,
+                allow_grid_snap=True,
+            )
+            self._drag_last_grid_pos = current_grid_pos
+            self._drag_last_scene_pos = event.scenePos()
+        else:
+            delta = event.scenePos() - self._drag_last_scene_pos
+            if delta.manhattanLength() <= 0:
+                return
+            self.apply_scene_delta(
+                delta,
+                detach_shared_nodes=True,
+                snap_endpoints=False,
+                allow_grid_snap=False,
+            )
+            self._drag_last_scene_pos = event.scenePos()
+        self.setPos(0, 0)
+        event.accept()
