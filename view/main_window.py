@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.include_simulation_in_export = False
         self._realtime_paused = False
         self._realtime_speed_multiplier = 1.0
+        self._realtime_speed_accumulator = 0.0
         
         # Initialisation
         self.create_actions()
@@ -933,7 +934,7 @@ class MainWindow(QMainWindow):
         self.simulation_bar.setObjectName("simulationToolbar")
         self.simulation_bar.setMovable(False)
         self.simulation_bar.setFloatable(False)
-        self.simulation_bar.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.simulation_bar.setToolButtonStyle(Qt.ToolButtonIconOnly)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -953,6 +954,7 @@ class MainWindow(QMainWindow):
         self.simulation_bar.addAction(self.custom_actions["action_sim_export_results"])
 
         self.addToolBar(Qt.TopToolBarArea, self.simulation_bar)
+        self._apply_simulation_icons()
 
     def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
         """Assigne une icone depuis assets, avec fallback optionnel."""
@@ -989,6 +991,19 @@ class MainWindow(QMainWindow):
         self._set_action_icon_from_asset(self.custom_actions["action_rotate"], "toolbar/rotate.png")
         self._set_action_icon_from_asset(self.custom_actions["action_flip"], "toolbar/flip.png")
         self._set_action_icon_from_asset(self.toolbar_delete_action, "toolbar/delete.png")
+
+    def _apply_simulation_icons(self) -> None:
+        """Mappe les actions de la barre simulation sur les icones du dossier assets/simulation."""
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_run_dc"], "simulation/run_dc.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_run_transient"], "simulation/run_transient.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_run_realtime"], "simulation/run_real_time.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_stop"], "simulation/stop.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_step"], "simulation/step.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_speed"], "simulation/speed.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_jump_time"], "simulation/jump_to.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_reset"], "simulation/reset.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_export_results"], "simulation/export.png")
+        self._update_pause_toggle_label()
 
     def retranslate_ui(self) -> None:
         """Met a jour tous les textes de l'interface."""
@@ -1080,6 +1095,8 @@ class MainWindow(QMainWindow):
             return
         label_key = "action_sim_resume" if self._realtime_paused else "action_sim_pause"
         action.setText(Translator.tr(label_key))
+        icon_name = "simulation/resume.png" if self._realtime_paused else "simulation/pause.png"
+        self._set_action_icon_from_asset(action, icon_name)
 
     def change_language(self, lang: str) -> None:
         """Change la langue et rafraichit l'interface."""
@@ -1466,14 +1483,22 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
             return
 
-        result = self.simulation_controller.tick_realtime_transient()
-        if result is None and not self.simulation_controller.is_realtime_running:
-            if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
-                self.realtime_timer.stop()
-            self._set_realtime_actions_state(False)
-        if hasattr(self, "scene") and self.scene is not None:
-            if hasattr(self.scene, "update_overlay_indicators"):
-                self.scene.update_overlay_indicators()
+        self._realtime_speed_accumulator += float(self._realtime_speed_multiplier)
+        steps = int(self._realtime_speed_accumulator)
+        if steps <= 0:
+            return
+        self._realtime_speed_accumulator -= steps
+
+        for _ in range(steps):
+            result = self.simulation_controller.tick_realtime_transient()
+            if result is None and not self.simulation_controller.is_realtime_running:
+                if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+                    self.realtime_timer.stop()
+                self._set_realtime_actions_state(False)
+                break
+            if hasattr(self, "scene") and self.scene is not None:
+                if hasattr(self.scene, "update_overlay_indicators"):
+                    self.scene.update_overlay_indicators()
 
     def on_run_simulation_realtime(self) -> None:
         """Lance une simulation transitoire avec rafraichissement temps reel du graphe."""
@@ -1513,7 +1538,8 @@ class MainWindow(QMainWindow):
         self._update_pause_toggle_label()
         self._realtime_auto_open_graph_once = True
         self._set_realtime_actions_state(True)
-        self._realtime_timer_interval_ms = max(30, int(time_step * 1000 / self._realtime_speed_multiplier))
+        self._realtime_speed_accumulator = 0.0
+        self._realtime_timer_interval_ms = max(30, int(time_step * 1000))
         self.realtime_timer.start(self._realtime_timer_interval_ms)
         self._on_realtime_tick()
 
@@ -1582,6 +1608,7 @@ class MainWindow(QMainWindow):
         if not ok:
             return
         self._realtime_speed_multiplier = float(value)
+        self._realtime_speed_accumulator = 0.0
 
         if (
             hasattr(self, "simulation_controller")
@@ -1589,7 +1616,7 @@ class MainWindow(QMainWindow):
             and self.simulation_controller.is_realtime_running
         ):
             base_step = self.simulation_controller.realtime_time_step
-            self._realtime_timer_interval_ms = max(30, int(base_step * 1000 / self._realtime_speed_multiplier))
+            self._realtime_timer_interval_ms = max(30, int(base_step * 1000))
             if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
                 self.realtime_timer.start(self._realtime_timer_interval_ms)
 
