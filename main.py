@@ -11,7 +11,7 @@ from utils.translator import Translator
 from utils.assets import get_logo_icon, logo_exists
 
 #TODO certaines clés de traduction sont dupliquées
-# TODO cliquer sur un noeud ne sélectionne pas le fil en entier
+
 def _setup_windows_icon():
     """Configure l'icône pour Windows (taskbar et autres)."""
     if platform.system() == "Windows":

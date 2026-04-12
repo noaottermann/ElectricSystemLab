@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QStatusBar,
     QStyle,
+    QSizePolicy,
     QToolBar,
     QWidget,
 )
@@ -59,12 +60,15 @@ class MainWindow(QMainWindow):
         self._configure_window_geometry()
         self._set_window_logo()
         self.include_simulation_in_export = False
+        self._realtime_paused = False
+        self._realtime_speed_multiplier = 1.0
         
         # Initialisation
         self.create_actions()
         self.create_shortcuts()
         self.setup_menus()
         self.setup_toolbar()
+        self.setup_simulation_bar()
 
         # Barre de statut
         
@@ -467,14 +471,20 @@ class MainWindow(QMainWindow):
         self._create_simulation_actions()
 
     def _create_simulation_actions(self) -> None:
-        """Cree les actions du menu Simulation."""
+        """Cree les actions de simulation."""
         self._make_action("action_sim_run_dc", None, self.on_run_simulation_dc)
         self._make_action("action_sim_run_transient", None, self.on_run_simulation_transient)
         self._make_action("action_sim_run_realtime", None, self.on_run_simulation_realtime)
-        self._make_action("action_sim_stop_realtime", None, self.on_stop_simulation_realtime)
+        self._make_action("action_sim_pause", None, self.on_pause_resume_simulation)
+        self._make_action("action_sim_stop", None, self.on_stop_simulation_realtime)
+        self._make_action("action_sim_step", None, self.on_step_simulation)
+        self._make_action("action_sim_speed", None, self.on_set_simulation_speed)
+        self._make_action("action_sim_jump_time", None, self.on_jump_simulation_time)
+        self._make_action("action_sim_reset", None, self.on_reset_simulation)
         self._make_action("action_sim_export_results", None, self.on_export_simulation_results)
-        self._make_action("action_sim_export_csv", None, self.on_export_transient_csv)
-        self.custom_actions["action_sim_stop_realtime"].setEnabled(False)
+        self.custom_actions["action_sim_pause"].setEnabled(False)
+        self.custom_actions["action_sim_stop"].setEnabled(False)
+        self.custom_actions["action_sim_step"].setEnabled(False)
 
     def _make_action(self, key, shortcut=None, slot=None) -> QAction:
         """Cree une action Qt et l'enregistre dans le dictionnaire."""
@@ -684,23 +694,10 @@ class MainWindow(QMainWindow):
         self.menu_edit = menubar.addMenu('')
         self.menu_view = menubar.addMenu('')
         self.menu_options = menubar.addMenu('')
-        self.menu_simulation = menubar.addMenu('')
-        
         self._setup_file_menu()
         self._setup_edit_menu()
         self._setup_view_menu()
         self._setup_options_menu()
-        self._setup_simulation_menu()
-
-    def _setup_simulation_menu(self) -> None:
-        """Construit le menu Simulation."""
-        self.menu_simulation.addAction(self.custom_actions["action_sim_run_dc"])
-        self.menu_simulation.addAction(self.custom_actions["action_sim_run_transient"])
-        self.menu_simulation.addAction(self.custom_actions["action_sim_run_realtime"])
-        self.menu_simulation.addAction(self.custom_actions["action_sim_stop_realtime"])
-        self.menu_simulation.addSeparator()
-        self.menu_simulation.addAction(self.custom_actions["action_sim_export_results"])
-        self.menu_simulation.addAction(self.custom_actions["action_sim_export_csv"])
 
     def _setup_file_menu(self) -> None:
         """Construit le menu Fichier."""
@@ -930,6 +927,33 @@ class MainWindow(QMainWindow):
 
         self._apply_toolbar_icons()
 
+    def setup_simulation_bar(self) -> None:
+        """Construit la barre de simulation en haut a droite."""
+        self.simulation_bar = QToolBar("Simulation", self)
+        self.simulation_bar.setObjectName("simulationToolbar")
+        self.simulation_bar.setMovable(False)
+        self.simulation_bar.setFloatable(False)
+        self.simulation_bar.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.simulation_bar.addWidget(spacer)
+
+        self.simulation_bar.addAction(self.custom_actions["action_sim_run_dc"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_run_transient"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_run_realtime"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_pause"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_stop"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_step"])
+        self.simulation_bar.addSeparator()
+        self.simulation_bar.addAction(self.custom_actions["action_sim_speed"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_jump_time"])
+        self.simulation_bar.addSeparator()
+        self.simulation_bar.addAction(self.custom_actions["action_sim_reset"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_export_results"])
+
+        self.addToolBar(Qt.TopToolBarArea, self.simulation_bar)
+
     def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
         """Assigne une icone depuis assets, avec fallback optionnel."""
         icon_path = get_asset_path(relative_asset_path)
@@ -985,7 +1009,6 @@ class MainWindow(QMainWindow):
         self.menu_edit.setTitle(Translator.tr("menu_edit"))
         self.menu_view.setTitle(Translator.tr("menu_view"))
         self.menu_options.setTitle(Translator.tr("menu_options"))
-        self.menu_simulation.setTitle(Translator.tr("menu_simulation"))
 
         self.menu_recent_files.setTitle(Translator.tr("menu_recent_files"))
         self.menu_selection_filter.setTitle(Translator.tr("menu_selection_filter"))
@@ -1004,6 +1027,7 @@ class MainWindow(QMainWindow):
 
         self._update_grid_toggle_label()
         self._update_snap_toggle_label()
+        self._update_pause_toggle_label()
 
         if hasattr(self, "toolbar_cut_action") and self.toolbar_cut_action is not None:
             self.toolbar_cut_action.setText(Translator.tr("action_cut"))
@@ -1047,6 +1071,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, "scene") and self.scene is not None:
             is_enabled = bool(getattr(self.scene, "snap_enabled", True))
         label_key = "action_snap_grid_off" if is_enabled else "action_snap_grid_on"
+        action.setText(Translator.tr(label_key))
+
+    def _update_pause_toggle_label(self) -> None:
+        """Met a jour le libelle Pause/Resume selon l'etat courant."""
+        action = self.custom_actions.get("action_sim_pause")
+        if action is None:
+            return
+        label_key = "action_sim_resume" if self._realtime_paused else "action_sim_pause"
         action.setText(Translator.tr(label_key))
 
     def change_language(self, lang: str) -> None:
@@ -1406,8 +1438,12 @@ class MainWindow(QMainWindow):
         """Synchronise l'etat des actions de simulation temps reel."""
         if "action_sim_run_realtime" in self.custom_actions:
             self.custom_actions["action_sim_run_realtime"].setEnabled(not is_running)
-        if "action_sim_stop_realtime" in self.custom_actions:
-            self.custom_actions["action_sim_stop_realtime"].setEnabled(is_running)
+        if "action_sim_stop" in self.custom_actions:
+            self.custom_actions["action_sim_stop"].setEnabled(is_running)
+        if "action_sim_pause" in self.custom_actions:
+            self.custom_actions["action_sim_pause"].setEnabled(is_running)
+        if "action_sim_step" in self.custom_actions:
+            self.custom_actions["action_sim_step"].setEnabled(is_running)
 
     def _on_realtime_update(self, result: dict) -> None:
         """Met a jour le panneau graphiques a chaque tick temps reel."""
@@ -1421,6 +1457,8 @@ class MainWindow(QMainWindow):
         """Callback appele a la fin d'une simulation temps reel."""
         if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
             self.realtime_timer.stop()
+        self._realtime_paused = False
+        self._update_pause_toggle_label()
         self._set_realtime_actions_state(False)
 
     def _on_realtime_tick(self) -> None:
@@ -1471,9 +1509,11 @@ class MainWindow(QMainWindow):
         if not started:
             return
 
+        self._realtime_paused = False
+        self._update_pause_toggle_label()
         self._realtime_auto_open_graph_once = True
         self._set_realtime_actions_state(True)
-        self._realtime_timer_interval_ms = max(30, int(time_step * 1000))
+        self._realtime_timer_interval_ms = max(30, int(time_step * 1000 / self._realtime_speed_multiplier))
         self.realtime_timer.start(self._realtime_timer_interval_ms)
         self._on_realtime_tick()
 
@@ -1483,10 +1523,115 @@ class MainWindow(QMainWindow):
             self.realtime_timer.stop()
         if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
             self.simulation_controller.stop_realtime_transient()
+        self._realtime_paused = False
+        self._update_pause_toggle_label()
         self._realtime_auto_open_graph_once = False
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.set_transient_window(None)
         self._set_realtime_actions_state(False)
+
+    def on_pause_resume_simulation(self) -> None:
+        """Met en pause ou reprend la simulation temps reel."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+        if not self.simulation_controller.is_realtime_running:
+            return
+
+        if self._realtime_paused:
+            self._realtime_paused = False
+            if hasattr(self, "realtime_timer"):
+                self.realtime_timer.start(self._realtime_timer_interval_ms)
+            if self.app_controller is not None:
+                self.app_controller.set_status("Simulation reprise")
+        else:
+            self._realtime_paused = True
+            if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+                self.realtime_timer.stop()
+            if self.app_controller is not None:
+                self.app_controller.set_status("Simulation en pause")
+
+        self._update_pause_toggle_label()
+
+    def on_step_simulation(self) -> None:
+        """Execute un pas unique de simulation temps reel."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+        if not self.simulation_controller.is_realtime_running:
+            if self.app_controller is not None:
+                self.app_controller.set_status("Simulation temps reel non demarree")
+            return
+
+        result = self.simulation_controller.tick_realtime_transient()
+        if result is None:
+            return
+        if hasattr(self, "scene") and self.scene is not None:
+            if hasattr(self.scene, "update_overlay_indicators"):
+                self.scene.update_overlay_indicators()
+
+    def on_set_simulation_speed(self) -> None:
+        """Configure la vitesse de la simulation temps reel."""
+        value, ok = QInputDialog.getDouble(
+            self,
+            Translator.tr("action_sim_speed"),
+            Translator.tr("action_sim_speed"),
+            self._realtime_speed_multiplier,
+            0.1,
+            100.0,
+            2,
+        )
+        if not ok:
+            return
+        self._realtime_speed_multiplier = float(value)
+
+        if (
+            hasattr(self, "simulation_controller")
+            and self.simulation_controller is not None
+            and self.simulation_controller.is_realtime_running
+        ):
+            base_step = self.simulation_controller.realtime_time_step
+            self._realtime_timer_interval_ms = max(30, int(base_step * 1000 / self._realtime_speed_multiplier))
+            if hasattr(self, "realtime_timer") and self.realtime_timer.isActive():
+                self.realtime_timer.start(self._realtime_timer_interval_ms)
+
+    def on_jump_simulation_time(self) -> None:
+        """Definit un temps courant pour la simulation temps reel."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+        if not self.simulation_controller.is_realtime_running:
+            if self.app_controller is not None:
+                self.app_controller.set_status("Simulation temps reel non demarree")
+            return
+
+        value, ok = QInputDialog.getDouble(
+            self,
+            Translator.tr("action_sim_jump_time"),
+            Translator.tr("action_sim_jump_time"),
+            self.simulation_controller.realtime_elapsed_time,
+            0.0,
+            1e9,
+            6,
+        )
+        if not ok:
+            return
+        self.simulation_controller._realtime_current_time = float(value)
+        if self.app_controller is not None:
+            self.app_controller.set_status(f"Temps fixe a {value:.4g}s")
+
+    def on_reset_simulation(self) -> None:
+        """Reinitialise les etats de simulation."""
+        if hasattr(self, "simulation_controller") and self.simulation_controller is not None:
+            self.simulation_controller.stop_realtime_transient(status_message=None)
+            self.simulation_controller.last_transient_result = None
+        if hasattr(self, "model") and self.model is not None:
+            self.model.reset_simulation()
+        if hasattr(self, "scene") and self.scene is not None:
+            if hasattr(self.scene, "update_overlay_indicators"):
+                self.scene.update_overlay_indicators()
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            if hasattr(self.graph_panel, "clear_results"):
+                self.graph_panel.clear_results()
+        if self.app_controller is not None:
+            self.app_controller.set_status("Simulation reinitialisee")
 
     def on_export_simulation_results(self) -> None:
         """Exporte uniquement les resultats de simulation."""
