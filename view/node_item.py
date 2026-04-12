@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QBrush, QColor, QPainterPath, QPen
-from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
+from PyQt5.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
 
 class NodeItem(QGraphicsEllipseItem):
@@ -14,10 +14,14 @@ class NodeItem(QGraphicsEllipseItem):
         super().__init__(-self.RADIUS, -self.RADIUS, self.RADIUS * 2, self.RADIUS * 2)
         self.node = node_model
         self._drag_active = False
+        self._drag_started = False
         self._undo_snapshot_taken = False
         self._drag_offset = QPointF(0, 0)
         self._locked = False
         self._snap_candidate = False
+        self._select_wire_on_release = False
+        self._wire_item_on_click = None
+        self._press_scene_pos = None
 
         self.setFlags(
             QGraphicsItem.ItemIsSelectable
@@ -72,11 +76,28 @@ class NodeItem(QGraphicsEllipseItem):
             if self._locked:
                 event.ignore()
                 return
+            scene = self.scene()
+            self._wire_item_on_click = None
+            self._select_wire_on_release = False
+            self._press_scene_pos = event.scenePos()
+            self._drag_started = False
+            if scene is not None:
+                # Si le noeud est une extremite de fil, selectionne le fil au clic (apres release).
+                model = getattr(scene, "model", None)
+                if model is not None and getattr(model, "wires", None):
+                    for wire in model.wires.values():
+                        if wire.node_a is self.node or wire.node_b is self.node:
+                            for item in scene.items():
+                                if hasattr(item, "wire") and getattr(item, "wire", None) is wire:
+                                    self._wire_item_on_click = item
+                                    self._select_wire_on_release = True
+                                    break
+                        if self._wire_item_on_click is not None:
+                            break
             self._drag_active = True
             self._undo_snapshot_taken = False
             self.setCursor(Qt.ClosedHandCursor)
             self._drag_offset = self.pos() - event.scenePos()
-            scene = self.scene()
             if scene is not None:
                 # Ensure model is aligned before dragging to avoid snapping back.
                 self.node.position = (self.pos().x(), self.pos().y())
@@ -92,6 +113,20 @@ class NodeItem(QGraphicsEllipseItem):
             self._drag_active = False
             self._undo_snapshot_taken = False
             scene = self.scene()
+            if self._select_wire_on_release and not self._drag_started and self._wire_item_on_click is not None:
+                if scene is not None and not (event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier)):
+                    scene.clearSelection()
+                self._wire_item_on_click.setSelected(True)
+                self._select_wire_on_release = False
+                self._wire_item_on_click = None
+                self._press_scene_pos = None
+                self._drag_started = False
+                if scene is not None and getattr(scene, "current_tool", "pointer") != "pointer":
+                    self.setCursor(Qt.CrossCursor)
+                else:
+                    self.setCursor(Qt.OpenHandCursor)
+                event.accept()
+                return
             if scene is not None and getattr(scene, "current_tool", "pointer") != "pointer":
                 self.setCursor(Qt.CrossCursor)
             else:
@@ -99,6 +134,10 @@ class NodeItem(QGraphicsEllipseItem):
             scene = self.scene()
             if scene and hasattr(scene, "finalize_node_move"):
                 scene.finalize_node_move(self)
+            self._select_wire_on_release = False
+            self._wire_item_on_click = None
+            self._press_scene_pos = None
+            self._drag_started = False
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -109,6 +148,11 @@ class NodeItem(QGraphicsEllipseItem):
             scene = self.scene()
             if scene is None:
                 return
+            if self._press_scene_pos is not None and not self._drag_started:
+                drag_distance = (event.scenePos() - self._press_scene_pos).manhattanLength()
+                if drag_distance >= QApplication.startDragDistance():
+                    self._drag_started = True
+                    self._select_wire_on_release = False
             target_pos = event.scenePos() + self._drag_offset
             if hasattr(scene, "get_wire_snap_position"):
                 snapped = scene.get_wire_snap_position(
