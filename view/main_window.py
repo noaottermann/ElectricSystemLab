@@ -943,6 +943,23 @@ class MainWindow(QMainWindow):
         self.simulation_bar.setFloatable(False)
         self.simulation_bar.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.simulation_bar.setAutoFillBackground(True)
+        self.simulation_bar.setStyleSheet(
+            """
+            QToolBar#simulationToolbar {
+                background: #f6f4ef;
+                border-left: 2px solid #b8b1a6;
+                border-right: 2px solid #b8b1a6;
+                border-bottom: 2px solid #b8b1a6;
+                spacing: 6px;
+                padding: 4px 6px;
+            }
+            QToolBar#simulationToolbar QToolButton {
+                min-height: 28px;
+                min-width: 28px;
+                padding: 3px;
+            }
+            """
+        )
 
         self.simulation_filename_label = QLabel("")
         self.simulation_filename_label.setObjectName("simulationFilename")
