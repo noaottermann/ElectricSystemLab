@@ -58,7 +58,7 @@ class ComponentsPanel(QWidget):
 		self.components_list.setObjectName("componentsList")
 		self.components_list.setViewMode(QListWidget.ListMode)
 		self.components_list.setIconSize(QSize(44, 44))
-		self.components_list.setSpacing(4)
+		self.components_list.setSpacing(0)
 		self.components_list.setUniformItemSizes(True)
 		self.components_list.setSelectionMode(QListWidget.SingleSelection)
 		self.components_list.setDragEnabled(True)
@@ -123,8 +123,6 @@ class ComponentsPanel(QWidget):
 			else:
 				self._apply_search_filter("")
 
-		if hasattr(self, "components_title_label"):
-			self.components_title_label.setText(Translator.tr("components_panel_title"))
 
 	def resizeEvent(self, event: object) -> None:
 		"""Reagit aux redimensionnements pour ajuster la liste des categories."""
@@ -164,21 +162,18 @@ class ComponentsPanel(QWidget):
 		frame = QFrame()
 		frame.setObjectName("componentsPane")
 		layout = QVBoxLayout(frame)
-		layout.setContentsMargins(10, 8, 10, 8)
+		layout.setContentsMargins(10, 0, 10, 8)
+		layout.setSpacing(0)
 		self._components_layout = layout
 		self._components_left_margin = 10
-		self._components_top_margin = 8
+		self._components_top_margin = 0
 		self._components_right_margin = 10
 		self._components_bottom_margin = 8
 
 		self.header_widget = QWidget()
 		header_layout = QVBoxLayout(self.header_widget)
 		header_layout.setContentsMargins(0, 0, 0, 0)
-		header_layout.setSpacing(6)
-
-		self.components_title_label = QLabel(Translator.tr("components_panel_title"))
-		self.components_title_label.setObjectName("componentsTitle")
-		header_layout.addWidget(self.components_title_label)
+		header_layout.setSpacing(0)
 
 		self.search_input = QLineEdit()
 		self.search_input.setPlaceholderText(Translator.tr("components_search_placeholder"))
@@ -248,7 +243,7 @@ class ComponentsPanel(QWidget):
 				background: transparent;
 			}
 			QListWidget::item {
-				padding: 6px 6px 6px 0px;
+				padding: 1px 6px 1px 0px;
 				border-radius: 8px;
 				color: #2a2a2a;
 			}
@@ -262,12 +257,6 @@ class ComponentsPanel(QWidget):
 			}
 			QListWidget::item:selected {
 				background: #ffe2b6;
-			}
-			QLabel#componentsTitle {
-				color: #2a2a2a;
-				font-size: 14px;
-				font-weight: 600;
-				padding: 4px 2px;
 			}
 			"""
 		)

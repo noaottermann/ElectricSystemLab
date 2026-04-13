@@ -129,7 +129,10 @@ class MainWindow(QMainWindow):
 
         self.graph_panel_container = QWidget()
         graph_panel_layout = QVBoxLayout(self.graph_panel_container)
-        graph_panel_layout.setContentsMargins(0, 0, 0, 0)
+        initial_graph_offset = 0
+        if hasattr(self, "simulation_bar") and self.simulation_bar is not None:
+            initial_graph_offset = max(0, int(self.simulation_bar.sizeHint().height()))
+        graph_panel_layout.setContentsMargins(0, initial_graph_offset, 0, 0)
         graph_panel_layout.setSpacing(0)
         graph_panel_layout.addWidget(self.graph_panel)
 
@@ -183,7 +186,6 @@ class MainWindow(QMainWindow):
             self.simulation_bar.setParent(central_widget)
             self.simulation_bar.show()
             self._update_simulation_bar_geometry()
-            self._update_graph_panel_offset()
         
         # Place le focus initial sur la vue du circuit plutôt que sur la barre de recherche
         self.view.setFocus()
@@ -215,7 +217,6 @@ class MainWindow(QMainWindow):
         self._update_toolbar_geometry()
         self._sync_components_header_height()
         self._update_simulation_bar_geometry()
-        self._update_graph_panel_offset()
 
     def closeEvent(self, event) -> None:
         """Nettoie les connexions Qt lors de la fermeture."""
@@ -322,24 +323,6 @@ class MainWindow(QMainWindow):
         self.simulation_bar.setGeometry(x, y, width, bar_size.height())
         self.simulation_bar.raise_()
 
-    def _update_graph_panel_offset(self) -> None:
-        """Decale le panneau Graphiques sous la barre de simulation."""
-        if not hasattr(self, "graph_panel_container") or self.graph_panel_container is None:
-            return
-        if not hasattr(self, "simulation_bar") or self.simulation_bar is None:
-            return
-        bar_height = self.simulation_bar.height()
-        if bar_height <= 0:
-            bar_height = self.simulation_bar.sizeHint().height()
-        bar_geo = self.simulation_bar.geometry()
-        bar_bottom = bar_geo.bottom() + 1
-        top_offset = max(int(bar_height), int(bar_bottom))
-        layout = self.graph_panel_container.layout()
-        if layout is None:
-            return
-        left, _, right, bottom = layout.getContentsMargins()
-        layout.setContentsMargins(left, top_offset, right, bottom)
-        self.simulation_bar.raise_()
 
     def _set_graph_panel_visible(self, visible: bool) -> None:
         """Affiche/masque le panneau Graphiques et synchronise le bouton flottant."""
@@ -365,7 +348,6 @@ class MainWindow(QMainWindow):
             action.setChecked(visible)
 
         self._update_toolbar_geometry()
-        self._update_graph_panel_offset()
         if visible and hasattr(self, "view") and self.view is not None:
             self.view.setFocus()
 
