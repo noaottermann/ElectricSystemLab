@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.model = model
         self.custom_actions: dict[str, QAction] = {}
+        self._current_filename: str | None = None
         self.init_ui_structure()
         self._init_controllers()
         self.retranslate_ui()
@@ -1010,6 +1011,7 @@ class MainWindow(QMainWindow):
 
     def set_current_filename(self, filename: str | None) -> None:
         """Expose la mise a jour du fichier courant pour la barre de simulation."""
+        self._current_filename = filename
         self._update_simulation_filename_label(filename)
 
     def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
@@ -1073,6 +1075,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "graph_collapse_button") and self.graph_collapse_button is not None:
             self.graph_collapse_button.setText(Translator.tr("graph_collapse_button"))
         self.status_bar.showMessage(Translator.tr("status_ready"))
+        self._update_simulation_filename_label(self._current_filename)
 
     def _retranslate_menus(self) -> None:
         """Met a jour les titres des menus."""
