@@ -4,6 +4,10 @@ from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
     QHBoxLayout,
     QInputDialog,
     QMainWindow,
@@ -1202,6 +1206,14 @@ class MainWindow(QMainWindow):
             return
         item = dipole_items[0]
         component = item.component
+        if isinstance(component, (VoltageSourceAC, CurrentSourceAC)):
+            if self._edit_ac_source_parameters(component):
+                if hasattr(self.scene, "_push_undo_snapshot"):
+                    self.scene._push_undo_snapshot()
+                item.update()
+                if hasattr(self.scene, "update"):
+                    self.scene.update()
+            return
         config = self._get_edit_value_config(component)
         if config is None:
             QMessageBox.information(self, Translator.tr("action_edit_value"), Translator.tr("dialog_edit_value_unsupported"))
@@ -1227,6 +1239,70 @@ class MainWindow(QMainWindow):
         item.update()
         if hasattr(self.scene, "update"):
             self.scene.update()
+
+    def _edit_ac_source_parameters(self, component: Dipole) -> bool:
+        """Affiche un dialogue multi-parametres pour les sources AC."""
+        if not isinstance(component, (VoltageSourceAC, CurrentSourceAC)):
+            return False
+
+        unit = "V" if isinstance(component, VoltageSourceAC) else "A"
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        amplitude_input = QDoubleSpinBox(dialog)
+        amplitude_input.setRange(-1e12, 1e12)
+        amplitude_input.setDecimals(6)
+        amplitude_input.setValue(float(component.amplitude))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_amplitude')} ({unit})",
+            amplitude_input,
+        )
+
+        frequency_input = QDoubleSpinBox(dialog)
+        frequency_input.setRange(0.0, 1e12)
+        frequency_input.setDecimals(6)
+        frequency_input.setValue(float(component.frequency))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_frequency')} (Hz)",
+            frequency_input,
+        )
+
+        phase_input = QDoubleSpinBox(dialog)
+        phase_input.setRange(-360.0, 360.0)
+        phase_input.setDecimals(4)
+        phase_input.setValue(float(component.phase))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_phase')} (deg)",
+            phase_input,
+        )
+
+        offset_input = QDoubleSpinBox(dialog)
+        offset_input.setRange(-1e12, 1e12)
+        offset_input.setDecimals(6)
+        offset_input.setValue(float(component.offset))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_offset')} ({unit})",
+            offset_input,
+        )
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        component.amplitude = float(amplitude_input.value())
+        component.frequency = float(frequency_input.value())
+        component.phase = float(phase_input.value())
+        component.offset = float(offset_input.value())
+        return True
 
     def on_export(self) -> None:
         """Declenche l'export de donnees."""
