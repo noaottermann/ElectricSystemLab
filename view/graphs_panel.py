@@ -5,8 +5,7 @@ from PyQt5.QtWidgets import (
 	QLabel, QTextEdit, QVBoxLayout, QWidget,
 	QCheckBox, QHBoxLayout, QGridLayout, QScrollArea, QGroupBox, QPushButton
 )
-from PyQt5.QtCore import Qt
-
+from PyQt5.QtCore import Qt, pyqtSignal
 import numpy as np
 from typing import Optional
 
@@ -173,6 +172,8 @@ class TimeSeriesPlotWidget(QWidget):
 class GraphPanel(QWidget):
 	"""Panneau persistant avec graphiques et controles interactifs."""
 
+	collapse_requested = pyqtSignal()
+
 	def __init__(self, parent=None) -> None:
 		super().__init__(parent)
 		self.setObjectName("graphPanel")
@@ -200,6 +201,29 @@ class GraphPanel(QWidget):
 		self.title_label = QLabel(Translator.tr("graph_panel_title"))
 		self.title_label.setObjectName("graphPanelTitle")
 		header_layout.addWidget(self.title_label, 1)
+
+		self.collapse_button = QPushButton("<")
+		self.collapse_button.setFixedSize(22, 22)
+		self.collapse_button.clicked.connect(self.collapse_requested.emit)
+		self.collapse_button.setStyleSheet(
+			"""
+			QPushButton {
+				background-color: #2c3e50;
+				color: white;
+				border: none;
+				border-radius: 6px;
+				font-weight: bold;
+				padding: 0;
+			}
+			QPushButton:hover {
+				background-color: #1f2d3a;
+			}
+			QPushButton:pressed {
+				background-color: #17212b;
+			}
+			"""
+		)
+		header_layout.addWidget(self.collapse_button)
 
 		layout.addWidget(header)
 
