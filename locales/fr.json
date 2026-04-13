@@ -116,6 +116,7 @@
     "action_color_cur": "Courant",
     "action_lang_fr": "Français",
     "action_lang_en": "English",
+    "label_untitled_file": "Sans titre.json",
     "dialog_transient_title": "Simulation transitoire",
     "dialog_realtime_title": "Simulation temps reel",
     "dialog_transient_duration": "Durée (s)",

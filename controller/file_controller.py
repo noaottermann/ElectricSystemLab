@@ -61,6 +61,8 @@ class FileController:
 		if self.scene is not None:
 			self.scene.refresh_from_model()
 		self.current_path = None
+		if hasattr(self.window, "set_current_filename"):
+			self.window.set_current_filename(None)
 		self._status("Nouveau circuit")
 
 	def open_circuit(self) -> None:
@@ -97,6 +99,8 @@ class FileController:
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Impossible de sauvegarder.\n{exc}")
 			return
+		if hasattr(self.window, "set_current_filename"):
+			self.window.set_current_filename(self.current_path.name)
 		self._status(f"Sauvegarde: {self.current_path.name}")
 
 	def save_circuit_as(self) -> None:
@@ -132,6 +136,7 @@ class FileController:
 			return
 		if self.scene is not None:
 			self.scene.refresh_from_model()
+		self._set_current_path(Path(path))
 		self._status("Import termine")
 
 	def export_circuit(self) -> None:
@@ -150,12 +155,16 @@ class FileController:
 			simulation_controller = getattr(self.window, "simulation_controller", None)
 			if simulation_controller is not None:
 				simulation_data = getattr(simulation_controller, "last_transient_result", None)
+		resolved = Path(path)
+		if resolved.suffix.lower() != ".json":
+			resolved = resolved.with_suffix(".json")
 		try:
-			self._exporter.export_circuit(self.model, path, simulation_data=simulation_data)
+			self._exporter.export_circuit(self.model, str(resolved), simulation_data=simulation_data)
 		except Exception as exc:
 			QMessageBox.warning(self.window, "Erreur", f"Export impossible.\n{exc}")
 			return
-		self._status(f"Export: {Path(path).with_suffix('.json').name}")
+		self._set_current_path(resolved)
+		self._status(f"Export: {resolved.name}")
 
 	def export_simulation_results(self) -> None:
 		"""Exporte uniquement les resultats de simulation."""
@@ -229,6 +238,8 @@ class FileController:
 		"""Met a jour le chemin courant et la liste des recents."""
 		self.current_path = path
 		self._push_recent(path)
+		if hasattr(self.window, "set_current_filename"):
+			self.window.set_current_filename(path.name)
 
 	def _push_recent(self, path: Path) -> None:
 		"""Enregistre un fichier recent en evitant les doublons."""

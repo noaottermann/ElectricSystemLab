@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QToolBar,
     QWidget,
+    QLabel,
 )
 from controller.app_controller import AppController
 from controller.circuit_controller import CircuitController
@@ -78,6 +79,7 @@ class MainWindow(QMainWindow):
         
         # Widget central
         self._setup_central_widget()
+        self._sync_components_header_height()
 
         self._realtime_auto_open_graph_once = False
         self._realtime_timer_interval_ms = 30
@@ -191,6 +193,11 @@ class MainWindow(QMainWindow):
             self.toolbar.show()
             self._update_toolbar_geometry()
             self._update_transform_actions_visibility()
+
+        if hasattr(self, "simulation_bar"):
+            self.simulation_bar.setParent(central_widget)
+            self.simulation_bar.show()
+            self._update_simulation_bar_geometry()
         
         # Place le focus initial sur la vue du circuit plutôt que sur la barre de recherche
         self.view.setFocus()
@@ -220,6 +227,8 @@ class MainWindow(QMainWindow):
         """Ajuste la barre d'outils lors des redimensionnements."""
         super().resizeEvent(event)
         self._update_toolbar_geometry()
+        self._sync_components_header_height()
+        self._update_simulation_bar_geometry()
 
     def closeEvent(self, event) -> None:
         """Nettoie les connexions Qt lors de la fermeture."""
@@ -316,10 +325,37 @@ class MainWindow(QMainWindow):
         self.toolbar.setGeometry(x, y, toolbar_width, toolbar_height)
         self.toolbar.raise_()
 
+    def _update_simulation_bar_geometry(self) -> None:
+        """Positionne la barre de simulation en haut a droite du widget central."""
+        if not hasattr(self, "simulation_bar") or self.simulation_bar is None:
+            return
+        if self.centralWidget() is None:
+            return
+
+        central_widget = self.centralWidget()
+        bar_size = self.simulation_bar.sizeHint()
+        if bar_size.width() <= 0 or bar_size.height() <= 0:
+            return
+
+        left_offset = 0
+        if hasattr(self, "components_panel") and self.components_panel is not None:
+            left_offset = self.components_panel.width()
+
+        right_offset = 0
+        if hasattr(self, "graph_panel") and self.graph_panel is not None and self.graph_panel.isVisible():
+            right_offset = self.graph_panel.width()
+
+        available_width = max(0, central_widget.width() - left_offset - right_offset)
+        width = max(0, available_width)
+        x = left_offset
+        y = 0
+        self.simulation_bar.setGeometry(x, y, width, bar_size.height())
+        self.simulation_bar.raise_()
+
     def _set_graph_panel_visible(self, visible: bool) -> None:
         """Affiche/masque le panneau Graphiques et synchronise le bouton flottant."""
-        if not hasattr(self, "graph_panel") or self.graph_panel is None:
-            return
+        if hasattr(self.components_panel, "set_header_top_margin"):
+            self.components_panel.set_header_top_margin(0)
         self.graph_panel.setVisible(visible)
 
         # En mode temps reel, la simulation ne tourne que lorsque le panneau Graphiques est ouvert.
@@ -936,9 +972,18 @@ class MainWindow(QMainWindow):
         self.simulation_bar.setFloatable(False)
         self.simulation_bar.setToolButtonStyle(Qt.ToolButtonIconOnly)
 
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.simulation_bar.addWidget(spacer)
+        self.simulation_filename_label = QLabel("")
+        self.simulation_filename_label.setObjectName("simulationFilename")
+        self.simulation_filename_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+
+        self.simulation_filename_container = QWidget()
+        filename_layout = QHBoxLayout(self.simulation_filename_container)
+        filename_layout.setContentsMargins(0, 0, 0, 0)
+        filename_layout.addStretch(1)
+        filename_layout.addWidget(self.simulation_filename_label)
+        filename_layout.addStretch(1)
+        self.simulation_filename_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.simulation_bar.addWidget(self.simulation_filename_container)
 
         self.simulation_bar.addAction(self.custom_actions["action_sim_run_dc"])
         self.simulation_bar.addAction(self.custom_actions["action_sim_run_transient"])
@@ -952,9 +997,31 @@ class MainWindow(QMainWindow):
         self.simulation_bar.addSeparator()
         self.simulation_bar.addAction(self.custom_actions["action_sim_reset"])
         self.simulation_bar.addAction(self.custom_actions["action_sim_export_results"])
-
-        self.addToolBar(Qt.TopToolBarArea, self.simulation_bar)
         self._apply_simulation_icons()
+        self._update_simulation_filename_label(None)
+
+    def _sync_components_header_height(self) -> None:
+        """Ajuste la zone header du panneau composants."""
+        if not hasattr(self, "components_panel") or self.components_panel is None:
+            return
+        if hasattr(self.components_panel, "set_header_visible"):
+            self.components_panel.set_header_visible(True)
+        if hasattr(self.components_panel, "clear_header_height"):
+            self.components_panel.clear_header_height()
+        if hasattr(self.components_panel, "set_header_top_margin"):
+            self.components_panel.set_header_top_margin(0)
+
+    def _update_simulation_filename_label(self, filename: str | None) -> None:
+        """Met a jour le libelle du fichier courant dans la barre de simulation."""
+        if not hasattr(self, "simulation_filename_label") or self.simulation_filename_label is None:
+            return
+        if not filename:
+            filename = Translator.tr("label_untitled_file")
+        self.simulation_filename_label.setText(filename)
+
+    def set_current_filename(self, filename: str | None) -> None:
+        """Expose la mise a jour du fichier courant pour la barre de simulation."""
+        self._update_simulation_filename_label(filename)
 
     def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
         """Assigne une icone depuis assets, avec fallback optionnel."""

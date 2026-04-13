@@ -42,7 +42,7 @@ class ComponentsPanel(QWidget):
 		self.category_list = QListWidget()
 		self.category_list.setObjectName("categoryList")
 		self.category_list.setViewMode(QListWidget.ListMode)
-		self.category_list.setFixedWidth(112)
+		self.category_list.setFixedWidth(72)
 		self.category_list.setSpacing(0)
 		self.category_list.setUniformItemSizes(True)
 		self.category_list.setSelectionMode(QListWidget.SingleSelection)
@@ -155,7 +155,7 @@ class ComponentsPanel(QWidget):
 		frame = QFrame()
 		frame.setObjectName("categoryPane")
 		layout = QVBoxLayout(frame)
-		layout.setContentsMargins(0, 8, 0, 8)
+		layout.setContentsMargins(0, 0, 0, 8)
 		layout.addWidget(self.category_list)
 		return frame
 
@@ -165,18 +165,72 @@ class ComponentsPanel(QWidget):
 		frame.setObjectName("componentsPane")
 		layout = QVBoxLayout(frame)
 		layout.setContentsMargins(10, 8, 10, 8)
+		self._components_layout = layout
+		self._components_left_margin = 10
+		self._components_top_margin = 8
+		self._components_right_margin = 10
+		self._components_bottom_margin = 8
+
+		self.header_widget = QWidget()
+		header_layout = QVBoxLayout(self.header_widget)
+		header_layout.setContentsMargins(0, 0, 0, 0)
+		header_layout.setSpacing(6)
 
 		self.components_title_label = QLabel(Translator.tr("components_panel_title"))
 		self.components_title_label.setObjectName("componentsTitle")
-		layout.addWidget(self.components_title_label)
+		header_layout.addWidget(self.components_title_label)
 
 		self.search_input = QLineEdit()
 		self.search_input.setPlaceholderText(Translator.tr("components_search_placeholder"))
 		self.search_input.textChanged.connect(self._apply_search_filter)
-		layout.addWidget(self.search_input)
+		header_layout.addWidget(self.search_input)
+
+		layout.addWidget(self.header_widget)
 
 		layout.addWidget(self.components_list, 1)
 		return frame
+
+	def set_header_height(self, height: int) -> None:
+		"""Force la hauteur du bloc titre + recherche."""
+		if not hasattr(self, "header_widget") or self.header_widget is None:
+			return
+		self.header_widget.setFixedHeight(max(0, int(height)))
+
+	def clear_header_height(self) -> None:
+		"""Restaure la hauteur automatique du bloc titre + recherche."""
+		if not hasattr(self, "header_widget") or self.header_widget is None:
+			return
+		self.header_widget.setMinimumHeight(0)
+		self.header_widget.setMaximumHeight(16777215)
+
+	def set_header_visible(self, visible: bool) -> None:
+		"""Affiche ou masque le bloc titre + recherche."""
+		if not hasattr(self, "header_widget") or self.header_widget is None:
+			return
+		self.header_widget.setVisible(bool(visible))
+
+	def set_header_overlap(self, overlap_height: int) -> None:
+		"""Decale le header vers le haut pour chevaucher la barre de simulation."""
+		if not hasattr(self, "_components_layout"):
+			return
+		overlap = int(overlap_height)
+		self._components_layout.setContentsMargins(
+			self._components_left_margin,
+			self._components_top_margin - overlap,
+			self._components_right_margin,
+			self._components_bottom_margin,
+		)
+
+	def set_header_top_margin(self, margin: int) -> None:
+		"""Definit la marge haute du panneau composants."""
+		if not hasattr(self, "_components_layout"):
+			return
+		self._components_layout.setContentsMargins(
+			self._components_left_margin,
+			int(margin),
+			self._components_right_margin,
+			self._components_bottom_margin,
+		)
 
 	def _apply_styles(self) -> None:
 		"""Applique le style visuel du panneau."""
