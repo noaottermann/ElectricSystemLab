@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QToolBar,
     QWidget,
     QLabel,
+    QVBoxLayout,
 )
 from controller.app_controller import AppController
 from controller.circuit_controller import CircuitController
@@ -124,6 +125,13 @@ class MainWindow(QMainWindow):
         self.graph_panel.setMinimumWidth(200)
         self.graph_panel.setMaximumWidth(300)
         self.graph_panel.setVisible(False)
+        self.graph_panel.collapse_requested.connect(lambda: self._set_graph_panel_visible(False))
+
+        self.graph_panel_container = QWidget()
+        graph_panel_layout = QVBoxLayout(self.graph_panel_container)
+        graph_panel_layout.setContentsMargins(0, 0, 0, 0)
+        graph_panel_layout.setSpacing(0)
+        graph_panel_layout.addWidget(self.graph_panel)
 
         # Crée le bouton Graphiques flottant
         self.graphics_button = QPushButton()
@@ -161,31 +169,8 @@ class MainWindow(QMainWindow):
         central_layout.setSpacing(0)
         central_layout.addWidget(self.components_panel)
         central_layout.addWidget(self.view, 1)
-        central_layout.addWidget(self.graph_panel)
+        central_layout.addWidget(self.graph_panel_container)
         self.setCentralWidget(central_widget)
-
-        # Bouton de repli externe, collé à gauche de l'onglet Graphiques
-        self.graph_collapse_button = QPushButton(">>>", central_widget)
-        self.graph_collapse_button.setFixedSize(36, 24)
-        self.graph_collapse_button.setVisible(False)
-        self.graph_collapse_button.clicked.connect(lambda: self._set_graph_panel_visible(False))
-        self.graph_collapse_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2c3e50;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #1f2d3a;
-            }
-            QPushButton:pressed {
-                background-color: #17212b;
-            }
-            """
-        )
 
         # Ancre la barre d'outils dans la zone centrale pour suivre la géométrie du panneau et de la vue
         if hasattr(self, "toolbar"):
@@ -198,6 +183,7 @@ class MainWindow(QMainWindow):
             self.simulation_bar.setParent(central_widget)
             self.simulation_bar.show()
             self._update_simulation_bar_geometry()
+            self._update_graph_panel_offset()
         
         # Place le focus initial sur la vue du circuit plutôt que sur la barre de recherche
         self.view.setFocus()
@@ -229,6 +215,7 @@ class MainWindow(QMainWindow):
         self._update_toolbar_geometry()
         self._sync_components_header_height()
         self._update_simulation_bar_geometry()
+        self._update_graph_panel_offset()
 
     def closeEvent(self, event) -> None:
         """Nettoie les connexions Qt lors de la fermeture."""
@@ -283,31 +270,14 @@ class MainWindow(QMainWindow):
             self.graphics_button.move(btn_x, btn_y)
             self.graphics_button.raise_()
 
-        # Positionne le bouton de repli juste a gauche de l'onglet Graphiques quand il est visible
-        if (
-            hasattr(self, "graph_collapse_button")
-            and self.graph_collapse_button is not None
-            and hasattr(self, "graph_panel")
-            and self.graph_panel is not None
-            and self.graph_panel.isVisible()
-        ):
-            panel_geo = self.graph_panel.geometry()
-            button_width = self.graph_collapse_button.width()
-            button_height = self.graph_collapse_button.height()
-            btn_x = max(0, panel_geo.x() - button_width)
-            btn_y = max(0, panel_geo.y())
-            if button_height > panel_geo.height():
-                btn_y = max(0, panel_geo.y() + panel_geo.height() - button_height)
-            self.graph_collapse_button.move(btn_x, btn_y)
-            self.graph_collapse_button.raise_()
 
         panel_width = 0
         if hasattr(self, "components_panel") and self.components_panel.isVisible():
             panel_width = self.components_panel.width()
 
         right_panel_width = 0
-        if hasattr(self, "graph_panel") and self.graph_panel.isVisible():
-            right_panel_width = self.graph_panel.width()
+        if hasattr(self, "graph_panel_container") and self.graph_panel.isVisible():
+            right_panel_width = self.graph_panel_container.width()
 
         x = min(panel_width, max(0, content_width - 1))
         remaining_width = content_width - x - right_panel_width
@@ -342,14 +312,33 @@ class MainWindow(QMainWindow):
             left_offset = self.components_panel.width()
 
         right_offset = 0
-        if hasattr(self, "graph_panel") and self.graph_panel is not None and self.graph_panel.isVisible():
-            right_offset = self.graph_panel.width()
+        if hasattr(self, "graph_panel_container") and self.graph_panel_container is not None and self.graph_panel.isVisible():
+            right_offset = self.graph_panel_container.width()
 
         available_width = max(0, central_widget.width() - left_offset - right_offset)
         width = max(0, available_width)
         x = left_offset
         y = 0
         self.simulation_bar.setGeometry(x, y, width, bar_size.height())
+        self.simulation_bar.raise_()
+
+    def _update_graph_panel_offset(self) -> None:
+        """Decale le panneau Graphiques sous la barre de simulation."""
+        if not hasattr(self, "graph_panel_container") or self.graph_panel_container is None:
+            return
+        if not hasattr(self, "simulation_bar") or self.simulation_bar is None:
+            return
+        bar_height = self.simulation_bar.height()
+        if bar_height <= 0:
+            bar_height = self.simulation_bar.sizeHint().height()
+        bar_geo = self.simulation_bar.geometry()
+        bar_bottom = bar_geo.bottom() + 1
+        top_offset = max(int(bar_height), int(bar_bottom))
+        layout = self.graph_panel_container.layout()
+        if layout is None:
+            return
+        left, _, right, bottom = layout.getContentsMargins()
+        layout.setContentsMargins(left, top_offset, right, bottom)
         self.simulation_bar.raise_()
 
     def _set_graph_panel_visible(self, visible: bool) -> None:
@@ -371,14 +360,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, "graphics_button") and self.graphics_button is not None:
             self.graphics_button.setVisible(not visible)
 
-        if hasattr(self, "graph_collapse_button") and self.graph_collapse_button is not None:
-            self.graph_collapse_button.setVisible(visible)
-
         action = self.custom_actions.get("action_show_graphs")
         if action is not None:
             action.setChecked(visible)
 
         self._update_toolbar_geometry()
+        self._update_graph_panel_offset()
+        if visible and hasattr(self, "view") and self.view is not None:
+            self.view.setFocus()
 
     def _update_transform_actions_visibility(self) -> None:
         """Ajuste la visibilite des actions selon la selection."""
@@ -971,6 +960,7 @@ class MainWindow(QMainWindow):
         self.simulation_bar.setMovable(False)
         self.simulation_bar.setFloatable(False)
         self.simulation_bar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.simulation_bar.setAutoFillBackground(True)
 
         self.simulation_filename_label = QLabel("")
         self.simulation_filename_label.setObjectName("simulationFilename")
