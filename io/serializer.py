@@ -6,17 +6,35 @@ from pathlib import Path
 from typing import Union
 
 from model.circuit import Circuit
-from model.components import Capacitor, Inductor, Resistor, VoltageSourceAC, VoltageSourceDC
+from model.components import (
+	Capacitor,
+	CurrentControlledCurrentSource,
+	CurrentSourceAC,
+	CurrentSourceDC,
+	Diode,
+	Inductor,
+	LED,
+	Resistor,
+	VoltageControlledCurrentSource,
+	VoltageSourceAC,
+	VoltageSourceDC,
+)
 
 
 def get_component_class_map() -> dict[str, type]:
 	"""Retourne la correspondance type -> classe de composant."""
 	return {
 		"Resistor": Resistor,
-		"VoltageSourceDC": VoltageSourceDC,
-		"VoltageSourceAC": VoltageSourceAC,
 		"Capacitor": Capacitor,
 		"Inductor": Inductor,
+		"VoltageSourceDC": VoltageSourceDC,
+		"VoltageSourceAC": VoltageSourceAC,
+		"CurrentSourceDC": CurrentSourceDC,
+		"CurrentSourceAC": CurrentSourceAC,
+		"VoltageControlledCurrentSource": VoltageControlledCurrentSource,
+		"CurrentControlledCurrentSource": CurrentControlledCurrentSource,
+		"Diode": Diode,
+		"LED": LED,
 	}
 
 
