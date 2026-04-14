@@ -6,10 +6,12 @@ import numpy as np
 
 from model.components import (
     CurrentControlledCurrentSource,
+    CurrentControlledVoltageSource,
     CurrentSourceDC,
     Diode,
     LED,
     Resistor,
+    VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceDC,
 )
@@ -68,7 +70,8 @@ class DCSolver:
                 x[idx] = float(node.potential)
 
         has_nonlinear = any(isinstance(d, (Diode, LED)) for d in circuit.dipoles.values())
-        iterations = self._MAX_ITERATIONS if has_nonlinear else 1
+        has_cccs_current_control = self._has_cccs_non_voltage_control(circuit, voltage_source_indices)
+        iterations = self._MAX_ITERATIONS if (has_nonlinear or has_cccs_current_control) else 1
 
         for _ in range(iterations):
             A = np.zeros((total_vars, total_vars))
@@ -83,10 +86,23 @@ class DCSolver:
                 group_to_idx,
                 ground_group_id,
                 A,
+                Z,
                 voltage_source_indices,
+                x,
             )
             self._stamp_diodes(circuit, node_groups, group_to_idx, ground_group_id, A, Z, x)
-            self._stamp_voltage_sources(voltage_sources, node_groups, group_to_idx, ground_group_id, A, Z, num_v_vars)
+            self._stamp_voltage_sources(
+                circuit,
+                voltage_sources,
+                node_groups,
+                group_to_idx,
+                ground_group_id,
+                A,
+                Z,
+                num_v_vars,
+                x,
+                voltage_source_indices,
+            )
 
             try:
                 x_next = np.linalg.solve(A, Z)
@@ -94,7 +110,7 @@ class DCSolver:
                 print("Erreur de resolution: matrice singuliere")
                 return
 
-            if not has_nonlinear:
+            if not (has_nonlinear or has_cccs_current_control):
                 x = x_next
                 break
             delta = np.max(np.abs(x_next - x))
@@ -126,11 +142,17 @@ class DCSolver:
                 else:
                     dipole.current = 0.0
             elif isinstance(dipole, CurrentControlledCurrentSource):
-                control_idx = voltage_source_indices.get(dipole.control_dipole_id)
-                if control_idx is not None:
-                    dipole.current = dipole.gain * (-float(x[control_idx]))
-                else:
-                    dipole.current = 0.0
+                control = circuit.dipoles.get(dipole.control_dipole_id)
+                control_current = self._control_current_from_state(
+                    circuit,
+                    control,
+                    node_groups,
+                    group_to_idx,
+                    ground_group_id,
+                    x,
+                    voltage_source_indices,
+                )
+                dipole.current = dipole.gain * control_current
             elif isinstance(dipole, (Diode, LED)):
                 current, _ = self._diode_current_and_conductance(dipole.voltage, dipole)
                 dipole.current = current
@@ -138,11 +160,14 @@ class DCSolver:
             idx_src = num_v_vars + i
             v_src.current = -float(x[idx_src])
 
-    def _collect_voltage_sources(self, circuit) -> list[VoltageSourceDC]:
+    def _collect_voltage_sources(self, circuit) -> list[object]:
         """Retourne les sources de tension continues du circuit."""
         voltage_sources = []
         for dipole in circuit.dipoles.values():
-            if isinstance(dipole, VoltageSourceDC):
+            if isinstance(
+                dipole,
+                (VoltageSourceDC, VoltageControlledVoltageSource, CurrentControlledVoltageSource),
+            ):
                 voltage_sources.append(dipole)
         return voltage_sources
 
@@ -202,24 +227,43 @@ class DCSolver:
         group_to_idx,
         ground_group_id,
         matrix_a,
+        vector_z,
         voltage_source_indices: dict[int, int],
+        state_vector,
     ) -> None:
         for dipole in circuit.dipoles.values():
             if not isinstance(dipole, CurrentControlledCurrentSource):
                 continue
-            ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
-            if ctrl_idx is None:
-                continue
             idx_a = self._get_matrix_index(dipole.node_a, node_groups, group_to_idx, ground_group_id)
             idx_b = self._get_matrix_index(dipole.node_b, node_groups, group_to_idx, ground_group_id)
             gain = float(dipole.gain)
+            ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
+            if ctrl_idx is not None:
+                if idx_a is not None:
+                    matrix_a[idx_a, ctrl_idx] += gain
+                if idx_b is not None:
+                    matrix_a[idx_b, ctrl_idx] -= gain
+                continue
+
+            control = circuit.dipoles.get(dipole.control_dipole_id)
+            control_current = self._control_current_from_state(
+                circuit,
+                control,
+                node_groups,
+                group_to_idx,
+                ground_group_id,
+                state_vector,
+                voltage_source_indices,
+            )
+            current = gain * control_current
             if idx_a is not None:
-                matrix_a[idx_a, ctrl_idx] += gain
+                vector_z[idx_a] -= current
             if idx_b is not None:
-                matrix_a[idx_b, ctrl_idx] -= gain
+                vector_z[idx_b] += current
 
     def _stamp_voltage_sources(
         self,
+        circuit,
         voltage_sources,
         node_groups,
         group_to_idx,
@@ -227,6 +271,8 @@ class DCSolver:
         matrix_a,
         vector_z,
         current_var_offset: int,
+        state_vector,
+        voltage_source_indices: dict[int, int],
     ) -> None:
         for i, v_src in enumerate(voltage_sources):
             idx_src = current_var_offset + i
@@ -238,7 +284,42 @@ class DCSolver:
             if idx_b is not None:
                 matrix_a[idx_src, idx_b] = -1
                 matrix_a[idx_b, idx_src] = -1
-            vector_z[idx_src] = v_src.dc_voltage
+
+            if isinstance(v_src, VoltageSourceDC):
+                vector_z[idx_src] = v_src.dc_voltage
+                continue
+
+            if isinstance(v_src, VoltageControlledVoltageSource):
+                control = circuit.dipoles.get(v_src.control_dipole_id)
+                if control is None:
+                    continue
+                idx_c = self._get_matrix_index(control.node_a, node_groups, group_to_idx, ground_group_id)
+                idx_d = self._get_matrix_index(control.node_b, node_groups, group_to_idx, ground_group_id)
+                gain = float(v_src.gain)
+                if idx_c is not None:
+                    matrix_a[idx_src, idx_c] -= gain
+                if idx_d is not None:
+                    matrix_a[idx_src, idx_d] += gain
+                continue
+
+            if isinstance(v_src, CurrentControlledVoltageSource):
+                control = circuit.dipoles.get(v_src.control_dipole_id)
+                if control is None:
+                    continue
+                ctrl_idx = voltage_source_indices.get(control.id)
+                if ctrl_idx is not None:
+                    matrix_a[idx_src, ctrl_idx] -= float(v_src.transresistance)
+                    continue
+                control_current = self._control_current_from_state(
+                    circuit,
+                    control,
+                    node_groups,
+                    group_to_idx,
+                    ground_group_id,
+                    state_vector,
+                    voltage_source_indices,
+                )
+                vector_z[idx_src] = float(v_src.transresistance) * control_current
 
     def _stamp_diodes(
         self,
@@ -288,6 +369,70 @@ class DCSolver:
         current = isrc * (exp_val - 1.0)
         conductance = (isrc / (n * vt)) * exp_val
         return current, conductance
+
+    def _has_cccs_non_voltage_control(self, circuit, voltage_source_indices: dict[int, int]) -> bool:
+        for dipole in circuit.dipoles.values():
+            if not isinstance(dipole, CurrentControlledCurrentSource):
+                continue
+            ctrl_id = dipole.control_dipole_id
+            if ctrl_id and ctrl_id not in voltage_source_indices:
+                return True
+        return False
+
+    def _node_voltage_from_state(
+        self,
+        node,
+        node_groups,
+        group_to_idx,
+        ground_group_id,
+        state_vector,
+    ) -> float:
+        if node is None:
+            return 0.0
+        gid = node_groups.get(node.id)
+        if gid == ground_group_id:
+            return 0.0
+        idx = group_to_idx.get(gid)
+        if idx is None:
+            return 0.0
+        return float(state_vector[idx])
+
+    def _control_current_from_state(
+        self,
+        circuit,
+        control,
+        node_groups,
+        group_to_idx,
+        ground_group_id,
+        state_vector,
+        voltage_source_indices: dict[int, int],
+    ) -> float:
+        if control is None:
+            return 0.0
+        ctrl_idx = voltage_source_indices.get(control.id)
+        if ctrl_idx is not None:
+            return -float(state_vector[ctrl_idx])
+        if isinstance(control, Resistor):
+            v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+            v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+            if control.resistance == 0:
+                return 0.0
+            return (v_a - v_b) / control.resistance
+        if isinstance(control, CurrentSourceDC):
+            return float(control.dc_current)
+        if isinstance(control, VoltageControlledCurrentSource):
+            ctrl = circuit.dipoles.get(control.control_dipole_id)
+            if ctrl is None:
+                return 0.0
+            v_c = self._node_voltage_from_state(ctrl.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+            v_d = self._node_voltage_from_state(ctrl.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+            return float(control.transconductance) * (v_c - v_d)
+        if isinstance(control, (Diode, LED)):
+            v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+            v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+            current, _ = self._diode_current_and_conductance(v_a - v_b, control)
+            return current
+        return float(getattr(control, "current", 0.0))
 
     def _build_group_index(self, node_groups: dict[int, int], ground_group_id: Optional[int]) -> dict[int, int]:
         """Associe chaque groupe de noeuds a un indice de matrice."""

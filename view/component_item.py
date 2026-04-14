@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
 from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
+    CurrentControlledVoltageSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
@@ -14,6 +15,7 @@ from model.components import (
     LED,
     Resistor,
     VoltageControlledCurrentSource,
+    VoltageControlledVoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
 )
@@ -398,14 +400,13 @@ class DependentCurrentSourceItem(ComponentItem):
         painter.drawPath(diamond)
 
         painter.setPen(self._pen_light())
+        painter.drawLine(-6, 0, 6, 0)
+        painter.drawLine(6, 0, 2, -3)
+        painter.drawLine(6, 0, 2, 3)
         if isinstance(self.component, VoltageControlledCurrentSource):
-            painter.drawLine(-10, 0, -4, 0)
-            painter.drawLine(-7, -3, -7, 3)
-            painter.drawLine(4, 0, 10, 0)
+            painter.drawText(18, -10, "Vx")
         else:
-            painter.drawLine(-6, 0, 6, 0)
-            painter.drawLine(6, 0, 2, -3)
-            painter.drawLine(6, 0, 2, 3)
+            painter.drawText(18, -10, "Ix")
 
     def get_value_text(self) -> str:
         """Retourne la valeur de gain a afficher."""
@@ -413,6 +414,43 @@ class DependentCurrentSourceItem(ComponentItem):
             return f"{self.component.transconductance} S"
         if isinstance(self.component, CurrentControlledCurrentSource):
             return f"{self.component.gain} A/A"
+        return ""
+
+
+class DependentVoltageSourceItem(ComponentItem):
+    """Item graphique pour les sources de tension dependantes."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une source de tension dependante."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -16, 0)
+        painter.drawLine(16, 0, 30, 0)
+
+        diamond = QPainterPath()
+        diamond.moveTo(0, -16)
+        diamond.lineTo(16, 0)
+        diamond.lineTo(0, 16)
+        diamond.lineTo(-16, 0)
+        diamond.closeSubpath()
+        painter.drawPath(diamond)
+
+        painter.setPen(self._pen_light())
+        painter.drawLine(-10, 0, -4, 0)
+        painter.drawLine(-7, -3, -7, 3)
+        painter.drawLine(4, 0, 10, 0)
+        if isinstance(self.component, VoltageControlledVoltageSource):
+            painter.drawText(18, -10, "Vx")
+        elif isinstance(self.component, CurrentControlledVoltageSource):
+            painter.drawText(18, -10, "Ix")
+
+    def get_value_text(self) -> str:
+        """Retourne la valeur de gain a afficher."""
+        if isinstance(self.component, VoltageControlledVoltageSource):
+            return f"{self.component.gain} V/V"
+        if isinstance(self.component, CurrentControlledVoltageSource):
+            return f"{self.component.transresistance} Ohm"
         return ""
 
 class CapacitorItem(ComponentItem):
@@ -510,6 +548,8 @@ def create_component_item(component_model) -> ComponentItem:
         return CurrentSourceItem(component_model)
     elif isinstance(component_model, (VoltageControlledCurrentSource, CurrentControlledCurrentSource)):
         return DependentCurrentSourceItem(component_model)
+    elif isinstance(component_model, (VoltageControlledVoltageSource, CurrentControlledVoltageSource)):
+        return DependentVoltageSourceItem(component_model)
     elif isinstance(component_model, Capacitor):
         return CapacitorItem(component_model)
     elif isinstance(component_model, Inductor):

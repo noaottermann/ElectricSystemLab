@@ -303,6 +303,72 @@ class CurrentControlledCurrentSource(Dipole):
         self.control_dipole_id = int(params.get("control_dipole_id", self.control_dipole_id) or 0)
 
 
+class VoltageControlledVoltageSource(Dipole):
+    """Source de tension dependante (VCVS)."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "VCVS",
+        gain: float = 1.0,
+        control_dipole_id: int = 0,
+    ) -> None:
+        """Initialise une source de tension commandee en tension."""
+        super().__init__(dipole_id, "VCVS", node_a, node_b, x, y, rotation)
+        self.gain = float(gain)
+        self.control_dipole_id = int(control_dipole_id)
+
+    def get_params(self) -> dict[str, float]:
+        """Retourne les parametres de la source dependante."""
+        return {
+            "gain": self.gain,
+            "control_dipole_id": self.control_dipole_id,
+        }
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Met a jour les parametres de la source dependante."""
+        self.gain = _get_float_param(params, "gain", 1.0)
+        self.control_dipole_id = int(params.get("control_dipole_id", self.control_dipole_id) or 0)
+
+
+class CurrentControlledVoltageSource(Dipole):
+    """Source de tension dependante (CCVS)."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "CCVS",
+        transresistance: float = 1.0,
+        control_dipole_id: int = 0,
+    ) -> None:
+        """Initialise une source de tension commandee en courant."""
+        super().__init__(dipole_id, "CCVS", node_a, node_b, x, y, rotation)
+        self.transresistance = float(transresistance)
+        self.control_dipole_id = int(control_dipole_id)
+
+    def get_params(self) -> dict[str, float]:
+        """Retourne les parametres de la source dependante."""
+        return {
+            "transresistance": self.transresistance,
+            "control_dipole_id": self.control_dipole_id,
+        }
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Met a jour les parametres de la source dependante."""
+        self.transresistance = _get_float_param(params, "transresistance", 1.0)
+        self.control_dipole_id = int(params.get("control_dipole_id", self.control_dipole_id) or 0)
+
+
 class Diode(Dipole):
     """Diode ideale avec loi exponentielle."""
 

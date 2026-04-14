@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model.circuit import Circuit
 from model.components import (
     Capacitor,
+    CurrentControlledVoltageSource,
     CurrentControlledCurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
@@ -14,6 +15,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
     VoltageSourceDC,
@@ -160,6 +162,75 @@ class TestDCSolver(unittest.TestCase):
         self.solver.solve(self.circuit)
 
         self.assertAlmostEqual(cccs.current, 2.0 * ctrl_source.current, places=5)
+
+    def test_cccs_can_use_resistor_control_current(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_ctrl = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        self.circuit.add_dipole(VoltageSourceDC(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, dc_voltage=10.0))
+        control_resistor = Resistor(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, resistance=1000.0)
+        self.circuit.add_dipole(control_resistor)
+
+        cccs = CurrentControlledCurrentSource(
+            self.circuit.get_next_dipole_id(),
+            n_out,
+            n_gnd,
+            gain=2.0,
+            control_dipole_id=control_resistor.id,
+        )
+        self.circuit.add_dipole(cccs)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_out, n_gnd, resistance=1000.0))
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(n_out.potential, 20.0, places=4)
+
+    def test_vcvs_sets_output_voltage(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_ctrl = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        ctrl_source = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, dc_voltage=2.0)
+        self.circuit.add_dipole(ctrl_source)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, resistance=1000.0))
+
+        vcvs = VoltageControlledVoltageSource(
+            self.circuit.get_next_dipole_id(),
+            n_out,
+            n_gnd,
+            gain=3.0,
+            control_dipole_id=ctrl_source.id,
+        )
+        self.circuit.add_dipole(vcvs)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_out, n_gnd, resistance=1000.0))
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(n_out.potential, 6.0, places=4)
+
+    def test_ccvs_sets_output_voltage_from_control_current(self):
+        n_gnd = self.circuit.create_node(0, 0, is_ground=True)
+        n_ctrl = self.circuit.create_node(0, 100)
+        n_out = self.circuit.create_node(80, 100)
+
+        self.circuit.add_dipole(VoltageSourceDC(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, dc_voltage=10.0))
+        control_resistor = Resistor(self.circuit.get_next_dipole_id(), n_ctrl, n_gnd, resistance=1000.0)
+        self.circuit.add_dipole(control_resistor)
+
+        ccvs = CurrentControlledVoltageSource(
+            self.circuit.get_next_dipole_id(),
+            n_out,
+            n_gnd,
+            transresistance=50.0,
+            control_dipole_id=control_resistor.id,
+        )
+        self.circuit.add_dipole(ccvs)
+        self.circuit.add_dipole(Resistor(self.circuit.get_next_dipole_id(), n_out, n_gnd, resistance=1000.0))
+
+        self.solver.solve(self.circuit)
+
+        self.assertAlmostEqual(n_out.potential, 0.5, places=4)
 
     def test_diode_forward_conduction(self):
         n_gnd = self.circuit.create_node(0, 0, is_ground=True)

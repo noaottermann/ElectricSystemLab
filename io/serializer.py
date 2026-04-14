@@ -8,6 +8,7 @@ from typing import Union
 from model.circuit import Circuit
 from model.components import (
 	Capacitor,
+	CurrentControlledVoltageSource,
 	CurrentControlledCurrentSource,
 	CurrentSourceAC,
 	CurrentSourceDC,
@@ -15,6 +16,7 @@ from model.components import (
 	Inductor,
 	LED,
 	Resistor,
+	VoltageControlledVoltageSource,
 	VoltageControlledCurrentSource,
 	VoltageSourceAC,
 	VoltageSourceDC,
@@ -33,6 +35,8 @@ def get_component_class_map() -> dict[str, type]:
 		"CurrentSourceAC": CurrentSourceAC,
 		"VoltageControlledCurrentSource": VoltageControlledCurrentSource,
 		"CurrentControlledCurrentSource": CurrentControlledCurrentSource,
+		"VoltageControlledVoltageSource": VoltageControlledVoltageSource,
+		"CurrentControlledVoltageSource": CurrentControlledVoltageSource,
 		"Diode": Diode,
 		"LED": LED,
 	}

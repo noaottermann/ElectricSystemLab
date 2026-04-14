@@ -138,6 +138,8 @@ class EditController:
 				"CurrentSourceAC",
 				"VoltageControlledCurrentSource",
 				"CurrentControlledCurrentSource",
+				"VoltageControlledVoltageSource",
+				"CurrentControlledVoltageSource",
 			}
 
 		self._filter_selection(_predicate)

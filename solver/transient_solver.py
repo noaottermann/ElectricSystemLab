@@ -6,6 +6,7 @@ import numpy as np
 
 from model.components import (
 	Capacitor,
+	CurrentControlledVoltageSource,
 	CurrentControlledCurrentSource,
 	CurrentSourceAC,
 	CurrentSourceDC,
@@ -13,6 +14,7 @@ from model.components import (
 	Inductor,
 	LED,
 	Resistor,
+	VoltageControlledVoltageSource,
 	VoltageControlledCurrentSource,
 	VoltageSourceAC,
 	VoltageSourceDC,
@@ -66,6 +68,8 @@ class TransientSolver(BaseSolver):
 					CurrentSourceAC,
 					VoltageControlledCurrentSource,
 					CurrentControlledCurrentSource,
+					VoltageControlledVoltageSource,
+					CurrentControlledVoltageSource,
 					Diode,
 					LED,
 				),
@@ -95,7 +99,8 @@ class TransientSolver(BaseSolver):
 				last_solution[idx] = float(node.potential)
 
 		has_nonlinear = any(isinstance(d, (Diode, LED)) for d in circuit.dipoles.values())
-		iterations = self._MAX_ITERATIONS if has_nonlinear else 1
+		has_cccs_current_control = self._has_cccs_non_voltage_control(circuit, voltage_source_indices)
+		iterations = self._MAX_ITERATIONS if (has_nonlinear or has_cccs_current_control) else 1
 
 		for t in time_values:
 			x = last_solution.copy()
@@ -130,10 +135,17 @@ class TransientSolver(BaseSolver):
 					group_to_idx,
 					ground_group_id,
 					A,
+					Z,
 					voltage_source_indices,
+					x,
+					t,
+					time_step,
+					capacitor_prev_voltage,
+					inductor_prev_current,
 				)
 				self._assemble_diodes(circuit, node_groups, group_to_idx, ground_group_id, A, Z, x)
 				self._assemble_voltage_sources(
+					circuit,
 					voltage_sources,
 					node_groups,
 					group_to_idx,
@@ -142,6 +154,11 @@ class TransientSolver(BaseSolver):
 					Z,
 					num_v_vars,
 					t,
+					x,
+					voltage_source_indices,
+					time_step,
+					capacitor_prev_voltage,
+					inductor_prev_current,
 				)
 
 				try:
@@ -149,7 +166,7 @@ class TransientSolver(BaseSolver):
 				except np.linalg.LinAlgError as exc:
 					raise ValueError("Erreur de resolution transitoire: matrice singuliere") from exc
 
-				if not has_nonlinear:
+				if not (has_nonlinear or has_cccs_current_control):
 					x = x_next
 					break
 				delta = np.max(np.abs(x_next - x))
@@ -188,7 +205,15 @@ class TransientSolver(BaseSolver):
 		return [
 			dipole
 			for dipole in circuit.dipoles.values()
-			if isinstance(dipole, (VoltageSourceDC, VoltageSourceAC))
+			if isinstance(
+				dipole,
+				(
+					VoltageSourceDC,
+					VoltageSourceAC,
+					VoltageControlledVoltageSource,
+					CurrentControlledVoltageSource,
+				),
+			)
 		]
 
 	def _build_time_grid(self, duration: float, time_step: float, start_time: float = 0.0) -> list[float]:
@@ -313,21 +338,47 @@ class TransientSolver(BaseSolver):
 		group_to_idx,
 		ground_group_id,
 		matrix_a,
+		vector_z,
 		voltage_source_indices: dict[int, int],
+		state_vector,
+		time_value: float,
+		time_step: float,
+		capacitor_prev_voltage,
+		inductor_prev_current,
 	) -> None:
 		for dipole in circuit.dipoles.values():
 			if not isinstance(dipole, CurrentControlledCurrentSource):
 				continue
-			ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
-			if ctrl_idx is None:
-				continue
 			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
 			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
 			gain = float(dipole.gain)
+			ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
+			if ctrl_idx is not None:
+				if idx_a is not None:
+					matrix_a[idx_a, ctrl_idx] += gain
+				if idx_b is not None:
+					matrix_a[idx_b, ctrl_idx] -= gain
+				continue
+
+			control = circuit.dipoles.get(dipole.control_dipole_id)
+			control_current = self._control_current_from_state(
+				circuit,
+				control,
+				node_groups,
+				group_to_idx,
+				ground_group_id,
+				state_vector,
+				voltage_source_indices,
+				time_value,
+				time_step,
+				capacitor_prev_voltage,
+				inductor_prev_current,
+			)
+			current = gain * control_current
 			if idx_a is not None:
-				matrix_a[idx_a, ctrl_idx] += gain
+				vector_z[idx_a] -= current
 			if idx_b is not None:
-				matrix_a[idx_b, ctrl_idx] -= gain
+				vector_z[idx_b] += current
 
 	def _assemble_diodes(
 		self,
@@ -354,6 +405,7 @@ class TransientSolver(BaseSolver):
 
 	def _assemble_voltage_sources(
 		self,
+		circuit,
 		voltage_sources,
 		node_groups,
 		group_to_idx,
@@ -362,6 +414,11 @@ class TransientSolver(BaseSolver):
 		vector_z,
 		current_var_offset: int,
 		time_value: float,
+		state_vector,
+		voltage_source_indices: dict[int, int],
+		time_step: float,
+		capacitor_prev_voltage,
+		inductor_prev_current,
 	) -> None:
 		for i, source in enumerate(voltage_sources):
 			idx_src = current_var_offset + i
@@ -377,8 +434,44 @@ class TransientSolver(BaseSolver):
 
 			if isinstance(source, VoltageSourceAC):
 				vector_z[idx_src] = source.get_value_at_time(time_value)
-			else:
+				continue
+			if isinstance(source, VoltageSourceDC):
 				vector_z[idx_src] = source.dc_voltage
+				continue
+			if isinstance(source, VoltageControlledVoltageSource):
+				control = circuit.dipoles.get(source.control_dipole_id)
+				if control is None:
+					continue
+				idx_c = matrix_index_for_node(control.node_a, node_groups, group_to_idx, ground_group_id)
+				idx_d = matrix_index_for_node(control.node_b, node_groups, group_to_idx, ground_group_id)
+				gain = float(source.gain)
+				if idx_c is not None:
+					matrix_a[idx_src, idx_c] -= gain
+				if idx_d is not None:
+					matrix_a[idx_src, idx_d] += gain
+				continue
+			if isinstance(source, CurrentControlledVoltageSource):
+				control = circuit.dipoles.get(source.control_dipole_id)
+				if control is None:
+					continue
+				ctrl_idx = voltage_source_indices.get(control.id)
+				if ctrl_idx is not None:
+					matrix_a[idx_src, ctrl_idx] -= float(source.transresistance)
+					continue
+				control_current = self._control_current_from_state(
+					circuit,
+					control,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					state_vector,
+					voltage_source_indices,
+					time_value,
+					time_step,
+					capacitor_prev_voltage,
+					inductor_prev_current,
+				)
+				vector_z[idx_src] = float(source.transresistance) * control_current
 
 	def _store_solution(
 		self,
@@ -443,11 +536,21 @@ class TransientSolver(BaseSolver):
 				if dipole.id in dipole_currents:
 					dipole_currents[dipole.id].append(float(dipole.current))
 			elif isinstance(dipole, CurrentControlledCurrentSource):
-				ctrl_idx = voltage_source_indices.get(dipole.control_dipole_id)
-				if ctrl_idx is not None:
-					dipole.current = dipole.gain * (-float(solution[ctrl_idx]))
-				else:
-					dipole.current = 0.0
+				control = circuit.dipoles.get(dipole.control_dipole_id)
+				control_current = self._control_current_from_state(
+					circuit,
+					control,
+					node_groups,
+					group_to_idx,
+					ground_group_id,
+					solution,
+					voltage_source_indices,
+					time_value,
+					time_step,
+					capacitor_prev_voltage,
+					inductor_prev_current,
+				)
+				dipole.current = dipole.gain * control_current
 				if dipole.id in dipole_currents:
 					dipole_currents[dipole.id].append(float(dipole.current))
 			elif isinstance(dipole, (Diode, LED)):
@@ -478,3 +581,83 @@ class TransientSolver(BaseSolver):
 				capacitor_prev_voltage[dipole.id] = float(dipole.voltage)
 			elif isinstance(dipole, Inductor):
 				inductor_prev_current[dipole.id] = float(dipole.current)
+
+	def _has_cccs_non_voltage_control(self, circuit, voltage_source_indices: dict[int, int]) -> bool:
+		for dipole in circuit.dipoles.values():
+			if not isinstance(dipole, CurrentControlledCurrentSource):
+				continue
+			ctrl_id = dipole.control_dipole_id
+			if ctrl_id and ctrl_id not in voltage_source_indices:
+				return True
+		return False
+
+	def _node_voltage_from_state(
+		self,
+		node,
+		node_groups,
+		group_to_idx,
+		ground_group_id,
+		state_vector,
+	) -> float:
+		if node is None:
+			return 0.0
+		gid = node_groups.get(node.id)
+		if gid == ground_group_id:
+			return 0.0
+		idx = group_to_idx.get(gid)
+		if idx is None:
+			return 0.0
+		return float(state_vector[idx])
+
+	def _control_current_from_state(
+		self,
+		circuit,
+		control,
+		node_groups,
+		group_to_idx,
+		ground_group_id,
+		state_vector,
+		voltage_source_indices: dict[int, int],
+		time_value: float,
+		time_step: float,
+		capacitor_prev_voltage,
+		inductor_prev_current,
+	) -> float:
+		if control is None:
+			return 0.0
+		ctrl_idx = voltage_source_indices.get(control.id)
+		if ctrl_idx is not None:
+			return -float(state_vector[ctrl_idx])
+		if isinstance(control, Resistor):
+			v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+			v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			if control.resistance == 0:
+				return 0.0
+			return (v_a - v_b) / control.resistance
+		if isinstance(control, CurrentSourceDC):
+			return float(control.dc_current)
+		if isinstance(control, CurrentSourceAC):
+			return float(control.get_value_at_time(time_value))
+		if isinstance(control, Capacitor):
+			v_prev = float(capacitor_prev_voltage.get(control.id, 0.0))
+			v_now = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector) - \
+				self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			return control.capacitance * (v_now - v_prev) / time_step
+		if isinstance(control, Inductor):
+			i_prev = float(inductor_prev_current.get(control.id, 0.0))
+			v_now = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector) - \
+				self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			return i_prev + (time_step / control.inductance) * v_now
+		if isinstance(control, VoltageControlledCurrentSource):
+			ctrl = circuit.dipoles.get(control.control_dipole_id)
+			if ctrl is None:
+				return 0.0
+			v_c = self._node_voltage_from_state(ctrl.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+			v_d = self._node_voltage_from_state(ctrl.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			return float(control.transconductance) * (v_c - v_d)
+		if isinstance(control, (Diode, LED)):
+			v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+			v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			current, _ = self._diode_current_and_conductance(v_a - v_b, control)
+			return current
+		return float(getattr(control, "current", 0.0))

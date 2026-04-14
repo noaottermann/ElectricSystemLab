@@ -4,6 +4,7 @@ from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -30,12 +31,14 @@ from controller.simulation_controller import SimulationController
 from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
+    CurrentControlledVoltageSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
     Inductor,
     LED,
     Resistor,
+    VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
     VoltageSourceDC,
@@ -471,6 +474,10 @@ class MainWindow(QMainWindow):
             return "transconductance", "S"
         if isinstance(component, CurrentControlledCurrentSource):
             return "gain", "A/A"
+        if isinstance(component, VoltageControlledVoltageSource):
+            return "gain", "V/V"
+        if isinstance(component, CurrentControlledVoltageSource):
+            return "transresistance", "Ohm"
         if isinstance(component, (Diode, LED)):
             return "saturation_current", "A"
         return None
@@ -1206,6 +1213,22 @@ class MainWindow(QMainWindow):
             return
         item = dipole_items[0]
         component = item.component
+        if isinstance(
+            component,
+            (
+                VoltageControlledCurrentSource,
+                CurrentControlledCurrentSource,
+                VoltageControlledVoltageSource,
+                CurrentControlledVoltageSource,
+            ),
+        ):
+            if self._edit_dependent_source_parameters(component):
+                if hasattr(self.scene, "_push_undo_snapshot"):
+                    self.scene._push_undo_snapshot()
+                item.update()
+                if hasattr(self.scene, "update"):
+                    self.scene.update()
+            return
         if isinstance(component, (VoltageSourceAC, CurrentSourceAC)):
             if self._edit_ac_source_parameters(component):
                 if hasattr(self.scene, "_push_undo_snapshot"):
@@ -1239,6 +1262,86 @@ class MainWindow(QMainWindow):
         item.update()
         if hasattr(self.scene, "update"):
             self.scene.update()
+
+    def _edit_dependent_source_parameters(self, component: Dipole) -> bool:
+        """Affiche un dialogue pour regler les sources dependantes."""
+        if not isinstance(
+            component,
+            (
+                VoltageControlledCurrentSource,
+                CurrentControlledCurrentSource,
+                VoltageControlledVoltageSource,
+                CurrentControlledVoltageSource,
+            ),
+        ):
+            return False
+
+        if isinstance(component, VoltageControlledCurrentSource):
+            unit = "S"
+            current_value = float(component.transconductance)
+        elif isinstance(component, CurrentControlledCurrentSource):
+            unit = "A/A"
+            current_value = float(component.gain)
+        elif isinstance(component, VoltageControlledVoltageSource):
+            unit = "V/V"
+            current_value = float(component.gain)
+        else:
+            unit = "Ohm"
+            current_value = float(component.transresistance)
+
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        gain_input = QDoubleSpinBox(dialog)
+        gain_input.setRange(-1e12, 1e12)
+        gain_input.setDecimals(6)
+        gain_input.setValue(current_value)
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_gain')} ({unit})",
+            gain_input,
+        )
+
+        control_input = QComboBox(dialog)
+        control_input.addItem(Translator.tr("dialog_edit_value_control_none"), 0)
+        selected_id = int(getattr(component, "control_dipole_id", 0) or 0)
+        dipoles = getattr(self.model, "dipoles", {}) if self.model is not None else {}
+        for dipole_id, dipole in sorted(dipoles.items()):
+            if dipole is component:
+                continue
+            label = f"{dipole_id} - {dipole.name}"
+            control_input.addItem(label, int(dipole_id))
+
+        if selected_id:
+            idx = control_input.findData(selected_id)
+            if idx >= 0:
+                control_input.setCurrentIndex(idx)
+
+        form_layout.addRow(Translator.tr("dialog_edit_value_control"), control_input)
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        value = float(gain_input.value())
+        if isinstance(component, VoltageControlledCurrentSource):
+            component.transconductance = value
+        elif isinstance(component, CurrentControlledCurrentSource):
+            component.gain = value
+        elif isinstance(component, VoltageControlledVoltageSource):
+            component.gain = value
+        else:
+            component.transresistance = value
+
+        component.control_dipole_id = int(control_input.currentData() or 0)
+        return True
 
     def _edit_ac_source_parameters(self, component: Dipole) -> bool:
         """Affiche un dialogue multi-parametres pour les sources AC."""

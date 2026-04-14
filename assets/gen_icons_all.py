@@ -36,6 +36,13 @@ def _soft_color(hex_color: str) -> QColor:
     return QColor(hex_color)
 
 
+def _draw_control_label(p, text: str) -> None:
+    font = QFont("Segoe UI", 8)
+    font.setBold(True)
+    p.setFont(font)
+    p.drawText(int(CENTER + 14), int(CENTER - 10), text)
+
+
 def save_icon(path, draw_func):
     image = QImage(SIZE, SIZE, QImage.Format_ARGB32)
     image.fill(Qt.transparent)
@@ -152,9 +159,10 @@ def draw_dependent_source_vccs(p):
     ])
     p.drawPolygon(diamond)
     p.setPen(_pen_light())
-    p.drawLine(CENTER_I - 10, CENTER_I, CENTER_I - 4, CENTER_I)
-    p.drawLine(CENTER_I - 7, CENTER_I - 3, CENTER_I - 7, CENTER_I + 3)
-    p.drawLine(CENTER_I + 4, CENTER_I, CENTER_I + 10, CENTER_I)
+    p.drawLine(CENTER_I - 6, CENTER_I, CENTER_I + 6, CENTER_I)
+    p.drawLine(CENTER_I + 6, CENTER_I, CENTER_I + 2, CENTER_I - 3)
+    p.drawLine(CENTER_I + 6, CENTER_I, CENTER_I + 2, CENTER_I + 3)
+    _draw_control_label(p, "Vx")
 
 
 def draw_dependent_source_cccs(p):
@@ -172,6 +180,43 @@ def draw_dependent_source_cccs(p):
     p.drawLine(CENTER_I - 6, CENTER_I, CENTER_I + 6, CENTER_I)
     p.drawLine(CENTER_I + 6, CENTER_I, CENTER_I + 2, CENTER_I - 3)
     p.drawLine(CENTER_I + 6, CENTER_I, CENTER_I + 2, CENTER_I + 3)
+    _draw_control_label(p, "Ix")
+
+
+def draw_dependent_source_vcvs(p):
+    p.setPen(_pen())
+    p.setBrush(Qt.NoBrush)
+    _leads(p, 14, CANVAS - 14)
+    diamond = QPolygonF([
+        QPointF(CENTER, CENTER - 18),
+        QPointF(CENTER + 18, CENTER),
+        QPointF(CENTER, CENTER + 18),
+        QPointF(CENTER - 18, CENTER),
+    ])
+    p.drawPolygon(diamond)
+    p.setPen(_pen_light())
+    p.drawLine(CENTER_I - 10, CENTER_I, CENTER_I - 4, CENTER_I)
+    p.drawLine(CENTER_I - 7, CENTER_I - 3, CENTER_I - 7, CENTER_I + 3)
+    p.drawLine(CENTER_I + 4, CENTER_I, CENTER_I + 10, CENTER_I)
+    _draw_control_label(p, "Vx")
+
+
+def draw_dependent_source_ccvs(p):
+    p.setPen(_pen())
+    p.setBrush(Qt.NoBrush)
+    _leads(p, 14, CANVAS - 14)
+    diamond = QPolygonF([
+        QPointF(CENTER, CENTER - 18),
+        QPointF(CENTER + 18, CENTER),
+        QPointF(CENTER, CENTER + 18),
+        QPointF(CENTER - 18, CENTER),
+    ])
+    p.drawPolygon(diamond)
+    p.setPen(_pen_light())
+    p.drawLine(CENTER_I - 10, CENTER_I, CENTER_I - 4, CENTER_I)
+    p.drawLine(CENTER_I - 7, CENTER_I - 3, CENTER_I - 7, CENTER_I + 3)
+    p.drawLine(CENTER_I + 4, CENTER_I, CENTER_I + 10, CENTER_I)
+    _draw_control_label(p, "Ix")
 
 
 def draw_diode(p):
@@ -240,6 +285,8 @@ def main():
     save_icon(os.path.join(COMP, "current_source_ac.png"), draw_current_source_ac)
     save_icon(os.path.join(COMP, "source_vccs.png"), draw_dependent_source_vccs)
     save_icon(os.path.join(COMP, "source_cccs.png"), draw_dependent_source_cccs)
+    save_icon(os.path.join(COMP, "source_vcvs.png"), draw_dependent_source_vcvs)
+    save_icon(os.path.join(COMP, "source_ccvs.png"), draw_dependent_source_ccvs)
     save_icon(os.path.join(COMP, "diode.png"), draw_diode)
     save_icon(os.path.join(COMP, "led.png"), draw_led)
 

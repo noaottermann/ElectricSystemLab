@@ -18,12 +18,14 @@ from PyQt5.QtWidgets import (
 from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
+    CurrentControlledVoltageSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
     Inductor,
     LED,
     Resistor,
+    VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
     VoltageSourceDC,
@@ -313,6 +315,8 @@ class CircuitScene(QGraphicsScene):
             "CurrentSourceAC": CurrentSourceAC,
             "VoltageControlledCurrentSource": VoltageControlledCurrentSource,
             "CurrentControlledCurrentSource": CurrentControlledCurrentSource,
+            "VoltageControlledVoltageSource": VoltageControlledVoltageSource,
+            "CurrentControlledVoltageSource": CurrentControlledVoltageSource,
             "Capacitor": Capacitor,
             "Inductor": Inductor,
             "Diode": Diode,
@@ -1208,7 +1212,9 @@ class CircuitScene(QGraphicsScene):
             "current_source_dc",
             "current_source_ac",
             "source_vccs",
+            "source_vcvs",
             "source_cccs",
+            "source_ccvs",
             "capacitor",
             "inductor",
             "diode",
@@ -1438,6 +1444,26 @@ class CircuitScene(QGraphicsScene):
                 x,
                 y,
                 name=f"F{d_id}",
+                control_dipole_id=_default_control_id(),
+            )
+        elif tool_type == "source_vcvs":
+            dipole = VoltageControlledVoltageSource(
+                d_id,
+                node_a,
+                node_b,
+                x,
+                y,
+                name=f"E{d_id}",
+                control_dipole_id=_default_control_id(),
+            )
+        elif tool_type == "source_ccvs":
+            dipole = CurrentControlledVoltageSource(
+                d_id,
+                node_a,
+                node_b,
+                x,
+                y,
+                name=f"H{d_id}",
                 control_dipole_id=_default_control_id(),
             )
         elif tool_type == "capacitor":

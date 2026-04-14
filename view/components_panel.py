@@ -330,9 +330,19 @@ class ComponentsPanel(QWidget):
 					"icon": "components/source_vccs.png",
 				},
 				{
+					"id": "source_vcvs",
+					"label_key": "components_item_source_vcvs",
+					"icon": "components/source_vcvs.png",
+				},
+				{
 					"id": "source_cccs",
 					"label_key": "components_item_source_cccs",
 					"icon": "components/source_cccs.png",
+				},
+				{
+					"id": "source_ccvs",
+					"label_key": "components_item_source_ccvs",
+					"icon": "components/source_ccvs.png",
 				},
 			],
 			"passive": [

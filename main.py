@@ -11,6 +11,7 @@ from utils.translator import Translator
 from utils.assets import get_logo_icon, logo_exists
 
 #TODO certaines clés de traduction sont dupliquées
+#TOOD les Controlled dipoles ne permettent pas de lancer la simulation, ça veut juste pas
 
 def _setup_windows_icon():
     """Configure l'icône pour Windows (taskbar et autres)."""
