@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QLabel,
     QVBoxLayout,
+    QSpinBox,
 )
 from controller.app_controller import AppController
 from controller.circuit_controller import CircuitController
@@ -493,6 +494,7 @@ class MainWindow(QMainWindow):
     def _create_simulation_actions(self) -> None:
         """Cree les actions de simulation."""
         self._make_action("action_sim_run_dc", None, self.on_run_simulation_dc)
+        self._make_action("action_sim_run_ac", None, self.on_run_simulation_ac)
         self._make_action("action_sim_run_transient", None, self.on_run_simulation_transient)
         self._make_action("action_sim_run_realtime", None, self.on_run_simulation_realtime)
         self._make_action("action_sim_pause", None, self.on_pause_resume_simulation)
@@ -987,6 +989,7 @@ class MainWindow(QMainWindow):
         self.simulation_bar.addWidget(self.simulation_filename_container)
 
         self.simulation_bar.addAction(self.custom_actions["action_sim_run_dc"])
+        self.simulation_bar.addAction(self.custom_actions["action_sim_run_ac"])
         self.simulation_bar.addAction(self.custom_actions["action_sim_run_transient"])
         self.simulation_bar.addAction(self.custom_actions["action_sim_run_realtime"])
         self.simulation_bar.addAction(self.custom_actions["action_sim_pause"])
@@ -1064,6 +1067,7 @@ class MainWindow(QMainWindow):
     def _apply_simulation_icons(self) -> None:
         """Mappe les actions de la barre simulation sur les icones du dossier assets/simulation."""
         self._set_action_icon_from_asset(self.custom_actions["action_sim_run_dc"], "simulation/run_dc.png")
+        self._set_action_icon_from_asset(self.custom_actions["action_sim_run_ac"], "simulation/run_ac.png")
         self._set_action_icon_from_asset(self.custom_actions["action_sim_run_transient"], "simulation/run_transient.png")
         self._set_action_icon_from_asset(self.custom_actions["action_sim_run_realtime"], "simulation/run_real_time.png")
         self._set_action_icon_from_asset(self.custom_actions["action_sim_stop"], "simulation/stop.png")
@@ -1648,6 +1652,33 @@ class MainWindow(QMainWindow):
             if hasattr(self, "graph_panel") and self.graph_panel is not None and self.model is not None:
                 self.graph_panel.set_dc_results(self.model)
 
+    def on_run_simulation_ac(self) -> None:
+        """Lance la simulation AC en regime sinusoidal."""
+        if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
+            return
+
+        if self.simulation_controller.is_realtime_running:
+            self.on_stop_simulation_realtime()
+
+        ac_params = self._prompt_ac_parameters()
+        if ac_params is None:
+            return
+        start_freq, stop_freq, points, sweep_key = ac_params
+
+        result = self.simulation_controller.run_ac(
+            start_freq=start_freq,
+            stop_freq=stop_freq,
+            points=points,
+            sweep=sweep_key,
+        )
+        if hasattr(self, "scene") and self.scene is not None:
+            if hasattr(self.scene, "update_overlay_indicators"):
+                self.scene.update_overlay_indicators()
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
+            self.graph_panel.set_ac_results(result, circuit=self.model)
+            if result and not self.graph_panel.isVisible():
+                self._set_graph_panel_visible(True)
+
     def on_run_simulation_transient(self) -> None:
         """Lance la simulation transitoire avec des parametres par defaut."""
         if not hasattr(self, "simulation_controller") or self.simulation_controller is None:
@@ -1656,29 +1687,10 @@ class MainWindow(QMainWindow):
         if self.simulation_controller.is_realtime_running:
             self.on_stop_simulation_realtime()
 
-        duration, ok_duration = QInputDialog.getDouble(
-            self,
-            Translator.tr("dialog_transient_title"),
-            Translator.tr("dialog_transient_duration"),
-            1.0,
-            1e-6,
-            1e6,
-            6,
-        )
-        if not ok_duration:
+        transient_params = self._prompt_transient_parameters()
+        if transient_params is None:
             return
-
-        time_step, ok_step = QInputDialog.getDouble(
-            self,
-            Translator.tr("dialog_transient_title"),
-            Translator.tr("dialog_transient_step"),
-            0.01,
-            1e-9,
-            1e6,
-            9,
-        )
-        if not ok_step:
-            return
+        duration, time_step = transient_params
 
         result = self.simulation_controller.run_transient(duration=duration, time_step=time_step)
         if hasattr(self, "scene") and self.scene is not None:
@@ -1688,6 +1700,82 @@ class MainWindow(QMainWindow):
             self.graph_panel.set_transient_results(result, circuit=self.model)
             if result and not self.graph_panel.isVisible():
                 self._set_graph_panel_visible(True)
+
+    def _prompt_ac_parameters(self) -> tuple[float, float, int, str] | None:
+        """Ouvre un dialogue unique pour la simulation AC."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(Translator.tr("dialog_ac_title"))
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        start_input = QDoubleSpinBox(dialog)
+        start_input.setRange(1e-3, 1e9)
+        start_input.setDecimals(6)
+        start_input.setValue(10.0)
+        form_layout.addRow(Translator.tr("dialog_ac_start_freq"), start_input)
+
+        stop_input = QDoubleSpinBox(dialog)
+        stop_input.setRange(1e-3, 1e9)
+        stop_input.setDecimals(6)
+        stop_input.setValue(10000.0)
+        form_layout.addRow(Translator.tr("dialog_ac_stop_freq"), stop_input)
+
+        points_input = QSpinBox(dialog)
+        points_input.setRange(1, 10000)
+        points_input.setValue(50)
+        form_layout.addRow(Translator.tr("dialog_ac_points"), points_input)
+
+        sweep_input = QComboBox(dialog)
+        sweep_input.addItem(Translator.tr("dialog_ac_sweep_log"), "log")
+        sweep_input.addItem(Translator.tr("dialog_ac_sweep_linear"), "linear")
+        form_layout.addRow(Translator.tr("dialog_ac_sweep"), sweep_input)
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+
+        sweep_key = str(sweep_input.currentData() or "log")
+        return (
+            float(start_input.value()),
+            float(stop_input.value()),
+            int(points_input.value()),
+            sweep_key,
+        )
+
+    def _prompt_transient_parameters(self) -> tuple[float, float] | None:
+        """Ouvre un dialogue unique pour la simulation transitoire."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(Translator.tr("dialog_transient_title"))
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        duration_input = QDoubleSpinBox(dialog)
+        duration_input.setRange(1e-6, 1e6)
+        duration_input.setDecimals(6)
+        duration_input.setValue(1.0)
+        form_layout.addRow(Translator.tr("dialog_transient_duration"), duration_input)
+
+        step_input = QDoubleSpinBox(dialog)
+        step_input.setRange(1e-9, 1e6)
+        step_input.setDecimals(9)
+        step_input.setValue(0.01)
+        form_layout.addRow(Translator.tr("dialog_transient_step"), step_input)
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+
+        return float(duration_input.value()), float(step_input.value())
 
     def _set_realtime_actions_state(self, is_running: bool) -> None:
         """Synchronise l'etat des actions de simulation temps reel."""

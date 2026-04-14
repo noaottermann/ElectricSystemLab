@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from solver.ac_solver import ACSolver
 from solver.dc_solver import DCSolver
 from solver.transient_solver import TransientSolver
 
@@ -13,8 +14,10 @@ class SimulationController:
 		self.model = model
 		self.app_controller = app_controller
 		self._dc_solver = DCSolver()
+		self._ac_solver = ACSolver()
 		self._transient_solver = TransientSolver()
 		self.last_transient_result = None
+		self.last_ac_result = None
 		self._realtime_running = False
 		self._realtime_time_step = 0.0
 		self._realtime_current_time = 0.0
@@ -32,6 +35,36 @@ class SimulationController:
 		self._dc_solver.solve(self.model)
 		if self.app_controller is not None:
 			self.app_controller.set_status("Simulation DC terminee")
+
+	def run_ac(
+		self,
+		start_freq: float,
+		stop_freq: float,
+		points: int,
+		sweep: str = "log",
+	):
+		"""Lance une simulation AC (phasors)."""
+		if self.model is None:
+			if self.app_controller is not None:
+				self.app_controller.set_status("Aucun circuit pour la simulation")
+			return None
+		try:
+			result = self._ac_solver.solve(
+				self.model,
+				start_freq=start_freq,
+				stop_freq=stop_freq,
+				points=points,
+				sweep=sweep,
+			)
+		except ValueError as exc:
+			if self.app_controller is not None:
+				self.app_controller.set_status(f"Simulation AC impossible: {exc}")
+			return None
+
+		self.last_ac_result = result
+		if self.app_controller is not None:
+			self.app_controller.set_status("Simulation AC terminee")
+		return result
 
 	def _solve_transient(self, duration: float, time_step: float, status_message: str | None):
 		"""Execute le solveur transitoire et met a jour l'etat interne."""

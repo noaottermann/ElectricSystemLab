@@ -50,11 +50,27 @@ class TimeSeriesPlotWidget(QWidget):
 		super().__init__(parent)
 		self.series = []
 		self.cursor_time = None
+		self.x_label = Translator.tr("graph_time_axis")
+		self.x_value_prefix = "t"
+		self.x_value_unit = "s"
 		self.setMinimumHeight(220)
 
-	def set_series(self, series: list[dict], cursor_time: float | None = None) -> None:
+	def set_series(
+		self,
+		series: list[dict],
+		cursor_time: float | None = None,
+		x_label: str | None = None,
+		x_value_prefix: str | None = None,
+		x_value_unit: str | None = None,
+	) -> None:
 		self.series = series
 		self.cursor_time = cursor_time
+		if x_label is not None:
+			self.x_label = x_label
+		if x_value_prefix is not None:
+			self.x_value_prefix = x_value_prefix
+		if x_value_unit is not None:
+			self.x_value_unit = x_value_unit
 		self.update()
 
 	def paintEvent(self, event) -> None:
@@ -107,7 +123,7 @@ class TimeSeriesPlotWidget(QWidget):
 		if plot_rect.left() <= y_axis_x <= plot_rect.right():
 			painter.drawLine(int(y_axis_x), plot_rect.top(), int(y_axis_x), plot_rect.bottom())
 		painter.setPen(QPen(QColor("#374151")))
-		painter.drawText(plot_rect.center().x() - 18, plot_rect.bottom() - 4, Translator.tr("graph_time_axis"))
+		painter.drawText(plot_rect.center().x() - 18, plot_rect.bottom() - 4, self.x_label)
 		painter.save()
 		painter.translate(plot_rect.left() + 10, plot_rect.center().y() + 24)
 		painter.rotate(-90)
@@ -147,7 +163,9 @@ class TimeSeriesPlotWidget(QWidget):
 			painter.setPen(QPen(QColor("#6b7280"), 1, Qt.DashLine))
 			painter.drawLine(int(cursor_x), plot_rect.top(), int(cursor_x), plot_rect.bottom())
 
-			info_lines = [f"t = {float(self.cursor_time):.4g} s"]
+			info_lines = [
+				f"{self.x_value_prefix} = {float(self.cursor_time):.4g} {self.x_value_unit}".rstrip()
+			]
 			for index, sample_time, sample_value in cursor_points[:4]:
 				label = str(self.series[index].get("label", f"Trace {index + 1}"))
 				unit_label = str(self.series[index].get("unit_label", Translator.tr("graph_value_axis")))
@@ -184,10 +202,12 @@ class GraphPanel(QWidget):
 		self.node_checkboxes: dict[str, QCheckBox] = {}
 		self.dipole_checkboxes: dict[str, QCheckBox] = {}
 		self.last_transient_result = None
+		self.last_ac_result = None
 		self.last_circuit = None
 		self.hover_time = None
 		self.cursor_time = None
 		self.transient_window_seconds = None
+		self.ac_show_phase = False
 
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(10, 8, 10, 8)
@@ -309,6 +329,17 @@ class GraphPanel(QWidget):
 		dipoles_controls_layout.addWidget(self.dipoles_select_none_button)
 		self.dipoles_layout.addWidget(dipoles_controls)
 		self.transient_controls_layout.addWidget(self.dipoles_group)
+
+		self.ac_options = QWidget()
+		self.ac_options_layout = QHBoxLayout(self.ac_options)
+		self.ac_options_layout.setContentsMargins(0, 0, 0, 0)
+		self.ac_options_layout.setSpacing(6)
+		self.ac_phase_checkbox = QCheckBox(Translator.tr("graph_ac_show_phase"))
+		self.ac_phase_checkbox.stateChanged.connect(self._on_ac_phase_toggle)
+		self.ac_options_layout.addWidget(self.ac_phase_checkbox)
+		self.ac_options_layout.addStretch(1)
+		self.ac_options.setVisible(False)
+		self.transient_controls_layout.addWidget(self.ac_options)
 		
 		self.transient_layout.addWidget(self.transient_controls)
 		
@@ -349,6 +380,8 @@ class GraphPanel(QWidget):
 		self.nodes_select_none_button.setText(Translator.tr("graph_select_none"))
 		self.dipoles_select_all_button.setText(Translator.tr("graph_select_all"))
 		self.dipoles_select_none_button.setText(Translator.tr("graph_select_none"))
+		if hasattr(self, "ac_phase_checkbox"):
+			self.ac_phase_checkbox.setText(Translator.tr("graph_ac_show_phase"))
 		if hasattr(self, "transient_voltage_plot"):
 			self.transient_voltage_plot.update()
 		if hasattr(self, "transient_current_plot"):
@@ -477,8 +510,21 @@ class GraphPanel(QWidget):
 			checkbox.blockSignals(False)
 		self._on_selection_changed()
 
+	def _on_ac_phase_toggle(self) -> None:
+		"""Bascule l'affichage en phase pour l'AC."""
+		self.ac_show_phase = bool(self.ac_phase_checkbox.isChecked())
+		if self.last_ac_result:
+			self._plot_ac_results(self.last_ac_result)
+			self._update_ac_stats(self.last_ac_result)
+
 	def _on_selection_changed(self) -> None:
 		"""Callback quand la sélection change."""
+		if self.last_ac_result:
+			self.selected_nodes = {node_id for node_id, checkbox in self.node_checkboxes.items() if checkbox.isChecked()}
+			self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
+			self._plot_ac_results(self.last_ac_result)
+			self._update_ac_stats(self.last_ac_result)
+			return
 		if not self.last_transient_result:
 			return
 		
@@ -498,7 +544,10 @@ class GraphPanel(QWidget):
 		self.selected_dipoles = set()
 		self.hover_time = None
 		self.cursor_time = None
+		self.last_ac_result = None
 		self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
+		if hasattr(self, "ac_options"):
+			self.ac_options.setVisible(False)
 		
 		if hasattr(self, "transient_voltage_plot"):
 			self.transient_voltage_plot.set_series([])
@@ -508,6 +557,63 @@ class GraphPanel(QWidget):
 	def set_dc_results(self, circuit) -> None:
 		"""Compatibilite: les resultats DC ne sont plus affiches dans ce panneau."""
 		return
+
+	def set_ac_results(self, result: dict | None, circuit=None) -> None:
+		"""Affiche les resultats AC (frequence)."""
+		if not result:
+			self.clear_results()
+			return
+
+		self.last_ac_result = result
+		self.last_transient_result = None
+		self.last_circuit = circuit
+		if hasattr(self, "ac_options"):
+			self.ac_options.setVisible(True)
+
+		previous_node_states = {node_id: checkbox.isChecked() for node_id, checkbox in self.node_checkboxes.items()}
+		previous_dipole_states = {dipole_id: checkbox.isChecked() for dipole_id, checkbox in self.dipole_checkboxes.items()}
+
+		node_voltages = result.get("node_voltage_mag", {})
+		dipole_currents = result.get("dipole_current_mag", {})
+		available_node_ids = {str(node_id) for node_id in node_voltages.keys()}
+		available_dipole_ids = {str(dipole_id) for dipole_id in dipole_currents.keys()}
+		node_ids_changed = available_node_ids != set(self.node_checkboxes.keys())
+		dipole_ids_changed = available_dipole_ids != set(self.dipole_checkboxes.keys())
+
+		if node_ids_changed:
+			self._sync_checkbox_group(
+				self.nodes_scroll_layout,
+				self.node_checkboxes,
+				available_node_ids,
+				self._create_node_checkbox,
+			)
+		if dipole_ids_changed:
+			self._sync_checkbox_group(
+				self.dipoles_scroll_layout,
+				self.dipole_checkboxes,
+				available_dipole_ids,
+				self._create_dipole_checkbox,
+			)
+
+		if node_ids_changed:
+			for node_id, checkbox in self.node_checkboxes.items():
+				target_checked = previous_node_states.get(node_id, True)
+				checkbox.blockSignals(True)
+				checkbox.setChecked(target_checked)
+				checkbox.blockSignals(False)
+
+		if dipole_ids_changed:
+			for dipole_id, checkbox in self.dipole_checkboxes.items():
+				target_checked = previous_dipole_states.get(dipole_id, True)
+				checkbox.blockSignals(True)
+				checkbox.setChecked(target_checked)
+				checkbox.blockSignals(False)
+
+		self.selected_nodes = {node_id for node_id, checkbox in self.node_checkboxes.items() if checkbox.isChecked()}
+		self.selected_dipoles = {dipole_id for dipole_id, checkbox in self.dipole_checkboxes.items() if checkbox.isChecked()}
+
+		self._plot_ac_results(result)
+		self._update_ac_stats(result)
 
 	def set_transient_results(self, result: dict | None, circuit=None) -> None:
 		"""Affiche les traces transitoires avec graphiques."""
@@ -522,6 +628,7 @@ class GraphPanel(QWidget):
 
 		# Stocke les résultats pour les mises à jour interactives
 		self.last_transient_result = result
+		self.last_ac_result = None
 		self.last_circuit = circuit
 		previous_node_states = {node_id: checkbox.isChecked() for node_id, checkbox in self.node_checkboxes.items()}
 		previous_dipole_states = {dipole_id: checkbox.isChecked() for dipole_id, checkbox in self.dipole_checkboxes.items()}
@@ -624,6 +731,43 @@ class GraphPanel(QWidget):
 
 		return visible_time_values, selected_nodes, selected_dipoles
 
+	def _collect_selected_ac_traces(
+		self,
+		result: dict,
+	) -> tuple[np.ndarray, list[tuple[str, np.ndarray, np.ndarray]], list[tuple[str, np.ndarray, np.ndarray]]]:
+		frequencies = np.asarray(result.get("frequency", []), dtype=float)
+		if frequencies.size == 0:
+			return frequencies, [], []
+
+		if self.ac_show_phase:
+			node_data = result.get("node_voltage_phase", {})
+			dipole_data = result.get("dipole_current_phase", {})
+		else:
+			node_data = result.get("node_voltage_mag", {})
+			dipole_data = result.get("dipole_current_mag", {})
+
+		selected_nodes: list[tuple[str, np.ndarray, np.ndarray]] = []
+		for node_id in sorted(node_data.keys(), key=lambda value: str(value)):
+			if str(node_id) not in self.selected_nodes:
+				continue
+			values = np.asarray(node_data.get(node_id, []), dtype=float)
+			if values.size == 0:
+				continue
+			trim_size = min(values.size, frequencies.size)
+			selected_nodes.append((str(node_id), frequencies[:trim_size], values[:trim_size]))
+
+		selected_dipoles: list[tuple[str, np.ndarray, np.ndarray]] = []
+		for dipole_id in sorted(dipole_data.keys(), key=lambda value: str(value)):
+			if str(dipole_id) not in self.selected_dipoles:
+				continue
+			values = np.asarray(dipole_data.get(dipole_id, []), dtype=float)
+			if values.size == 0:
+				continue
+			trim_size = min(values.size, frequencies.size)
+			selected_dipoles.append((str(dipole_id), frequencies[:trim_size], values[:trim_size]))
+
+		return frequencies, selected_nodes, selected_dipoles
+
 	def _plot_transient_results_native(self, result: dict) -> None:
 		"""Prépare un rendu natif Qt des courbes transitoires."""
 		cursor_time = self.cursor_time if self.cursor_time is not None else self.hover_time
@@ -650,9 +794,125 @@ class GraphPanel(QWidget):
 		]
 
 		if hasattr(self, 'transient_voltage_plot'):
-			self.transient_voltage_plot.set_series(voltage_series, cursor_time=cursor_time)
+			self.transient_voltage_plot.set_series(
+				voltage_series,
+				cursor_time=cursor_time,
+				x_label=Translator.tr("graph_time_axis"),
+				x_value_prefix="t",
+				x_value_unit="s",
+			)
 		if hasattr(self, 'transient_current_plot'):
-			self.transient_current_plot.set_series(current_series, cursor_time=cursor_time)
+			self.transient_current_plot.set_series(
+				current_series,
+				cursor_time=cursor_time,
+				x_label=Translator.tr("graph_time_axis"),
+				x_value_prefix="t",
+				x_value_unit="s",
+			)
+
+	def _plot_ac_results(self, result: dict) -> None:
+		cursor_freq = self.cursor_time if self.cursor_time is not None else self.hover_time
+		_, selected_nodes, selected_dipoles = self._collect_selected_ac_traces(result)
+
+		if self.ac_show_phase:
+			voltage_unit = Translator.tr("graph_ac_voltage_phase_axis")
+			current_unit = Translator.tr("graph_ac_current_phase_axis")
+		else:
+			voltage_unit = Translator.tr("graph_ac_voltage_mag_axis")
+			current_unit = Translator.tr("graph_ac_current_mag_axis")
+
+		voltage_series = [
+			{
+				"x": freq_values,
+				"y": values,
+				"label": f"D{node_id}",
+				"unit_label": voltage_unit,
+			}
+			for node_id, freq_values, values in selected_nodes
+		]
+
+		current_series = [
+			{
+				"x": freq_values,
+				"y": values,
+				"label": f"D{dipole_id}",
+				"unit_label": current_unit,
+			}
+			for dipole_id, freq_values, values in selected_dipoles
+		]
+
+		if hasattr(self, "transient_voltage_plot"):
+			self.transient_voltage_plot.set_series(
+				voltage_series,
+				cursor_time=cursor_freq,
+				x_label=Translator.tr("graph_ac_frequency_axis"),
+				x_value_prefix="f",
+				x_value_unit="Hz",
+			)
+		if hasattr(self, "transient_current_plot"):
+			self.transient_current_plot.set_series(
+				current_series,
+				cursor_time=cursor_freq,
+				x_label=Translator.tr("graph_ac_frequency_axis"),
+				x_value_prefix="f",
+				x_value_unit="Hz",
+			)
+
+	def _build_ac_trace_stats(self, label: str, unit: str, freq_values: np.ndarray, values: np.ndarray) -> str:
+		if values.size == 0:
+			return f"{label}\n  {Translator.tr('graph_state')}      : {Translator.tr('graph_empty_trace')}"
+
+		parts = [
+			f"{label}",
+			f"  {Translator.tr('graph_min')}       : {float(values.min()):.4g} {unit}",
+			f"  {Translator.tr('graph_max')}       : {float(values.max()):.4g} {unit}",
+			f"  {Translator.tr('graph_rms')}       : {_rms(values):.4g} {unit}",
+			f"  {Translator.tr('graph_final')}     : {float(values[-1]):.4g} {unit}",
+		]
+		cursor_freq = self.cursor_time if self.cursor_time is not None else self.hover_time
+		if cursor_freq is not None and freq_values.size:
+			_, sample_freq, sample_value = _trace_value_at_time(freq_values, values, cursor_freq)
+			parts.append(f"  {Translator.tr('graph_cursor')}   : f={sample_freq:.4g} Hz -> {sample_value:.4g} {unit}")
+		return "\n".join(parts)
+
+	def _update_ac_stats(self, result: dict) -> None:
+		freq_values, selected_nodes, selected_dipoles = self._collect_selected_ac_traces(result)
+		lines = [Translator.tr("graph_ac_measurements_title")]
+		if freq_values.size:
+			lines.append(
+				Translator.tr("graph_ac_window").format(
+					start=float(freq_values[0]),
+					end=float(freq_values[-1]),
+					count=len(freq_values),
+				)
+			)
+		lines.append("")
+
+		if self.ac_show_phase:
+			voltage_unit = Translator.tr("graph_ac_phase_unit")
+			current_unit = Translator.tr("graph_ac_phase_unit")
+		else:
+			voltage_unit = Translator.tr("graph_voltage_unit")
+			current_unit = Translator.tr("graph_current_unit")
+
+		if selected_nodes:
+			lines.append(Translator.tr("graph_voltage_section"))
+		for node_id, node_freq, values in selected_nodes:
+			lines.append(self._build_ac_trace_stats(f"D{node_id}", voltage_unit, node_freq, values))
+			lines.append("")
+
+		if selected_dipoles:
+			lines.append(Translator.tr("graph_current_section"))
+		for dipole_id, dipole_freq, values in selected_dipoles:
+			lines.append(self._build_ac_trace_stats(f"D{dipole_id}", current_unit, dipole_freq, values))
+			lines.append("")
+
+		if not selected_nodes and not selected_dipoles:
+			lines.append(Translator.tr("graph_no_measure"))
+
+		while lines and lines[-1] == "":
+			lines.pop()
+		self.transient_stats_text.setPlainText("\n".join(lines))
 
 	def _build_trace_stats(self, label: str, unit: str, time_values: np.ndarray, values: np.ndarray) -> str:
 		"""Construit un bloc de stats lisible pour une trace."""

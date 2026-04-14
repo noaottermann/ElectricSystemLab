@@ -196,5 +196,22 @@
     "graph_current_last_point": "Dipoles (last point):",
     "graph_dc_title": "DC simulation",
     "graph_dc_voltage_section": "Dipoles (voltages):",
-    "graph_dc_current_section": "Dipoles (currents):"
+    "graph_dc_current_section": "Dipoles (currents):",
+    "action_sim_run_ac": "AC simulation",
+    "dialog_ac_title": "AC simulation",
+    "dialog_ac_start_freq": "Start frequency (Hz)",
+    "dialog_ac_stop_freq": "Stop frequency (Hz)",
+    "dialog_ac_points": "Points",
+    "dialog_ac_sweep": "Sweep",
+    "dialog_ac_sweep_log": "Log",
+    "dialog_ac_sweep_linear": "Linear",
+    "graph_ac_show_phase": "Show phase",
+    "graph_ac_frequency_axis": "Frequency (Hz)",
+    "graph_ac_voltage_mag_axis": "Voltage (V)",
+    "graph_ac_current_mag_axis": "Current (A)",
+    "graph_ac_voltage_phase_axis": "Phase (deg)",
+    "graph_ac_current_phase_axis": "Phase (deg)",
+    "graph_ac_measurements_title": "AC MEASUREMENTS",
+    "graph_ac_window": "Frequency: {start:.4g} Hz -> {end:.4g} Hz ({count} points)",
+    "graph_ac_phase_unit": "deg"
 }
