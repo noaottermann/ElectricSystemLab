@@ -556,6 +556,8 @@ class GraphPanel(QWidget):
 
 	def set_dc_results(self, circuit) -> None:
 		"""Compatibilite: les resultats DC ne sont plus affiches dans ce panneau."""
+		if hasattr(self, "ac_options"):
+			self.ac_options.setVisible(False)
 		return
 
 	def set_ac_results(self, result: dict | None, circuit=None) -> None:
@@ -624,12 +626,16 @@ class GraphPanel(QWidget):
 			if hasattr(self, "transient_current_plot"):
 				self.transient_current_plot.set_series([])
 			self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
+			if hasattr(self, "ac_options"):
+				self.ac_options.setVisible(False)
 			return
 
 		# Stocke les résultats pour les mises à jour interactives
 		self.last_transient_result = result
 		self.last_ac_result = None
 		self.last_circuit = circuit
+		if hasattr(self, "ac_options"):
+			self.ac_options.setVisible(False)
 		previous_node_states = {node_id: checkbox.isChecked() for node_id, checkbox in self.node_checkboxes.items()}
 		previous_dipole_states = {dipole_id: checkbox.isChecked() for dipole_id, checkbox in self.dipole_checkboxes.items()}
 
