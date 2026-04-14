@@ -110,6 +110,15 @@ class DCSolver:
                 print("Erreur de resolution: matrice singuliere")
                 return
 
+            self._refresh_dependent_currents(
+                circuit,
+                node_groups,
+                group_to_idx,
+                ground_group_id,
+                x_next,
+                voltage_source_indices,
+            )
+
             if not (has_nonlinear or has_cccs_current_control):
                 x = x_next
                 break
@@ -159,6 +168,45 @@ class DCSolver:
         for i, v_src in enumerate(voltage_sources):
             idx_src = num_v_vars + i
             v_src.current = -float(x[idx_src])
+
+    def _refresh_dependent_currents(
+        self,
+        circuit,
+        node_groups,
+        group_to_idx,
+        ground_group_id,
+        state_vector,
+        voltage_source_indices: dict[int, int],
+    ) -> None:
+        for _ in range(self._MAX_ITERATIONS):
+            max_delta = 0.0
+            for dipole in circuit.dipoles.values():
+                previous = float(getattr(dipole, "current", 0.0))
+                if isinstance(dipole, (VoltageSourceDC, VoltageControlledVoltageSource, CurrentControlledVoltageSource)):
+                    idx = voltage_source_indices.get(dipole.id)
+                    if idx is not None:
+                        dipole.current = -float(state_vector[idx])
+                elif isinstance(dipole, VoltageControlledCurrentSource):
+                    control = circuit.dipoles.get(dipole.control_dipole_id)
+                    if control is not None:
+                        dipole.current = dipole.transconductance * float(control.voltage)
+                    else:
+                        dipole.current = 0.0
+                elif isinstance(dipole, CurrentControlledCurrentSource):
+                    control = circuit.dipoles.get(dipole.control_dipole_id)
+                    control_current = self._control_current_from_state(
+                        circuit,
+                        control,
+                        node_groups,
+                        group_to_idx,
+                        ground_group_id,
+                        state_vector,
+                        voltage_source_indices,
+                    )
+                    dipole.current = dipole.gain * control_current
+                max_delta = max(max_delta, abs(float(getattr(dipole, "current", 0.0)) - previous))
+            if max_delta <= self._CONVERGENCE_TOL:
+                break
 
     def _collect_voltage_sources(self, circuit) -> list[object]:
         """Retourne les sources de tension continues du circuit."""
@@ -406,9 +454,17 @@ class DCSolver:
         ground_group_id,
         state_vector,
         voltage_source_indices: dict[int, int],
+        visited: Optional[set[int]] = None,
     ) -> float:
         if control is None:
             return 0.0
+        if visited is None:
+            visited = set()
+        control_id = int(getattr(control, "id", 0) or 0)
+        if control_id in visited:
+            return float(getattr(control, "current", 0.0))
+        if control_id:
+            visited.add(control_id)
         ctrl_idx = voltage_source_indices.get(control.id)
         if ctrl_idx is not None:
             return -float(state_vector[ctrl_idx])
@@ -427,6 +483,18 @@ class DCSolver:
             v_c = self._node_voltage_from_state(ctrl.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
             v_d = self._node_voltage_from_state(ctrl.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
             return float(control.transconductance) * (v_c - v_d)
+        if isinstance(control, CurrentControlledCurrentSource):
+            ctrl = circuit.dipoles.get(control.control_dipole_id)
+            return float(control.gain) * self._control_current_from_state(
+                circuit,
+                ctrl,
+                node_groups,
+                group_to_idx,
+                ground_group_id,
+                state_vector,
+                voltage_source_indices,
+                visited=visited,
+            )
         if isinstance(control, (Diode, LED)):
             v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
             v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)

@@ -415,7 +415,15 @@ class CircuitScene(QGraphicsScene):
 
         def _dipole_current_for_kcl(dipole: object) -> float:
             current = float(getattr(dipole, "current", 0.0))
-            if isinstance(dipole, (VoltageSourceDC, VoltageSourceAC)):
+            if isinstance(
+                dipole,
+                (
+                    VoltageSourceDC,
+                    VoltageSourceAC,
+                    VoltageControlledVoltageSource,
+                    CurrentControlledVoltageSource,
+                ),
+            ):
                 return -current
             return current
 
