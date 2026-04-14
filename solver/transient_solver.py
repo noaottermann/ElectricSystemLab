@@ -28,6 +28,8 @@ class TransientSolver(BaseSolver):
 
 	_MAX_ITERATIONS = 30
 	_CONVERGENCE_TOL = 1e-6
+	_RELAXATION_MIN = 0.1
+	_RELAXATION_DECAY = 0.5
 
 	def solve(self, circuit, duration: float, time_step: float, start_time: float = 0.0) -> dict[str, object]:
 		"""Resout le circuit pour chaque pas de temps et retourne les traces."""
@@ -102,9 +104,20 @@ class TransientSolver(BaseSolver):
 		has_cccs_current_control = self._has_cccs_non_voltage_control(circuit, voltage_source_indices)
 		iterations = self._MAX_ITERATIONS if (has_nonlinear or has_cccs_current_control) else 1
 
+		diagnostics: list[dict[str, float | int | bool]] = []
 		for t in time_values:
 			x = last_solution.copy()
-			for _ in range(iterations):
+			step_diag = {
+				"time": float(t),
+				"converged": True,
+				"iterations": 0,
+				"max_delta": 0.0,
+				"residual": 0.0,
+				"relaxation": 1.0,
+			}
+			prev_delta = float("inf")
+			prev_residual = float("inf")
+			for iteration in range(iterations):
 				A = np.zeros((total_vars, total_vars))
 				Z = np.zeros(total_vars)
 
@@ -164,15 +177,56 @@ class TransientSolver(BaseSolver):
 				try:
 					x_next = np.linalg.solve(A, Z)
 				except np.linalg.LinAlgError as exc:
+					step_diag.update(
+						{
+							"converged": False,
+							"iterations": iteration + 1,
+							"max_delta": float("inf"),
+							"residual": float("inf"),
+							"relaxation": 0.0,
+						}
+					)
+					diagnostics.append(step_diag)
 					raise ValueError("Erreur de resolution transitoire: matrice singuliere") from exc
 
 				if not (has_nonlinear or has_cccs_current_control):
 					x = x_next
+					step_diag.update(
+						{
+							"iterations": iteration + 1,
+							"max_delta": 0.0,
+							"residual": float(np.max(np.abs(A.dot(x_next) - Z))),
+							"relaxation": 1.0,
+						}
+					)
 					break
-				delta = np.max(np.abs(x_next - x))
-				x = x_next
+
+				x_relaxed, delta, residual, relaxation = self._apply_relaxation(
+					x,
+					x_next,
+					A,
+					Z,
+					prev_delta,
+					prev_residual,
+				)
+				x = x_relaxed
+				prev_delta = delta
+				prev_residual = residual
+				step_diag.update(
+					{
+						"iterations": iteration + 1,
+						"max_delta": float(delta),
+						"residual": float(residual),
+						"relaxation": float(relaxation),
+					}
+				)
 				if delta <= self._CONVERGENCE_TOL:
 					break
+			else:
+				step_diag["converged"] = False
+
+			if has_nonlinear or has_cccs_current_control:
+				diagnostics.append(step_diag)
 
 			self._store_solution(
 				circuit,
@@ -199,7 +253,30 @@ class TransientSolver(BaseSolver):
 			"node_potentials": node_potentials,
 			"dipole_voltages": dipole_voltages,
 			"dipole_currents": dipole_currents,
+			"diagnostics": diagnostics,
 		}
+
+	def _apply_relaxation(
+		self,
+		x,
+		x_next,
+		matrix_a,
+		vector_z,
+		prev_delta: float,
+		prev_residual: float,
+	) -> tuple[np.ndarray, float, float, float]:
+		"""Applique un amortissement si la mise a jour diverge."""
+		update = x_next - x
+		relaxation = 1.0
+		while True:
+			x_trial = x + relaxation * update
+			delta = float(np.max(np.abs(x_trial - x)))
+			residual = float(np.max(np.abs(matrix_a.dot(x_trial) - vector_z)))
+			if delta <= prev_delta or residual <= prev_residual:
+				return x_trial, delta, residual, relaxation
+			if relaxation <= self._RELAXATION_MIN:
+				return x_trial, delta, residual, relaxation
+			relaxation *= self._RELAXATION_DECAY
 
 	def _collect_voltage_sources(self, circuit) -> list[object]:
 		return [
