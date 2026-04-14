@@ -1779,14 +1779,16 @@ class MainWindow(QMainWindow):
         min_value, max_value = self._dialog_double_limits(1e-6, 1e6)
         duration_input.setRange(min_value, max_value)
         duration_input.setDecimals(6)
-        duration_input.setValue(1.0)
+        duration_input.setValue(0.01)
+        duration_input.setSingleStep(0.01)
         form_layout.addRow(Translator.tr("dialog_transient_duration"), duration_input)
 
         step_input = QDoubleSpinBox(dialog)
         min_value, max_value = self._dialog_double_limits(1e-9, 1e6)
         step_input.setRange(min_value, max_value)
         step_input.setDecimals(9)
-        step_input.setValue(0.01)
+        step_input.setSingleStep(0.0001)
+        step_input.setValue(0.0003)
         form_layout.addRow(Translator.tr("dialog_transient_step"), step_input)
 
         layout.addLayout(form_layout)
@@ -1799,6 +1801,32 @@ class MainWindow(QMainWindow):
             return None
 
         return float(duration_input.value()), float(step_input.value())
+
+    def _prompt_realtime_parameters(self) -> float | None:
+        """Ouvre un dialogue unique pour le pas de temps en temps reel."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(Translator.tr("dialog_realtime_title"))
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        step_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(1e-9, 1e6)
+        step_input.setRange(min_value, max_value)
+        step_input.setDecimals(9)
+        step_input.setSingleStep(0.0001)
+        step_input.setValue(0.0003)
+        form_layout.addRow(Translator.tr("dialog_transient_step"), step_input)
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+
+        return float(step_input.value())
 
     def _set_realtime_actions_state(self, is_running: bool) -> None:
         """Synchronise l'etat des actions de simulation temps reel."""
@@ -1856,17 +1884,8 @@ class MainWindow(QMainWindow):
         if self.simulation_controller.is_realtime_running:
             return
 
-        min_value, max_value = self._dialog_double_limits(1e-9, 1e6)
-        time_step, ok_step = QInputDialog.getDouble(
-            self,
-            Translator.tr("dialog_realtime_title"),
-            Translator.tr("dialog_transient_step"),
-            0.01,
-            min_value,
-            max_value,
-            9,
-        )
-        if not ok_step:
+        time_step = self._prompt_realtime_parameters()
+        if time_step is None:
             return
 
         if hasattr(self, "graph_panel") and self.graph_panel is not None:
