@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self._configure_window_geometry()
         self._set_window_logo()
         self.include_simulation_in_export = False
+        self._allow_unbounded_dialogs = False
         self._realtime_paused = False
         self._realtime_speed_multiplier = 1.0
         self._realtime_speed_accumulator = 0.0
@@ -613,6 +614,7 @@ class MainWindow(QMainWindow):
         self._make_action("action_precision", None, self.on_set_precision)
         self._make_action("action_sci_notation", None, self.on_toggle_sci_notation)
         self._make_action("action_cross_cursor", None, self.on_toggle_cross_cursor)
+        self._make_action("action_dialog_limits", None, self.on_toggle_dialog_limits)
         self._make_action("action_enable_anim", None, self.on_toggle_animations)
         self._make_action("action_allow_overlap", None, self.on_toggle_overlap)
         self._make_action("action_disable_editing", None, self.on_toggle_editing)
@@ -837,6 +839,7 @@ class MainWindow(QMainWindow):
         self.menu_options.addAction(self.custom_actions["action_precision"])
         self.menu_options.addAction(self.custom_actions["action_sci_notation"])
         self.menu_options.addAction(self.custom_actions["action_cross_cursor"])
+        self.menu_options.addAction(self.custom_actions["action_dialog_limits"])
         self.menu_options.addAction(self.custom_actions["action_enable_anim"])
         self.menu_options.addAction(self.custom_actions["action_allow_overlap"])
         self.menu_options.addAction(self.custom_actions["action_disable_editing"])
@@ -1117,6 +1120,7 @@ class MainWindow(QMainWindow):
         self._update_grid_toggle_label()
         self._update_snap_toggle_label()
         self._update_pause_toggle_label()
+        self._update_dialog_limits_label()
 
         if hasattr(self, "toolbar_cut_action") and self.toolbar_cut_action is not None:
             self.toolbar_cut_action.setText(Translator.tr("action_cut"))
@@ -1171,6 +1175,14 @@ class MainWindow(QMainWindow):
         action.setText(Translator.tr(label_key))
         icon_name = "simulation/resume.png" if self._realtime_paused else "simulation/pause.png"
         self._set_action_icon_from_asset(action, icon_name)
+
+    def _update_dialog_limits_label(self) -> None:
+        """Met a jour le libelle du mode de limites des dialogues."""
+        action = self.custom_actions.get("action_dialog_limits")
+        if action is None:
+            return
+        label_key = "action_dialog_limits_strict" if self._allow_unbounded_dialogs else "action_dialog_limits_relaxed"
+        action.setText(Translator.tr(label_key))
 
     def change_language(self, lang: str) -> None:
         """Change la langue et rafraichit l'interface."""
@@ -1249,13 +1261,14 @@ class MainWindow(QMainWindow):
         current_value = float(getattr(component, param_key, 0.0))
         title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
         label = f"{Translator.tr('dialog_edit_value_label')} ({unit})"
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
         new_value, ok = QInputDialog.getDouble(
             self,
             title,
             label,
             current_value,
-            -1e12,
-            1e12,
+            min_value,
+            max_value,
             6,
         )
         if not ok:
@@ -1300,7 +1313,8 @@ class MainWindow(QMainWindow):
         form_layout = QFormLayout()
 
         gain_input = QDoubleSpinBox(dialog)
-        gain_input.setRange(-1e12, 1e12)
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
+        gain_input.setRange(min_value, max_value)
         gain_input.setDecimals(6)
         gain_input.setValue(current_value)
         form_layout.addRow(
@@ -1361,7 +1375,8 @@ class MainWindow(QMainWindow):
         form_layout = QFormLayout()
 
         amplitude_input = QDoubleSpinBox(dialog)
-        amplitude_input.setRange(-1e12, 1e12)
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
+        amplitude_input.setRange(min_value, max_value)
         amplitude_input.setDecimals(6)
         amplitude_input.setValue(float(component.amplitude))
         form_layout.addRow(
@@ -1370,7 +1385,8 @@ class MainWindow(QMainWindow):
         )
 
         frequency_input = QDoubleSpinBox(dialog)
-        frequency_input.setRange(0.0, 1e12)
+        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
+        frequency_input.setRange(min_value, max_value)
         frequency_input.setDecimals(6)
         frequency_input.setValue(float(component.frequency))
         form_layout.addRow(
@@ -1379,7 +1395,8 @@ class MainWindow(QMainWindow):
         )
 
         phase_input = QDoubleSpinBox(dialog)
-        phase_input.setRange(-360.0, 360.0)
+        min_value, max_value = self._dialog_double_limits(-360.0, 360.0)
+        phase_input.setRange(min_value, max_value)
         phase_input.setDecimals(4)
         phase_input.setValue(float(component.phase))
         form_layout.addRow(
@@ -1388,7 +1405,8 @@ class MainWindow(QMainWindow):
         )
 
         offset_input = QDoubleSpinBox(dialog)
-        offset_input.setRange(-1e12, 1e12)
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
+        offset_input.setRange(min_value, max_value)
         offset_input.setDecimals(6)
         offset_input.setValue(float(component.offset))
         form_layout.addRow(
@@ -1709,19 +1727,22 @@ class MainWindow(QMainWindow):
         form_layout = QFormLayout()
 
         start_input = QDoubleSpinBox(dialog)
-        start_input.setRange(1e-3, 1e9)
+        min_value, max_value = self._dialog_double_limits(1e-3, 1e9)
+        start_input.setRange(min_value, max_value)
         start_input.setDecimals(6)
         start_input.setValue(10.0)
         form_layout.addRow(Translator.tr("dialog_ac_start_freq"), start_input)
 
         stop_input = QDoubleSpinBox(dialog)
-        stop_input.setRange(1e-3, 1e9)
+        min_value, max_value = self._dialog_double_limits(1e-3, 1e9)
+        stop_input.setRange(min_value, max_value)
         stop_input.setDecimals(6)
         stop_input.setValue(10000.0)
         form_layout.addRow(Translator.tr("dialog_ac_stop_freq"), stop_input)
 
         points_input = QSpinBox(dialog)
-        points_input.setRange(1, 10000)
+        min_value, max_value = self._dialog_int_limits(1, 10000)
+        points_input.setRange(min_value, max_value)
         points_input.setValue(50)
         form_layout.addRow(Translator.tr("dialog_ac_points"), points_input)
 
@@ -1755,13 +1776,15 @@ class MainWindow(QMainWindow):
         form_layout = QFormLayout()
 
         duration_input = QDoubleSpinBox(dialog)
-        duration_input.setRange(1e-6, 1e6)
+        min_value, max_value = self._dialog_double_limits(1e-6, 1e6)
+        duration_input.setRange(min_value, max_value)
         duration_input.setDecimals(6)
         duration_input.setValue(1.0)
         form_layout.addRow(Translator.tr("dialog_transient_duration"), duration_input)
 
         step_input = QDoubleSpinBox(dialog)
-        step_input.setRange(1e-9, 1e6)
+        min_value, max_value = self._dialog_double_limits(1e-9, 1e6)
+        step_input.setRange(min_value, max_value)
         step_input.setDecimals(9)
         step_input.setValue(0.01)
         form_layout.addRow(Translator.tr("dialog_transient_step"), step_input)
@@ -1833,13 +1856,14 @@ class MainWindow(QMainWindow):
         if self.simulation_controller.is_realtime_running:
             return
 
+        min_value, max_value = self._dialog_double_limits(1e-9, 1e6)
         time_step, ok_step = QInputDialog.getDouble(
             self,
             Translator.tr("dialog_realtime_title"),
             Translator.tr("dialog_transient_step"),
             0.01,
-            1e-9,
-            1e6,
+            min_value,
+            max_value,
             9,
         )
         if not ok_step:
@@ -1922,13 +1946,14 @@ class MainWindow(QMainWindow):
 
     def on_set_simulation_speed(self) -> None:
         """Configure la vitesse de la simulation temps reel."""
+        min_value, max_value = self._dialog_double_limits(0.1, 100.0)
         value, ok = QInputDialog.getDouble(
             self,
             Translator.tr("action_sim_speed"),
             Translator.tr("action_sim_speed"),
             self._realtime_speed_multiplier,
-            0.1,
-            100.0,
+            min_value,
+            max_value,
             2,
         )
         if not ok:
@@ -1955,13 +1980,14 @@ class MainWindow(QMainWindow):
                 self.app_controller.set_status("Simulation temps reel non demarree")
             return
 
+        min_value, max_value = self._dialog_double_limits(0.0, 1e9)
         value, ok = QInputDialog.getDouble(
             self,
             Translator.tr("action_sim_jump_time"),
             Translator.tr("action_sim_jump_time"),
             self.simulation_controller.realtime_elapsed_time,
-            0.0,
-            1e9,
+            min_value,
+            max_value,
             6,
         )
         if not ok:
@@ -2074,6 +2100,26 @@ class MainWindow(QMainWindow):
         """Bascule le curseur en croix."""
         if hasattr(self, "app_controller") and self.app_controller is not None:
             self.app_controller.not_implemented("Curseur en croix")
+
+    def on_toggle_dialog_limits(self) -> None:
+        """Autorise ou limite les bornes des dialogues."""
+        self._allow_unbounded_dialogs = not self._allow_unbounded_dialogs
+        self._update_dialog_limits_label()
+        if self.app_controller is not None:
+            status_key = "action_dialog_limits_relaxed" if self._allow_unbounded_dialogs else "action_dialog_limits_strict"
+            self.app_controller.set_status(Translator.tr(status_key))
+
+    def _dialog_double_limits(self, min_value: float, max_value: float) -> tuple[float, float]:
+        """Retourne les bornes a appliquer aux champs numeriques."""
+        if not self._allow_unbounded_dialogs:
+            return min_value, max_value
+        return -1e18, 1e18
+
+    def _dialog_int_limits(self, min_value: int, max_value: int) -> tuple[int, int]:
+        """Retourne les bornes a appliquer aux champs entiers."""
+        if not self._allow_unbounded_dialogs:
+            return min_value, max_value
+        return -1_000_000, 1_000_000
 
     def on_toggle_animations(self) -> None:
         """Bascule les animations."""
