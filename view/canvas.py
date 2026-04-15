@@ -2091,6 +2091,7 @@ class CircuitScene(QGraphicsScene):
 
     def update_wires_connected_to(self, component_model, new_pos: QPointF, rotation: float) -> None:
         """Met a jour les fils connectes pendant le deplacement d'un composant."""
+        self._detach_component_from_shared_nodes(component_model)
         
         # Positions des noeuds depuis le centre et la rotation du composant
         cx, cy = new_pos.x(), new_pos.y()
@@ -2112,6 +2113,36 @@ class CircuitScene(QGraphicsScene):
                 wire = item.wire
                 if wire.node_a.id in node_ids or wire.node_b.id in node_ids:
                     item.refresh_geometry()
+
+    def _detach_component_from_shared_nodes(self, component_model) -> None:
+        """Detache un dipole d'un noeud partage avec d'autres dipoles si besoin."""
+        if component_model is None or self.model is None:
+            return
+
+        selected_components = set()
+        if self._group_move_active:
+            selected_components = {
+                item.component for item in self.selectedItems() if isinstance(item, ComponentItem)
+            }
+
+        for attr in ("node_a", "node_b"):
+            node = getattr(component_model, attr, None)
+            if node is None:
+                continue
+            connected = [
+                dipole for dipole in getattr(node, "connected_dipoles", [])
+                if dipole is not component_model
+            ]
+            if not connected:
+                continue
+            if self._group_move_active and selected_components:
+                if all(dipole in selected_components for dipole in connected):
+                    continue
+            nx, ny = node.position
+            new_node = self.model.create_node(float(nx), float(ny))
+            node.remove_connection(component_model)
+            new_node.add_connection(component_model)
+            setattr(component_model, attr, new_node)
 
     def cancel_wire_drawing(self) -> None:
         """Annule l'operation de dessin de fil en cours."""
