@@ -543,6 +543,22 @@ class LedItem(DiodeItem):
 class SwitchItem(ComponentItem):
     """Item graphique pour un interrupteur."""
 
+    def mousePressEvent(self, event) -> None:
+        """Bascule l'etat du switch avec clic droit."""
+        if event.button() == Qt.RightButton:
+            if self.scene() and hasattr(self.scene(), "_push_undo_snapshot"):
+                self.scene()._push_undo_snapshot()
+            current = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+            new_state = "closed" if current != "closed" else "open"
+            if hasattr(self.component, "set_state"):
+                self.component.set_state(new_state)
+            self.update()
+            if self.scene() is not None:
+                self.scene().update()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def draw_symbol(self, painter: QPainter) -> None:
         """Dessine le symbole d'un interrupteur."""
         painter.setPen(self._pen())

@@ -1229,6 +1229,7 @@ class CircuitScene(QGraphicsScene):
             "inductor",
             "diode",
             "led",
+            "switch",
         ]:
             self.add_component_at(self.current_tool, grid_x, grid_y)
             event.accept()

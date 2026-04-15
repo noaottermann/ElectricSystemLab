@@ -245,7 +245,10 @@ def draw_led(p):
 
 def draw_category_base(p, color, label):
     rect = QRectF(0, 0, CANVAS, CANVAS)
-    font = QFont("Segoe UI", 40)
+    font_size = 40
+    if len(label) >= 2:
+        font_size = 32
+    font = QFont("Segoe UI", font_size)
     font.setBold(True)
     p.setFont(font)
     p.setPen(QPen(_soft_color(color), 2))
