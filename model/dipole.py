@@ -77,6 +77,14 @@ class Dipole:
         """Retourne les parametres specifiques du dipole."""
         return {}
 
+    def get_state(self) -> Optional[str]:
+        """Retourne l'etat courant (pour les dipoles a variantes)."""
+        return None
+
+    def get_state_options(self) -> list[tuple[str, str]]:
+        """Retourne la liste des etats (valeur, libelle)."""
+        return []
+
     @classmethod
     def from_dict(cls, data: dict, nodes_dict: dict) -> "Dipole":
         """Reconstruit un dipole a partir d'un dictionnaire."""
@@ -99,6 +107,10 @@ class Dipole:
 
     def set_params(self, params: dict) -> None:
         """Applique des parametres specifiques au dipole."""
+        return None
+
+    def set_state(self, value: str) -> None:
+        """Met a jour l'etat du dipole si applicable."""
         return None
 
     def __repr__(self) -> str:

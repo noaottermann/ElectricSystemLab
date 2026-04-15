@@ -42,7 +42,7 @@ class ComponentsPanel(QWidget):
 		self.category_list = QListWidget()
 		self.category_list.setObjectName("categoryList")
 		self.category_list.setViewMode(QListWidget.ListMode)
-		self.category_list.setFixedWidth(72)
+		self.category_list.setFixedWidth(100)
 		self.category_list.setSpacing(0)
 		self.category_list.setUniformItemSizes(True)
 		self.category_list.setSelectionMode(QListWidget.SingleSelection)
@@ -268,8 +268,8 @@ class ComponentsPanel(QWidget):
 		"""Construit la liste des categories par defaut."""
 		return [
 			{
-				"key": "connections",
-				"label_key": "components_category_connections",
+				"key": "topology",
+				"label_key": "components_category_topology",
 				"icon": "categories/connections.png",
 				"color": "#7a6a3a",
 			},
@@ -280,27 +280,50 @@ class ComponentsPanel(QWidget):
 				"color": "#f25f5c",
 			},
 			{
-				"key": "passive",
-				"label_key": "components_category_passive",
+				"key": "passives",
+				"label_key": "components_category_passives",
 				"icon": "categories/passive.png",
 				"color": "#247ba0",
 			},
 			{
-				"key": "nonlinear",
-				"label_key": "components_category_nonlinear",
+				"key": "semiconductors",
+				"label_key": "components_category_semiconductors",
 				"icon": "categories/nonlinear.png",
 				"color": "#8b5cf6",
+			},
+			{
+				"key": "analog_ics",
+				"label_key": "components_category_analog_ics",
+				"icon": "categories/active.png",
+				"color": "#e07a5f",
+			},
+			{
+				"key": "electromechanical",
+				"label_key": "components_category_electromechanical",
+				"icon": "categories/connections.png",
+				"color": "#9c6644",
+			},
+			{
+				"key": "instruments",
+				"label_key": "components_category_instruments",
+				"icon": "categories/instruments.png",
+				"color": "#4d908e",
 			},
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
 		"""Construit les composants par defaut affiches dans la liste."""
 		return {
-			"connections": [
+			"topology": [
 				{
 					"id": "wire",
 					"label_key": "components_item_wire",
 					"icon": "components/wire.png",
+				},
+				{
+					"id": "ground",
+					"label_key": "components_item_ground",
+					"icon": "components/ground.png",
 				},
 			],
 			"sources": [
@@ -345,7 +368,7 @@ class ComponentsPanel(QWidget):
 					"icon": "components/source_ccvs.png",
 				},
 			],
-			"passive": [
+			"passives": [
 				{
 					"id": "resistor",
 					"label_key": "components_item_resistor",
@@ -361,17 +384,68 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
 				},
+				{
+					"id": "transformer",
+					"label_key": "components_item_transformer",
+					"icon": "components/transformer.png",
+				},
 			],
-			"nonlinear": [
+			"semiconductors": [
 				{
 					"id": "diode",
 					"label_key": "components_item_diode",
 					"icon": "components/diode.png",
 				},
 				{
+					"id": "zener",
+					"label_key": "components_item_zener",
+					"icon": "components/zener.png",
+				},
+				{
 					"id": "led",
 					"label_key": "components_item_led",
 					"icon": "components/led.png",
+				},
+				{
+					"id": "bjt_npn",
+					"label_key": "components_item_bjt_npn",
+					"icon": "components/bjt_npn.png",
+				},
+				{
+					"id": "bjt_pnp",
+					"label_key": "components_item_bjt_pnp",
+					"icon": "components/bjt_pnp.png",
+				},
+			],
+			"analog_ics": [
+				{
+					"id": "opamp_3",
+					"label_key": "components_item_opamp_3",
+					"icon": "components/opamp_3.png",
+				},
+				{
+					"id": "opamp_5",
+					"label_key": "components_item_opamp_5",
+					"icon": "components/opamp_5.png",
+				},
+			],
+			"electromechanical": [
+				{
+					"id": "switch",
+					"label_key": "components_item_switch",
+					"icon": "components/switch.png",
+				},
+			],
+			"instruments": [
+				{
+					"id": "voltmeter",
+					"label_key": "components_item_voltmeter",
+					"icon": "components/voltmeter.png",
+				},
+				{
+					"id": "ammeter",
+					"label_key": "components_item_ammeter",
+					"icon": "components/ammeter.png",
 				},
 			],
 		}
@@ -394,7 +468,7 @@ class ComponentsPanel(QWidget):
 		self._sync_category_item_widths()
 
 	def _on_category_changed(self, current: Optional[QListWidgetItem], _previous: Optional[QListWidgetItem]) -> None:
-		"""Fait defiler la liste des composants selon la categorie active."""
+		"""Fait defiler la liste d'elements de circuit selon la categorie active."""
 		if current is None:
 			return
 		category_key = current.data(Qt.UserRole)
@@ -423,7 +497,7 @@ class ComponentsPanel(QWidget):
 		self.tool_selected.emit(str(component_id))
 
 	def _populate_components_all(self) -> None:
-		"""Remplit la liste des composants pour toutes les categories."""
+		"""Remplit la liste d'elements de circuit pour toutes les categories."""
 		self.components_list.clear()
 		for category in self._category_data:
 			self._add_category_section(category)
@@ -475,7 +549,7 @@ class ComponentsPanel(QWidget):
 				return
 
 	def _apply_search_filter(self, text: str) -> None:
-		"""Filtre la liste de composants selon le texte de recherche."""
+		"""Filtre la liste d'elements de circuit selon le texte de recherche."""
 		filter_text = text.strip().lower()
 		self._set_filter_state(filter_text)
 		visible_by_category = self._apply_component_filter(filter_text)
@@ -547,7 +621,7 @@ class ComponentsPanel(QWidget):
 				return
 
 	def _find_top_visible_item(self) -> Optional[QListWidgetItem]:
-		"""Retourne le premier item visible dans la liste des composants."""
+		"""Retourne le premier item visible dans la liste d'elements de circuit."""
 		viewport_rect = self.components_list.viewport().rect()
 		for row in range(self.components_list.count()):
 			item = self.components_list.item(row)
