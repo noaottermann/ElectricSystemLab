@@ -12,7 +12,6 @@ from utils.assets import get_logo_icon, logo_exists
 
 #TODO certaines clés de traduction sont dupliquées
 #TODO boucles arbitraires à changer
-#TODO bug quand je déplace un dipôle qui a une rotation d'angle non nulle et que j'essaie de le connecter à 2 fils, un des fils aura une extrémité de perdue, sans noeud apparent
 
 def _setup_windows_icon():
     """Configure l'icône pour Windows (taskbar et autres)."""

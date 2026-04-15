@@ -1521,6 +1521,21 @@ class CircuitScene(QGraphicsScene):
         candidate_a = self._find_nearest_external_connectable_node(component_model, ax, ay, threshold)
         candidate_b = self._find_nearest_external_connectable_node(component_model, bx, by, threshold)
 
+        if candidate_a and candidate_b and candidate_a[0] is not candidate_b[0]:
+            mapping = self._try_snap_component_between_nodes(
+                component_item,
+                candidate_a[0],
+                candidate_b[0],
+                threshold,
+            )
+            if mapping is not None:
+                node_for_a, node_for_b = mapping
+                self._reattach_component_terminal_node(component_model, "node_a", node_for_a)
+                self._reattach_component_terminal_node(component_model, "node_b", node_for_b)
+                component_item.update_model_nodes()
+                self._refresh_component_wires(component_model)
+                return
+
         best = None
         if candidate_a and candidate_b:
             best = ("a", candidate_a[0]) if candidate_a[1] <= candidate_b[1] else ("b", candidate_b[0])
@@ -1563,6 +1578,53 @@ class CircuitScene(QGraphicsScene):
             used_target_nodes.add(target_node)
 
         # Rafraichit tous les fils lies a ce dipole apres d'eventuels rattachements de noeuds
+        self._refresh_component_wires(component_model)
+
+    def _try_snap_component_between_nodes(
+        self,
+        component_item: ComponentItem,
+        node_a,
+        node_b,
+        threshold: float,
+    ) -> Optional[tuple[object, object]]:
+        """Tente d'aligner les deux bornes du dipole sur deux noeuds cibles."""
+        if node_a is None or node_b is None:
+            return None
+        ax, ay = node_a.position
+        bx, by = node_b.position
+
+        rotation = math.radians(component_item.rotation())
+        offset = 30.0
+        dx = offset * math.cos(rotation)
+        dy = offset * math.sin(rotation)
+
+        center_x = (ax + bx) / 2.0
+        center_y = (ay + by) / 2.0
+
+        term_a = (center_x - dx, center_y - dy)
+        term_b = (center_x + dx, center_y + dy)
+
+        def _dist(p1, p2) -> float:
+            return ((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2) ** 0.5
+
+        direct = _dist((ax, ay), term_a) + _dist((bx, by), term_b)
+        swap = _dist((ax, ay), term_b) + _dist((bx, by), term_a)
+
+        if direct <= swap:
+            best = ((node_a, node_b), _dist((ax, ay), term_a), _dist((bx, by), term_b))
+        else:
+            best = ((node_b, node_a), _dist((ax, ay), term_b), _dist((bx, by), term_a))
+
+        (node_for_a, node_for_b), dist_a, dist_b = best
+        if dist_a > threshold or dist_b > threshold:
+            return None
+
+        component_item.setPos(QPointF(center_x, center_y))
+        component_item.update_model_nodes()
+        return node_for_a, node_for_b
+
+    def _refresh_component_wires(self, component_model) -> None:
+        """Rafraichit les fils relies a un dipole."""
         node_ids = {component_model.node_a.id, component_model.node_b.id}
         for item in self.items():
             if isinstance(item, WireItem):
