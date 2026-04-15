@@ -4,6 +4,8 @@ from PyQt5.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
 
+from utils.translator import Translator
+
 from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
@@ -597,7 +599,8 @@ class SwitchItem(ComponentItem):
 
     def get_value_text(self) -> str:
         state = (getattr(self.component, "get_state", lambda: "")() or "").lower()
-        return "Closed" if state == "closed" else "Open"
+        key = "switch_state_closed" if state == "closed" else "switch_state_open"
+        return Translator.tr(key)
 
     def _start_flash(self) -> None:
         self._flash_elapsed.start()

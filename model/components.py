@@ -102,8 +102,8 @@ class Switch(StatefulDipole):
         rotation: float = 0.0,
         name: str = "Switch",
         state: str = "open",
-        resistance_closed: float = 1e-2,
-        resistance_open: float = 1e9,
+        resistance_closed: float = 0.0,
+        resistance_open: float = 1e12,
     ) -> None:
         """Initialise un interrupteur ideal."""
         super().__init__(
@@ -115,7 +115,7 @@ class Switch(StatefulDipole):
             y,
             rotation,
             state=str(state),
-            state_options=[("open", "Open"), ("closed", "Closed")],
+            state_options=[("open", "switch_state_open"), ("closed", "switch_state_closed")],
         )
         self.resistance_closed = float(resistance_closed)
         self.resistance_open = float(resistance_open)
@@ -124,8 +124,8 @@ class Switch(StatefulDipole):
     def resistance(self) -> float:
         """Retourne la resistance equivalente selon l'etat."""
         if (self.get_state() or "").lower() == "closed":
-            return self.resistance_closed
-        return self.resistance_open
+            return self.resistance_closed if self.resistance_closed > 0.0 else 1e-9
+        return self.resistance_open if self.resistance_open > 0.0 else 1e12
 
     def get_params(self) -> dict[str, float]:
         """Retourne les parametres du switch."""
@@ -141,8 +141,8 @@ class Switch(StatefulDipole):
     def set_params(self, params: dict[str, Any]) -> None:
         """Met a jour les parametres du switch."""
         super().set_params(params)
-        self.resistance_closed = _get_float_param(params, "resistance_closed", 1e-2)
-        self.resistance_open = _get_float_param(params, "resistance_open", 1e9)
+        self.resistance_closed = _get_float_param(params, "resistance_closed", 0.0)
+        self.resistance_open = _get_float_param(params, "resistance_open", 1e12)
 
 class VoltageSourceDC(Dipole):
     """Source de tension continue ideale"""

@@ -39,6 +39,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    Switch,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
@@ -503,7 +504,7 @@ class MainWindow(QMainWindow):
 
         state_input = QComboBox(dialog)
         for value, label in state_options:
-            state_input.addItem(label, value)
+            state_input.addItem(Translator.tr(str(label)), value)
         current_state = None
         if hasattr(component, "get_state"):
             current_state = component.get_state()
@@ -544,7 +545,7 @@ class MainWindow(QMainWindow):
         if state_options:
             state_input = QComboBox(dialog)
             for value, label in state_options:
-                state_input.addItem(label, value)
+                state_input.addItem(Translator.tr(str(label)), value)
             current_state = None
             if hasattr(component, "get_state"):
                 current_state = component.get_state()
@@ -1343,6 +1344,14 @@ class MainWindow(QMainWindow):
                 if hasattr(self.scene, "update"):
                     self.scene.update()
             return
+        if isinstance(component, Switch):
+            if self._edit_switch_parameters(component):
+                if hasattr(self.scene, "_push_undo_snapshot"):
+                    self.scene._push_undo_snapshot()
+                item.update()
+                if hasattr(self.scene, "update"):
+                    self.scene.update()
+            return
         config = self._get_edit_value_config(component)
         if config is None and not state_options:
             QMessageBox.information(self, Translator.tr("action_edit_value"), Translator.tr("dialog_edit_value_unsupported"))
@@ -1513,6 +1522,61 @@ class MainWindow(QMainWindow):
         component.frequency = float(frequency_input.value())
         component.phase = float(phase_input.value())
         component.offset = float(offset_input.value())
+        return True
+
+    def _edit_switch_parameters(self, component: Dipole) -> bool:
+        """Affiche un dialogue pour regler l'etat et les resistances du switch."""
+        if not isinstance(component, Switch):
+            return False
+
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        state_input = QComboBox(dialog)
+        for value, label in component.get_state_options():
+            state_input.addItem(Translator.tr(str(label)), value)
+        current_state = component.get_state()
+        if current_state is not None:
+            idx = state_input.findData(str(current_state))
+            if idx >= 0:
+                state_input.setCurrentIndex(idx)
+        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+
+        closed_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
+        closed_input.setRange(min_value, max_value)
+        closed_input.setDecimals(6)
+        closed_input.setValue(float(component.resistance_closed))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_switch_closed_resistance')} (Ohm)",
+            closed_input,
+        )
+
+        open_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
+        open_input.setRange(min_value, max_value)
+        open_input.setDecimals(6)
+        open_input.setValue(float(component.resistance_open))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_switch_open_resistance')} (Ohm)",
+            open_input,
+        )
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        component.set_state(str(state_input.currentData()))
+        component.resistance_closed = float(closed_input.value())
+        component.resistance_open = float(open_input.value())
         return True
 
     def on_export(self) -> None:

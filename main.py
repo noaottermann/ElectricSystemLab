@@ -13,6 +13,7 @@ from utils.assets import get_logo_icon, logo_exists
 #TODO certaines clés de traduction sont dupliquées
 #TODO boucles arbitraires à changer
 #TODO taille des graphiques inférieur à taille liste des éléments
+#TODO vérfier si les interrupteurs sont cohérents dans les comportements avec autres composants
 
 def _setup_windows_icon():
     """Configure l'icône pour Windows (taskbar et autres)."""
