@@ -269,27 +269,27 @@ class DCSolver:
             if max_delta <= self._CONVERGENCE_TOL:
                 break
 
-        def _apply_relaxation(
-            self,
-            x,
-            x_next,
-            matrix_a,
-            vector_z,
-            prev_delta: float,
-            prev_residual: float,
-        ) -> tuple[np.ndarray, float, float, float]:
-            """Applique un amortissement si la mise a jour diverge."""
-            update = x_next - x
-            relaxation = 1.0
-            while True:
-                x_trial = x + relaxation * update
-                delta = float(np.max(np.abs(x_trial - x)))
-                residual = float(np.max(np.abs(matrix_a.dot(x_trial) - vector_z)))
-                if delta <= prev_delta or residual <= prev_residual:
-                    return x_trial, delta, residual, relaxation
-                if relaxation <= self._RELAXATION_MIN:
-                    return x_trial, delta, residual, relaxation
-                relaxation *= self._RELAXATION_DECAY
+    def _apply_relaxation(
+        self,
+        x,
+        x_next,
+        matrix_a,
+        vector_z,
+        prev_delta: float,
+        prev_residual: float,
+    ) -> tuple[np.ndarray, float, float, float]:
+        """Applique un amortissement si la mise a jour diverge."""
+        update = x_next - x
+        relaxation = 1.0
+        while True:
+            x_trial = x + relaxation * update
+            delta = float(np.max(np.abs(x_trial - x)))
+            residual = float(np.max(np.abs(matrix_a.dot(x_trial) - vector_z)))
+            if delta <= prev_delta or residual <= prev_residual:
+                return x_trial, delta, residual, relaxation
+            if relaxation <= self._RELAXATION_MIN:
+                return x_trial, delta, residual, relaxation
+            relaxation *= self._RELAXATION_DECAY
 
     def _collect_voltage_sources(self, circuit) -> list[object]:
         """Retourne les sources de tension continues du circuit."""
