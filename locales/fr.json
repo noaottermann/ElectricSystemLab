@@ -129,6 +129,7 @@
     "dialog_edit_value_state": "Etat",
     "dialog_edit_value_switch_closed_resistance": "Resistance fermee",
     "dialog_edit_value_switch_open_resistance": "Resistance ouverte",
+    "dialog_edit_value_switch_ideal": "Idéal",
     "dialog_edit_value_amplitude": "Amplitude",
     "dialog_edit_value_frequency": "Frequence",
     "dialog_edit_value_phase": "Phase",

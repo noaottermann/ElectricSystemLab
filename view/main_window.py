@@ -515,6 +515,11 @@ class MainWindow(QMainWindow):
 
         form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
         layout.addLayout(form_layout)
+
+        ideal_button = QPushButton(Translator.tr("dialog_edit_value_switch_ideal"), dialog)
+        ideal_button.clicked.connect(lambda: self._reset_switch_ideal(closed_input, open_input))
+        layout.addWidget(ideal_button)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -1566,6 +1571,11 @@ class MainWindow(QMainWindow):
         )
 
         layout.addLayout(form_layout)
+
+        ideal_button = QPushButton(Translator.tr("dialog_edit_value_switch_ideal"), dialog)
+        ideal_button.clicked.connect(lambda: self._reset_switch_ideal(closed_input, open_input))
+        layout.addWidget(ideal_button)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -1578,6 +1588,11 @@ class MainWindow(QMainWindow):
         component.resistance_closed = float(closed_input.value())
         component.resistance_open = float(open_input.value())
         return True
+
+    def _reset_switch_ideal(self, closed_input: QDoubleSpinBox, open_input: QDoubleSpinBox) -> None:
+        """Reinitialise le switch en mode ideal (Rfermee=0, Rouvert=1e12)."""
+        closed_input.setValue(0.0)
+        open_input.setValue(1e12)
 
     def on_export(self) -> None:
         """Declenche l'export de donnees."""
