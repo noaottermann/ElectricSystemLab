@@ -252,20 +252,32 @@ def draw_category_base(p, color, label):
     p.drawText(rect, Qt.AlignCenter, label)
 
 
-def draw_category_connections(p):
-    draw_category_base(p, "#7a6a3a", "N")
+def draw_category_topology(p):
+    draw_category_base(p, "#4c5c68", "T")
 
 
 def draw_category_sources(p):
-    draw_category_base(p, "#f25f5c", "S")
+    draw_category_base(p, "#f18f01", "S")
 
 
-def draw_category_passive(p):
+def draw_category_passives(p):
     draw_category_base(p, "#247ba0", "P")
 
 
-def draw_category_nonlinear(p):
-    draw_category_base(p, "#8b5cf6", "NL")
+def draw_category_semiconductors(p):
+    draw_category_base(p, "#6d597a", "SC")
+
+
+def draw_category_analog_ics(p):
+    draw_category_base(p, "#c1666b", "AI")
+
+
+def draw_category_electromechanical(p):
+    draw_category_base(p, "#7f5539", "EM")
+
+
+def draw_category_instruments(p):
+    draw_category_base(p, "#386641", "I")
 
 
 def main():
@@ -290,10 +302,13 @@ def main():
     save_icon(os.path.join(COMP, "diode.png"), draw_diode)
     save_icon(os.path.join(COMP, "led.png"), draw_led)
 
-    save_icon(os.path.join(CAT, "connections.png"), draw_category_connections)
+    save_icon(os.path.join(CAT, "topology.png"), draw_category_topology)
     save_icon(os.path.join(CAT, "sources.png"), draw_category_sources)
-    save_icon(os.path.join(CAT, "passive.png"), draw_category_passive)
-    save_icon(os.path.join(CAT, "nonlinear.png"), draw_category_nonlinear)
+    save_icon(os.path.join(CAT, "passives.png"), draw_category_passives)
+    save_icon(os.path.join(CAT, "semiconductors.png"), draw_category_semiconductors)
+    save_icon(os.path.join(CAT, "analog_ics.png"), draw_category_analog_ics)
+    save_icon(os.path.join(CAT, "electromechanical.png"), draw_category_electromechanical)
+    save_icon(os.path.join(CAT, "instruments.png"), draw_category_instruments)
 
 
 if __name__ == "__main__":

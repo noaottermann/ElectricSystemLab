@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-from .dipole import Dipole
+from .dipole import Dipole, StatefulDipole
 
 
 def _get_float_param(params: dict[str, Any], key: str, default: float) -> float:
@@ -87,6 +87,62 @@ class Inductor(Dipole):
     def set_params(self, params: dict[str, Any]) -> None:
         """Met a jour les parametres de l'inductance."""
         self.inductance = _get_float_param(params, "inductance", 1e-3)
+
+
+class Switch(StatefulDipole):
+    """Interrupteur ideal avec etat ouvert/ferme."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Switch",
+        state: str = "open",
+        resistance_closed: float = 1e-2,
+        resistance_open: float = 1e9,
+    ) -> None:
+        """Initialise un interrupteur ideal."""
+        super().__init__(
+            dipole_id,
+            name,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            state=str(state),
+            state_options=[("open", "Open"), ("closed", "Closed")],
+        )
+        self.resistance_closed = float(resistance_closed)
+        self.resistance_open = float(resistance_open)
+
+    @property
+    def resistance(self) -> float:
+        """Retourne la resistance equivalente selon l'etat."""
+        if (self.get_state() or "").lower() == "closed":
+            return self.resistance_closed
+        return self.resistance_open
+
+    def get_params(self) -> dict[str, float]:
+        """Retourne les parametres du switch."""
+        params = super().get_params()
+        params.update(
+            {
+                "resistance_closed": self.resistance_closed,
+                "resistance_open": self.resistance_open,
+            }
+        )
+        return params
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Met a jour les parametres du switch."""
+        super().set_params(params)
+        self.resistance_closed = _get_float_param(params, "resistance_closed", 1e-2)
+        self.resistance_open = _get_float_param(params, "resistance_open", 1e9)
 
 class VoltageSourceDC(Dipole):
     """Source de tension continue ideale"""

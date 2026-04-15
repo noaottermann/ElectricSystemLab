@@ -25,6 +25,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    Switch,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
@@ -321,6 +322,7 @@ class CircuitScene(QGraphicsScene):
             "Inductor": Inductor,
             "Diode": Diode,
             "LED": LED,
+            "Switch": Switch,
         }
         self._clipboard_payload: Optional[dict] = None
 
@@ -1482,6 +1484,8 @@ class CircuitScene(QGraphicsScene):
             dipole = Diode(d_id, node_a, node_b, x, y, name=f"D{d_id}")
         elif tool_type == "led":
             dipole = LED(d_id, node_a, node_b, x, y, name=f"LED{d_id}")
+        elif tool_type == "switch":
+            dipole = Switch(d_id, node_a, node_b, x, y, name=f"SW{d_id}")
 
         if dipole:
             self.model.add_dipole(dipole)

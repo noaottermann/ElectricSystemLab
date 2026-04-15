@@ -42,7 +42,7 @@ class ComponentsPanel(QWidget):
 		self.category_list = QListWidget()
 		self.category_list.setObjectName("categoryList")
 		self.category_list.setViewMode(QListWidget.ListMode)
-		self.category_list.setFixedWidth(100)
+		self.category_list.setFixedWidth(124)
 		self.category_list.setSpacing(0)
 		self.category_list.setUniformItemSizes(True)
 		self.category_list.setSelectionMode(QListWidget.SingleSelection)
@@ -270,44 +270,44 @@ class ComponentsPanel(QWidget):
 			{
 				"key": "topology",
 				"label_key": "components_category_topology",
-				"icon": "categories/connections.png",
-				"color": "#7a6a3a",
+				"icon": "categories/topology.png",
+				"color": "#4c5c68",
 			},
 			{
 				"key": "sources",
 				"label_key": "components_category_sources",
 				"icon": "categories/sources.png",
-				"color": "#f25f5c",
+				"color": "#f18f01",
 			},
 			{
 				"key": "passives",
 				"label_key": "components_category_passives",
-				"icon": "categories/passive.png",
+				"icon": "categories/passives.png",
 				"color": "#247ba0",
 			},
 			{
 				"key": "semiconductors",
 				"label_key": "components_category_semiconductors",
-				"icon": "categories/nonlinear.png",
-				"color": "#8b5cf6",
+				"icon": "categories/semiconductors.png",
+				"color": "#6d597a",
 			},
 			{
 				"key": "analog_ics",
 				"label_key": "components_category_analog_ics",
-				"icon": "categories/active.png",
-				"color": "#e07a5f",
+				"icon": "categories/analog_ics.png",
+				"color": "#c1666b",
 			},
 			{
 				"key": "electromechanical",
 				"label_key": "components_category_electromechanical",
-				"icon": "categories/connections.png",
-				"color": "#9c6644",
+				"icon": "categories/electromechanical.png",
+				"color": "#7f5539",
 			},
 			{
 				"key": "instruments",
 				"label_key": "components_category_instruments",
 				"icon": "categories/instruments.png",
-				"color": "#4d908e",
+				"color": "#386641",
 			},
 		]
 
@@ -454,12 +454,12 @@ class ComponentsPanel(QWidget):
 		"""Remplit la liste des categories disponibles."""
 		self.category_list.clear()
 		for category in self._category_data:
-			icon = self._load_icon(category["icon"], category["color"], QSize(40, 40))
+			icon = self._load_icon(category["icon"], category["color"], QSize(48, 48))
 			label = Translator.tr(category["label_key"])
 			item = QListWidgetItem()
 			item.setToolTip(label)
 			item.setData(Qt.UserRole, category["key"])
-			item.setSizeHint(QSize(112, 96))
+			item.setSizeHint(QSize(132, 104))
 			self.category_list.addItem(item)
 			self.category_list.setItemWidget(
 				item, self._build_category_widget(icon, label)
@@ -644,7 +644,7 @@ class ComponentsPanel(QWidget):
 		icon_label = QLabel()
 		icon_label.setObjectName("categoryIcon")
 		icon_label.setAlignment(Qt.AlignCenter)
-		icon_label.setPixmap(icon.pixmap(24, 24))
+		icon_label.setPixmap(icon.pixmap(32, 32))
 
 		text_label = QLabel(label)
 		text_label.setObjectName("categoryText")
@@ -663,7 +663,7 @@ class ComponentsPanel(QWidget):
 			return
 		for row in range(self.category_list.count()):
 			item = self.category_list.item(row)
-			item.setSizeHint(QSize(viewport_width, 72))
+			item.setSizeHint(QSize(viewport_width, 84))
 			widget = self.category_list.itemWidget(item)
 			if widget is not None:
 				widget.setFixedWidth(viewport_width)

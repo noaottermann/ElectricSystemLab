@@ -14,6 +14,7 @@ from model.components import (
 	Inductor,
 	LED,
 	Resistor,
+	Switch,
 	VoltageControlledVoltageSource,
 	VoltageControlledCurrentSource,
 	VoltageSourceAC,
@@ -302,11 +303,14 @@ class TransientSolver(BaseSolver):
 
 	def _assemble_resistors(self, circuit, node_groups, group_to_idx, ground_group_id, matrix_a) -> None:
 		for dipole in circuit.dipoles.values():
-			if not isinstance(dipole, Resistor):
+			if not isinstance(dipole, (Resistor, Switch)):
 				continue
 			idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
 			idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
-			g = 1.0 / dipole.resistance
+			resistance = float(getattr(dipole, "resistance", 0.0))
+			if resistance <= 0:
+				continue
+			g = 1.0 / resistance
 
 			if idx_a is not None:
 				matrix_a[idx_a, idx_a] += g
@@ -582,8 +586,9 @@ class TransientSolver(BaseSolver):
 			dipole_voltages[dipole.id].append(float(dipole.voltage))
 
 		for dipole in circuit.dipoles.values():
-			if isinstance(dipole, Resistor):
-				dipole.current = dipole.voltage / dipole.resistance
+			if isinstance(dipole, (Resistor, Switch)):
+				resistance = float(getattr(dipole, "resistance", 0.0))
+				dipole.current = dipole.voltage / resistance if resistance else 0.0
 				if dipole.id in dipole_currents:
 					dipole_currents[dipole.id].append(float(dipole.current))
 			elif isinstance(dipole, Capacitor):

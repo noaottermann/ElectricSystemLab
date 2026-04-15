@@ -11,6 +11,7 @@ from model.components import (
     Diode,
     LED,
     Resistor,
+    Switch,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceDC,
@@ -201,8 +202,9 @@ class DCSolver:
 
         # Met a jour les courants
         for dipole in circuit.dipoles.values():
-            if isinstance(dipole, Resistor):
-                dipole.current = dipole.voltage / dipole.resistance
+            if isinstance(dipole, (Resistor, Switch)):
+                resistance = float(getattr(dipole, "resistance", 0.0))
+                dipole.current = dipole.voltage / resistance if resistance else 0.0
             elif isinstance(dipole, CurrentSourceDC):
                 dipole.current = dipole.dc_current
             elif isinstance(dipole, VoltageControlledCurrentSource):
@@ -304,11 +306,14 @@ class DCSolver:
 
     def _stamp_resistors(self, circuit, node_groups, group_to_idx, ground_group_id, matrix_a) -> None:
         for dipole in circuit.dipoles.values():
-            if not isinstance(dipole, Resistor):
+            if not isinstance(dipole, (Resistor, Switch)):
                 continue
             idx_a = self._get_matrix_index(dipole.node_a, node_groups, group_to_idx, ground_group_id)
             idx_b = self._get_matrix_index(dipole.node_b, node_groups, group_to_idx, ground_group_id)
-            g = 1.0 / dipole.resistance
+            resistance = float(getattr(dipole, "resistance", 0.0))
+            if resistance <= 0:
+                continue
+            g = 1.0 / resistance
             if idx_a is not None:
                 matrix_a[idx_a, idx_a] += g
                 if idx_b is not None:

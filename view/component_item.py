@@ -14,6 +14,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    Switch,
     VoltageControlledCurrentSource,
     VoltageControlledVoltageSource,
     VoltageSourceAC,
@@ -538,6 +539,28 @@ class LedItem(DiodeItem):
         """Retourne un libelle court."""
         return "LED"
 
+
+class SwitchItem(ComponentItem):
+    """Item graphique pour un interrupteur."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un interrupteur."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -10, 0)
+        painter.drawLine(10, 0, 30, 0)
+
+        state = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+        if state == "closed":
+            painter.drawLine(-10, 0, 10, 0)
+        else:
+            painter.drawLine(-10, 0, 8, -10)
+
+    def get_value_text(self) -> str:
+        state = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+        return "Closed" if state == "closed" else "Open"
+
 def create_component_item(component_model) -> ComponentItem:
     """Retourne l'element graphique adapte a un objet modele."""
     if isinstance(component_model, Resistor):
@@ -558,6 +581,8 @@ def create_component_item(component_model) -> ComponentItem:
         return LedItem(component_model)
     elif isinstance(component_model, Diode):
         return DiodeItem(component_model)
+    elif isinstance(component_model, Switch):
+        return SwitchItem(component_model)
     else:
         # Repli pour les composants inconnus
         return ComponentItem(component_model)
