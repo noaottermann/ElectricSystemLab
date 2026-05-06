@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QApplication
 
 from model.circuit import Circuit
 from view.main_window import MainWindow
+from view.splash_screen import LoadingSplashScreen
 from utils.translator import Translator
 from utils.assets import get_logo_icon, logo_exists
 
@@ -38,7 +39,11 @@ def main():
     
     window = MainWindow(model=circuit)
     
-    window.showMaximized()
+    # Afficher le splash screen de chargement
+    splash = LoadingSplashScreen(duration_ms=3000)
+    splash.splash_finished.connect(lambda: window.showMaximized())
+    splash.show()
+    app.processEvents()
     
     sys.exit(app.exec_())
 
