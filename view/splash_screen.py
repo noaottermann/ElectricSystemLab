@@ -31,19 +31,31 @@ class LoadingSplashScreen(QSplashScreen):
         self.setWindowFlag(Qt.FramelessWindowHint)
         
         # Définir une taille pour la fenêtre du splash screen
-        self.setFixedSize(400, 400)
+        self.setFixedSize(720, 450)
+        
+        # Track frames to detect when animation loops
+        self.previous_frame = 0
+        self.animation_finished = False
         
         # Configurer le GIF animé
         self.movie = QMovie(gif_path)
-        self.movie.setScaledSize(QSize(400, 400))
+        self.movie.setScaledSize(QSize(720, 450))
         self.movie.frameChanged.connect(self._on_frame_changed)
-        self.movie.finished.connect(self._close_splash)
         self.movie.start()
 
     def _on_frame_changed(self):
         """Met à jour le pixmap du splash screen avec la frame actuelle du GIF"""
+        current_frame = self.movie.currentFrameNumber()
         frame_pixmap = self.movie.currentPixmap()
         self.setPixmap(frame_pixmap)
+        
+        # Detect when animation loops (frame number goes back to start)
+        if current_frame < self.previous_frame and not self.animation_finished:
+            # Animation has looped, close the splash screen
+            self.animation_finished = True
+            self._close_splash()
+        
+        self.previous_frame = current_frame
 
     def _close_splash(self):
         """Ferme le splash screen"""
