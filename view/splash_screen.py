@@ -1,5 +1,3 @@
-"""Splash screen avec animation de chargement"""
-
 from PyQt5.QtWidgets import QSplashScreen, QApplication, QWidget, QVBoxLayout, QLabel
 from PyQt5.QtGui import QPixmap, QMovie
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
@@ -12,32 +10,26 @@ class LoadingSplashScreen(QSplashScreen):
     splash_finished = pyqtSignal()
 
     def __init__(self, duration_ms: int = 3000):
-        """
-        Initialise le splash screen
-        
-        Args:
-            duration_ms: Durée d'affichage du splash screen en millisecondes (non utilisée, fermeture au fin du GIF)
-        """
-        # Charger le GIF
+        """Initialise le splash screen"""
         gif_path = str(get_asset_path("loading.gif"))
         
-        # Créer un pixmap initial (première frame du GIF)
+        # Créer un pixmap initial
         pixmap = QPixmap(gif_path)
         
         super().__init__(pixmap)
         
-        # Configurer la fenêtre
+        # Configurations
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.setWindowFlag(Qt.FramelessWindowHint)
         
-        # Définir une taille pour la fenêtre du splash screen
+        # Taille
         self.setFixedSize(720, 450)
         
-        # Track frames to detect when animation loops
+        # Variables d'animation
         self.previous_frame = 0
         self.animation_finished = False
         
-        # Configurer le GIF animé
+        # Configurations GIF animé
         self.movie = QMovie(gif_path)
         self.movie.setScaledSize(QSize(720, 450))
         self.movie.frameChanged.connect(self._on_frame_changed)
@@ -48,13 +40,11 @@ class LoadingSplashScreen(QSplashScreen):
         current_frame = self.movie.currentFrameNumber()
         frame_pixmap = self.movie.currentPixmap()
         self.setPixmap(frame_pixmap)
-        
-        # Detect when animation loops (frame number goes back to start)
+        # Animation a fait une boucle
         if current_frame < self.previous_frame and not self.animation_finished:
-            # Animation has looped, close the splash screen
+            # Stopper
             self.animation_finished = True
             self._close_splash()
-        
         self.previous_frame = current_frame
 
     def _close_splash(self):
