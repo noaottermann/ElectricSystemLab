@@ -42,7 +42,7 @@ class ComponentsPanel(QWidget):
 		self.category_list = QListWidget()
 		self.category_list.setObjectName("categoryList")
 		self.category_list.setViewMode(QListWidget.ListMode)
-		self.category_list.setFixedWidth(72)
+		self.category_list.setFixedWidth(124)
 		self.category_list.setSpacing(0)
 		self.category_list.setUniformItemSizes(True)
 		self.category_list.setSelectionMode(QListWidget.SingleSelection)
@@ -268,40 +268,42 @@ class ComponentsPanel(QWidget):
 		"""Construit la liste des categories par defaut."""
 		return [
 			{
-				"key": "connections",
-				"label_key": "components_category_connections",
-				"icon": "categories/connections.png",
-				"color": "#7a6a3a",
+				"key": "topology",
+				"label_key": "components_category_topology",
+				"icon": "categories/topology.png",
+				"color": "#4c5c68",
 			},
 			{
 				"key": "sources",
 				"label_key": "components_category_sources",
 				"icon": "categories/sources.png",
-				"color": "#f25f5c",
+				"color": "#f18f01",
 			},
 			{
-				"key": "passive",
-				"label_key": "components_category_passive",
-				"icon": "categories/passive.png",
+				"key": "passives",
+				"label_key": "components_category_passives",
+				"icon": "categories/passives.png",
 				"color": "#247ba0",
 			},
 			{
-				"key": "nonlinear",
-				"label_key": "components_category_nonlinear",
-				"icon": "categories/nonlinear.png",
-				"color": "#8b5cf6",
+				"key": "semiconductors",
+				"label_key": "components_category_semiconductors",
+				"icon": "categories/semiconductors.png",
+				"color": "#6d597a",
 			},
+
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
 		"""Construit les composants par defaut affiches dans la liste."""
 		return {
-			"connections": [
+			"topology": [
 				{
 					"id": "wire",
 					"label_key": "components_item_wire",
 					"icon": "components/wire.png",
 				},
+
 			],
 			"sources": [
 				{
@@ -345,7 +347,7 @@ class ComponentsPanel(QWidget):
 					"icon": "components/source_ccvs.png",
 				},
 			],
-			"passive": [
+			"passives": [
 				{
 					"id": "resistor",
 					"label_key": "components_item_resistor",
@@ -361,8 +363,9 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
 				},
+
 			],
-			"nonlinear": [
+			"semiconductors": [
 				{
 					"id": "diode",
 					"label_key": "components_item_diode",
@@ -374,18 +377,19 @@ class ComponentsPanel(QWidget):
 					"icon": "components/led.png",
 				},
 			],
+
 		}
 
 	def _populate_categories(self) -> None:
 		"""Remplit la liste des categories disponibles."""
 		self.category_list.clear()
 		for category in self._category_data:
-			icon = self._load_icon(category["icon"], category["color"], QSize(40, 40))
+			icon = self._load_icon(category["icon"], category["color"], QSize(48, 48))
 			label = Translator.tr(category["label_key"])
 			item = QListWidgetItem()
 			item.setToolTip(label)
 			item.setData(Qt.UserRole, category["key"])
-			item.setSizeHint(QSize(112, 96))
+			item.setSizeHint(QSize(132, 104))
 			self.category_list.addItem(item)
 			self.category_list.setItemWidget(
 				item, self._build_category_widget(icon, label)
@@ -394,7 +398,7 @@ class ComponentsPanel(QWidget):
 		self._sync_category_item_widths()
 
 	def _on_category_changed(self, current: Optional[QListWidgetItem], _previous: Optional[QListWidgetItem]) -> None:
-		"""Fait defiler la liste des composants selon la categorie active."""
+		"""Fait defiler la liste d'elements de circuit selon la categorie active."""
 		if current is None:
 			return
 		category_key = current.data(Qt.UserRole)
@@ -423,7 +427,7 @@ class ComponentsPanel(QWidget):
 		self.tool_selected.emit(str(component_id))
 
 	def _populate_components_all(self) -> None:
-		"""Remplit la liste des composants pour toutes les categories."""
+		"""Remplit la liste d'elements de circuit pour toutes les categories."""
 		self.components_list.clear()
 		for category in self._category_data:
 			self._add_category_section(category)
@@ -475,7 +479,7 @@ class ComponentsPanel(QWidget):
 				return
 
 	def _apply_search_filter(self, text: str) -> None:
-		"""Filtre la liste de composants selon le texte de recherche."""
+		"""Filtre la liste d'elements de circuit selon le texte de recherche."""
 		filter_text = text.strip().lower()
 		self._set_filter_state(filter_text)
 		visible_by_category = self._apply_component_filter(filter_text)
@@ -547,7 +551,7 @@ class ComponentsPanel(QWidget):
 				return
 
 	def _find_top_visible_item(self) -> Optional[QListWidgetItem]:
-		"""Retourne le premier item visible dans la liste des composants."""
+		"""Retourne le premier item visible dans la liste d'elements de circuit."""
 		viewport_rect = self.components_list.viewport().rect()
 		for row in range(self.components_list.count()):
 			item = self.components_list.item(row)
@@ -570,7 +574,7 @@ class ComponentsPanel(QWidget):
 		icon_label = QLabel()
 		icon_label.setObjectName("categoryIcon")
 		icon_label.setAlignment(Qt.AlignCenter)
-		icon_label.setPixmap(icon.pixmap(24, 24))
+		icon_label.setPixmap(icon.pixmap(32, 32))
 
 		text_label = QLabel(label)
 		text_label.setObjectName("categoryText")
@@ -589,7 +593,7 @@ class ComponentsPanel(QWidget):
 			return
 		for row in range(self.category_list.count()):
 			item = self.category_list.item(row)
-			item.setSizeHint(QSize(viewport_width, 72))
+			item.setSizeHint(QSize(viewport_width, 84))
 			widget = self.category_list.itemWidget(item)
 			if widget is not None:
 				widget.setFixedWidth(viewport_width)

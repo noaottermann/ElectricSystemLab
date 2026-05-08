@@ -245,27 +245,30 @@ def draw_led(p):
 
 def draw_category_base(p, color, label):
     rect = QRectF(0, 0, CANVAS, CANVAS)
-    font = QFont("Segoe UI", 40)
+    font_size = 40
+    if len(label) >= 2:
+        font_size = 32
+    font = QFont("Segoe UI", font_size)
     font.setBold(True)
     p.setFont(font)
     p.setPen(QPen(_soft_color(color), 2))
     p.drawText(rect, Qt.AlignCenter, label)
 
 
-def draw_category_connections(p):
-    draw_category_base(p, "#7a6a3a", "N")
+def draw_category_topology(p):
+    draw_category_base(p, "#4c5c68", "T")
 
 
 def draw_category_sources(p):
-    draw_category_base(p, "#f25f5c", "S")
+    draw_category_base(p, "#f18f01", "S")
 
 
-def draw_category_passive(p):
+def draw_category_passives(p):
     draw_category_base(p, "#247ba0", "P")
 
 
-def draw_category_nonlinear(p):
-    draw_category_base(p, "#8b5cf6", "NL")
+def draw_category_semiconductors(p):
+    draw_category_base(p, "#6d597a", "SC")
 
 
 def main():
@@ -290,10 +293,10 @@ def main():
     save_icon(os.path.join(COMP, "diode.png"), draw_diode)
     save_icon(os.path.join(COMP, "led.png"), draw_led)
 
-    save_icon(os.path.join(CAT, "connections.png"), draw_category_connections)
+    save_icon(os.path.join(CAT, "topology.png"), draw_category_topology)
     save_icon(os.path.join(CAT, "sources.png"), draw_category_sources)
-    save_icon(os.path.join(CAT, "passive.png"), draw_category_passive)
-    save_icon(os.path.join(CAT, "nonlinear.png"), draw_category_nonlinear)
+    save_icon(os.path.join(CAT, "passives.png"), draw_category_passives)
+    save_icon(os.path.join(CAT, "semiconductors.png"), draw_category_semiconductors)
 
 
 if __name__ == "__main__":

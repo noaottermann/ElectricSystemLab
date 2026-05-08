@@ -77,6 +77,14 @@ class Dipole:
         """Retourne les parametres specifiques du dipole."""
         return {}
 
+    def get_state(self) -> Optional[str]:
+        """Retourne l'etat courant (pour les dipoles a variantes)."""
+        return None
+
+    def get_state_options(self) -> list[tuple[str, str]]:
+        """Retourne la liste des etats (valeur, libelle)."""
+        return []
+
     @classmethod
     def from_dict(cls, data: dict, nodes_dict: dict) -> "Dipole":
         """Reconstruit un dipole a partir d'un dictionnaire."""
@@ -100,6 +108,36 @@ class Dipole:
     def set_params(self, params: dict) -> None:
         """Applique des parametres specifiques au dipole."""
         return None
+
+    def set_state(self, value: str) -> None:
+        """Met a jour l'etat du dipole si applicable."""
+        return None
+
+
+class StatefulDipole(Dipole):
+    """Dipole avec variantes selectionnables via un etat."""
+
+    def __init__(self, *args, state: str = "", state_options: Optional[list[tuple[str, str]]] = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._state = str(state)
+        self._state_options = state_options or []
+
+    def get_state(self) -> Optional[str]:
+        return self._state
+
+    def get_state_options(self) -> list[tuple[str, str]]:
+        return list(self._state_options)
+
+    def set_state(self, value: str) -> None:
+        self._state = str(value)
+
+    def get_params(self) -> dict[str, object]:
+        params = super().get_params()
+        params["state"] = self._state
+        return params
+
+    def set_params(self, params: dict) -> None:
+        self._state = str(params.get("state", self._state))
 
     def __repr__(self) -> str:
         """Retourne une representation textuelle du dipole."""

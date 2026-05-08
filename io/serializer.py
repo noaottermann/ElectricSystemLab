@@ -16,6 +16,7 @@ from model.components import (
 	Inductor,
 	LED,
 	Resistor,
+	Switch,
 	VoltageControlledVoltageSource,
 	VoltageControlledCurrentSource,
 	VoltageSourceAC,
@@ -39,6 +40,7 @@ def get_component_class_map() -> dict[str, type]:
 		"CurrentControlledVoltageSource": CurrentControlledVoltageSource,
 		"Diode": Diode,
 		"LED": LED,
+		"Switch": Switch,
 	}
 
 

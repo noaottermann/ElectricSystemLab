@@ -1,8 +1,10 @@
 import math
 
-from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
+
+from utils.translator import Translator
 
 from model.components import (
     Capacitor,
@@ -14,6 +16,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    Switch,
     VoltageControlledCurrentSource,
     VoltageControlledVoltageSource,
     VoltageSourceAC,
@@ -538,6 +541,77 @@ class LedItem(DiodeItem):
         """Retourne un libelle court."""
         return "LED"
 
+
+class SwitchItem(ComponentItem):
+    """Item graphique pour un interrupteur."""
+
+    def __init__(self, component_model) -> None:
+        super().__init__(component_model)
+        self._flash_timer = QTimer()
+        self._flash_timer.setInterval(30)
+        self._flash_timer.timeout.connect(self._on_flash_tick)
+        self._flash_elapsed = QElapsedTimer()
+        self._flash_duration_ms = 220
+
+    def mousePressEvent(self, event) -> None:
+        """Bascule l'etat du switch avec clic droit."""
+        if event.button() == Qt.RightButton:
+            if self.scene() and hasattr(self.scene(), "_push_undo_snapshot"):
+                self.scene()._push_undo_snapshot()
+            current = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+            new_state = "closed" if current != "closed" else "open"
+            if hasattr(self.component, "set_state"):
+                self.component.set_state(new_state)
+            self._start_flash()
+            self.update()
+            if self.scene() is not None:
+                self.scene().update()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un interrupteur."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -10, 0)
+        painter.drawLine(10, 0, 30, 0)
+
+        state = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+        if state == "closed":
+            painter.drawLine(-10, 0, 10, 0)
+        else:
+            painter.drawLine(-10, 0, 8, -10)
+
+        indicator_color = QColor("#16a34a") if state == "closed" else QColor("#dc2626")
+        painter.setBrush(indicator_color)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPointF(0, -12), 4, 4)
+
+        if self._flash_timer.isActive():
+            progress = min(self._flash_elapsed.elapsed() / self._flash_duration_ms, 1.0)
+            alpha = int(90 * (1.0 - progress))
+            if alpha > 0:
+                painter.setBrush(QColor(255, 200, 80, alpha))
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(QPointF(0, 0), 18, 18)
+
+    def get_value_text(self) -> str:
+        state = (getattr(self.component, "get_state", lambda: "")() or "").lower()
+        key = "switch_state_closed" if state == "closed" else "switch_state_open"
+        return Translator.tr(key)
+
+    def _start_flash(self) -> None:
+        self._flash_elapsed.start()
+        if not self._flash_timer.isActive():
+            self._flash_timer.start()
+
+    def _on_flash_tick(self) -> None:
+        if self._flash_elapsed.elapsed() >= self._flash_duration_ms:
+            self._flash_timer.stop()
+        self.update()
+
 def create_component_item(component_model) -> ComponentItem:
     """Retourne l'element graphique adapte a un objet modele."""
     if isinstance(component_model, Resistor):
@@ -558,6 +632,8 @@ def create_component_item(component_model) -> ComponentItem:
         return LedItem(component_model)
     elif isinstance(component_model, Diode):
         return DiodeItem(component_model)
+    elif isinstance(component_model, Switch):
+        return SwitchItem(component_model)
     else:
         # Repli pour les composants inconnus
         return ComponentItem(component_model)

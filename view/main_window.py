@@ -39,6 +39,7 @@ from model.components import (
     Inductor,
     LED,
     Resistor,
+    Switch,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
     VoltageSourceAC,
@@ -484,6 +485,102 @@ class MainWindow(QMainWindow):
             return "saturation_current", "A"
         return None
 
+    def _get_component_state_options(self, component: Dipole) -> list[tuple[str, str]]:
+        """Retourne les options d'etat pour un composant multi-etats."""
+        options = []
+        if hasattr(component, "get_state_options"):
+            options = component.get_state_options() or []
+        return [(str(value), str(label)) for value, label in options]
+
+    def _edit_state_only(self, component: Dipole, state_options: list[tuple[str, str]]) -> bool:
+        """Ouvre un dialogue pour modifier uniquement l'etat."""
+        if not state_options:
+            return False
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        state_input = QComboBox(dialog)
+        for value, label in state_options:
+            state_input.addItem(Translator.tr(str(label)), value)
+        current_state = None
+        if hasattr(component, "get_state"):
+            current_state = component.get_state()
+        if current_state is not None:
+            idx = state_input.findData(str(current_state))
+            if idx >= 0:
+                state_input.setCurrentIndex(idx)
+
+        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+        layout.addLayout(form_layout)
+
+        ideal_button = QPushButton(Translator.tr("dialog_edit_value_switch_ideal"), dialog)
+        ideal_button.clicked.connect(lambda: self._reset_switch_ideal(closed_input, open_input))
+        layout.addWidget(ideal_button)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        if hasattr(component, "set_state"):
+            component.set_state(str(state_input.currentData()))
+        return True
+
+    def _edit_value_with_optional_state(
+        self,
+        component: Dipole,
+        param_key: str,
+        unit: str,
+        state_options: list[tuple[str, str]],
+    ) -> bool:
+        """Ouvre un dialogue avec valeur + etat optionnel."""
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        state_input = None
+        if state_options:
+            state_input = QComboBox(dialog)
+            for value, label in state_options:
+                state_input.addItem(Translator.tr(str(label)), value)
+            current_state = None
+            if hasattr(component, "get_state"):
+                current_state = component.get_state()
+            if current_state is not None:
+                idx = state_input.findData(str(current_state))
+                if idx >= 0:
+                    state_input.setCurrentIndex(idx)
+            form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+
+        value_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
+        value_input.setRange(min_value, max_value)
+        value_input.setDecimals(6)
+        value_input.setValue(float(getattr(component, param_key, 0.0)))
+        form_layout.addRow(f"{Translator.tr('dialog_edit_value_label')} ({unit})", value_input)
+
+        layout.addLayout(form_layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        setattr(component, param_key, float(value_input.value()))
+        if state_input is not None and hasattr(component, "set_state"):
+            component.set_state(str(state_input.currentData()))
+        return True
+
     def create_actions(self) -> None:
         """Crée toutes les actions de la fenêtre principale."""
         self._create_file_actions()
@@ -664,8 +761,6 @@ class MainWindow(QMainWindow):
         # Retour rapide a l'outil de selection
         self.shortcut_tool_pointer = QShortcut(QKeySequence(Qt.Key_Escape), self)
         self.shortcut_tool_pointer.activated.connect(self._reset_tool_selection)
-        
-        # Les raccourcis d'outils sont supprimes pour privilegier la liste des composants.
 
     def set_tool(self, tool_name: str) -> None:
         """Change l'outil actif via le controleur."""
@@ -1229,6 +1324,7 @@ class MainWindow(QMainWindow):
             return
         item = dipole_items[0]
         component = item.component
+        state_options = self._get_component_state_options(component)
         if isinstance(
             component,
             (
@@ -1253,32 +1349,36 @@ class MainWindow(QMainWindow):
                 if hasattr(self.scene, "update"):
                     self.scene.update()
             return
+        if isinstance(component, Switch):
+            if self._edit_switch_parameters(component):
+                if hasattr(self.scene, "_push_undo_snapshot"):
+                    self.scene._push_undo_snapshot()
+                item.update()
+                if hasattr(self.scene, "update"):
+                    self.scene.update()
+            return
         config = self._get_edit_value_config(component)
-        if config is None:
+        if config is None and not state_options:
             QMessageBox.information(self, Translator.tr("action_edit_value"), Translator.tr("dialog_edit_value_unsupported"))
             return
-        param_key, unit = config
-        current_value = float(getattr(component, param_key, 0.0))
-        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
-        label = f"{Translator.tr('dialog_edit_value_label')} ({unit})"
-        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
-        new_value, ok = QInputDialog.getDouble(
-            self,
-            title,
-            label,
-            current_value,
-            min_value,
-            max_value,
-            6,
-        )
-        if not ok:
+
+        if config is None:
+            if self._edit_state_only(component, state_options):
+                if hasattr(self.scene, "_push_undo_snapshot"):
+                    self.scene._push_undo_snapshot()
+                item.update()
+                if hasattr(self.scene, "update"):
+                    self.scene.update()
             return
-        if hasattr(self.scene, "_push_undo_snapshot"):
-            self.scene._push_undo_snapshot()
-        setattr(component, param_key, float(new_value))
-        item.update()
-        if hasattr(self.scene, "update"):
-            self.scene.update()
+
+        param_key, unit = config
+        if self._edit_value_with_optional_state(component, param_key, unit, state_options):
+            if hasattr(self.scene, "_push_undo_snapshot"):
+                self.scene._push_undo_snapshot()
+            item.update()
+            if hasattr(self.scene, "update"):
+                self.scene.update()
+            return
 
     def _edit_dependent_source_parameters(self, component: Dipole) -> bool:
         """Affiche un dialogue pour regler les sources dependantes."""
@@ -1428,6 +1528,71 @@ class MainWindow(QMainWindow):
         component.phase = float(phase_input.value())
         component.offset = float(offset_input.value())
         return True
+
+    def _edit_switch_parameters(self, component: Dipole) -> bool:
+        """Affiche un dialogue pour regler l'etat et les resistances du switch."""
+        if not isinstance(component, Switch):
+            return False
+
+        title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        state_input = QComboBox(dialog)
+        for value, label in component.get_state_options():
+            state_input.addItem(Translator.tr(str(label)), value)
+        current_state = component.get_state()
+        if current_state is not None:
+            idx = state_input.findData(str(current_state))
+            if idx >= 0:
+                state_input.setCurrentIndex(idx)
+        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+
+        closed_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
+        closed_input.setRange(min_value, max_value)
+        closed_input.setDecimals(6)
+        closed_input.setValue(float(component.resistance_closed))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_switch_closed_resistance')} (Ohm)",
+            closed_input,
+        )
+
+        open_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
+        open_input.setRange(min_value, max_value)
+        open_input.setDecimals(6)
+        open_input.setValue(float(component.resistance_open))
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_switch_open_resistance')} (Ohm)",
+            open_input,
+        )
+
+        layout.addLayout(form_layout)
+
+        ideal_button = QPushButton(Translator.tr("dialog_edit_value_switch_ideal"), dialog)
+        ideal_button.clicked.connect(lambda: self._reset_switch_ideal(closed_input, open_input))
+        layout.addWidget(ideal_button)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return False
+
+        component.set_state(str(state_input.currentData()))
+        component.resistance_closed = float(closed_input.value())
+        component.resistance_open = float(open_input.value())
+        return True
+
+    def _reset_switch_ideal(self, closed_input: QDoubleSpinBox, open_input: QDoubleSpinBox) -> None:
+        """Reinitialise le switch en mode ideal (Rfermee=0, Rouvert=1e12)."""
+        closed_input.setValue(0.0)
+        open_input.setValue(1e12)
 
     def on_export(self) -> None:
         """Declenche l'export de donnees."""
