@@ -271,18 +271,6 @@ def draw_category_semiconductors(p):
     draw_category_base(p, "#6d597a", "SC")
 
 
-def draw_category_analog_ics(p):
-    draw_category_base(p, "#c1666b", "AI")
-
-
-def draw_category_electromechanical(p):
-    draw_category_base(p, "#7f5539", "EM")
-
-
-def draw_category_instruments(p):
-    draw_category_base(p, "#386641", "I")
-
-
 def main():
     global _APP
     app_instance = QGuiApplication.instance()
@@ -309,9 +297,6 @@ def main():
     save_icon(os.path.join(CAT, "sources.png"), draw_category_sources)
     save_icon(os.path.join(CAT, "passives.png"), draw_category_passives)
     save_icon(os.path.join(CAT, "semiconductors.png"), draw_category_semiconductors)
-    save_icon(os.path.join(CAT, "analog_ics.png"), draw_category_analog_ics)
-    save_icon(os.path.join(CAT, "electromechanical.png"), draw_category_electromechanical)
-    save_icon(os.path.join(CAT, "instruments.png"), draw_category_instruments)
 
 
 if __name__ == "__main__":

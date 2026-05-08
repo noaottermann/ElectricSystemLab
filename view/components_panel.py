@@ -291,24 +291,7 @@ class ComponentsPanel(QWidget):
 				"icon": "categories/semiconductors.png",
 				"color": "#6d597a",
 			},
-			{
-				"key": "analog_ics",
-				"label_key": "components_category_analog_ics",
-				"icon": "categories/analog_ics.png",
-				"color": "#c1666b",
-			},
-			{
-				"key": "electromechanical",
-				"label_key": "components_category_electromechanical",
-				"icon": "categories/electromechanical.png",
-				"color": "#7f5539",
-			},
-			{
-				"key": "instruments",
-				"label_key": "components_category_instruments",
-				"icon": "categories/instruments.png",
-				"color": "#386641",
-			},
+
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
@@ -320,11 +303,7 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_wire",
 					"icon": "components/wire.png",
 				},
-				{
-					"id": "ground",
-					"label_key": "components_item_ground",
-					"icon": "components/ground.png",
-				},
+
 			],
 			"sources": [
 				{
@@ -384,11 +363,7 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
 				},
-				{
-					"id": "transformer",
-					"label_key": "components_item_transformer",
-					"icon": "components/transformer.png",
-				},
+
 			],
 			"semiconductors": [
 				{
@@ -397,57 +372,12 @@ class ComponentsPanel(QWidget):
 					"icon": "components/diode.png",
 				},
 				{
-					"id": "zener",
-					"label_key": "components_item_zener",
-					"icon": "components/zener.png",
-				},
-				{
 					"id": "led",
 					"label_key": "components_item_led",
 					"icon": "components/led.png",
 				},
-				{
-					"id": "bjt_npn",
-					"label_key": "components_item_bjt_npn",
-					"icon": "components/bjt_npn.png",
-				},
-				{
-					"id": "bjt_pnp",
-					"label_key": "components_item_bjt_pnp",
-					"icon": "components/bjt_pnp.png",
-				},
 			],
-			"analog_ics": [
-				{
-					"id": "opamp_3",
-					"label_key": "components_item_opamp_3",
-					"icon": "components/opamp_3.png",
-				},
-				{
-					"id": "opamp_5",
-					"label_key": "components_item_opamp_5",
-					"icon": "components/opamp_5.png",
-				},
-			],
-			"electromechanical": [
-				{
-					"id": "switch",
-					"label_key": "components_item_switch",
-					"icon": "components/switch.png",
-				},
-			],
-			"instruments": [
-				{
-					"id": "voltmeter",
-					"label_key": "components_item_voltmeter",
-					"icon": "components/voltmeter.png",
-				},
-				{
-					"id": "ammeter",
-					"label_key": "components_item_ammeter",
-					"icon": "components/ammeter.png",
-				},
-			],
+
 		}
 
 	def _populate_categories(self) -> None:
