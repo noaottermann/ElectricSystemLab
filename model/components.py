@@ -4,6 +4,20 @@ from typing import Any
 from .dipole import Dipole, StatefulDipole
 
 
+def get_component_registry() -> dict[str, type]:
+    """Retourne la correspondance entre nom de type et classe de composant."""
+    registry: dict[str, type] = {}
+    for name, value in globals().items():
+        if not isinstance(value, type):
+            continue
+        if not issubclass(value, Dipole):
+            continue
+        if value in (Dipole, StatefulDipole):
+            continue
+        registry[name] = value
+    return registry
+
+
 def _get_float_param(params: dict[str, Any], key: str, default: float) -> float:
     """Extrait un parametre numerique en appliquant un defaut."""
     return float(params.get(key, default))
@@ -143,6 +157,280 @@ class Switch(StatefulDipole):
         super().set_params(params)
         self.resistance_closed = _get_float_param(params, "resistance_closed", 0.0)
         self.resistance_open = _get_float_param(params, "resistance_open", 1e12)
+
+
+class VoltageSource(StatefulDipole):
+    """Source de tension avec etat DC/AC selectionnable."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "VoltageSource",
+        state: str = "dc",
+        dc_voltage: float = 5.0,
+        amplitude: float = 10.0,
+        frequency: float = 50.0,
+        phase: float = 0.0,
+        offset: float = 0.0,
+    ) -> None:
+        """Initialise une source de tension selectionnable."""
+        super().__init__(
+            dipole_id,
+            name,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            state=str(state),
+            state_options=[("dc", "source_state_dc"), ("ac", "source_state_ac")],
+        )
+        self.dc_voltage = float(dc_voltage)
+        self.amplitude = float(amplitude)
+        self.frequency = float(frequency)
+        self.phase = float(phase)
+        self.offset = float(offset)
+
+    def get_dc_value(self) -> float:
+        """Retourne la valeur DC utilisee par le solveur."""
+        if (self.get_state() or "dc").lower() != "dc":
+            return 0.0
+        return float(self.dc_voltage)
+
+    def get_ac_phasor(self) -> complex:
+        """Retourne le phaseur utilise par le solveur AC."""
+        if (self.get_state() or "dc").lower() != "ac":
+            return 0.0
+        omega_phase = math.radians(self.phase)
+        return float(self.amplitude) * (math.cos(omega_phase) + 1j * math.sin(omega_phase))
+
+    def get_value_at_time(self, t: float) -> float:
+        """Retourne la valeur instantanee associee a l'etat actif."""
+        if (self.get_state() or "dc").lower() == "ac":
+            omega = 2 * math.pi * self.frequency
+            phi = math.radians(self.phase)
+            return self.offset + self.amplitude * math.sin(omega * t + phi)
+        return self.dc_voltage
+
+    def get_params(self) -> dict[str, float]:
+        return {
+            "state": self.get_state() or "dc",
+            "dc_voltage": self.dc_voltage,
+            "amplitude": self.amplitude,
+            "frequency": self.frequency,
+            "phase": self.phase,
+            "offset": self.offset,
+        }
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.set_state(str(params.get("state", self.get_state() or "dc")))
+        self.dc_voltage = _get_float_param(params, "dc_voltage", 5.0)
+        self.amplitude = _get_float_param(params, "amplitude", 10.0)
+        self.frequency = _get_float_param(params, "frequency", 50.0)
+        self.phase = _get_float_param(params, "phase", 0.0)
+        self.offset = _get_float_param(params, "offset", 0.0)
+
+
+class VoltageSourceDC(VoltageSource):
+    """Source de tension continue ideale."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "VoltageSourceDC",
+        dc_voltage: float = 5.0,
+    ) -> None:
+        super().__init__(
+            dipole_id,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            name="DC Source",
+            state="dc",
+            dc_voltage=dc_voltage,
+        )
+
+
+class VoltageSourceAC(VoltageSource):
+    """Source de tension alternative sinusoidale."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "VoltageSourceAC",
+        amplitude: float = 10.0,
+        frequency: float = 50.0,
+        phase: float = 0.0,
+        offset: float = 0.0,
+    ) -> None:
+        super().__init__(
+            dipole_id,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            name="AC Source",
+            state="ac",
+            amplitude=amplitude,
+            frequency=frequency,
+            phase=phase,
+            offset=offset,
+        )
+
+
+class CurrentSource(StatefulDipole):
+    """Source de courant avec etat DC/AC selectionnable."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "CurrentSource",
+        state: str = "dc",
+        dc_current: float = 1.0,
+        amplitude: float = 1.0,
+        frequency: float = 50.0,
+        phase: float = 0.0,
+        offset: float = 0.0,
+    ) -> None:
+        """Initialise une source de courant selectionnable."""
+        super().__init__(
+            dipole_id,
+            name,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            state=str(state),
+            state_options=[("dc", "source_state_dc"), ("ac", "source_state_ac")],
+        )
+        self.dc_current = float(dc_current)
+        self.amplitude = float(amplitude)
+        self.frequency = float(frequency)
+        self.phase = float(phase)
+        self.offset = float(offset)
+
+    def get_dc_value(self) -> float:
+        """Retourne la valeur DC utilisee par le solveur."""
+        if (self.get_state() or "dc").lower() != "dc":
+            return 0.0
+        return float(self.dc_current)
+
+    def get_ac_phasor(self) -> complex:
+        """Retourne le phaseur utilise par le solveur AC."""
+        if (self.get_state() or "dc").lower() != "ac":
+            return 0.0
+        omega_phase = math.radians(self.phase)
+        return float(self.amplitude) * (math.cos(omega_phase) + 1j * math.sin(omega_phase))
+
+    def get_value_at_time(self, t: float) -> float:
+        """Retourne la valeur instantanee associee a l'etat actif."""
+        if (self.get_state() or "dc").lower() == "ac":
+            omega = 2 * math.pi * self.frequency
+            phi = math.radians(self.phase)
+            return self.offset + self.amplitude * math.sin(omega * t + phi)
+        return self.dc_current
+
+    def get_params(self) -> dict[str, float]:
+        return {
+            "state": self.get_state() or "dc",
+            "dc_current": self.dc_current,
+            "amplitude": self.amplitude,
+            "frequency": self.frequency,
+            "phase": self.phase,
+            "offset": self.offset,
+        }
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.set_state(str(params.get("state", self.get_state() or "dc")))
+        self.dc_current = _get_float_param(params, "dc_current", 1.0)
+        self.amplitude = _get_float_param(params, "amplitude", 1.0)
+        self.frequency = _get_float_param(params, "frequency", 50.0)
+        self.phase = _get_float_param(params, "phase", 0.0)
+        self.offset = _get_float_param(params, "offset", 0.0)
+
+
+class CurrentSourceDC(CurrentSource):
+    """Source de courant continue ideale."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "CurrentSourceDC",
+        dc_current: float = 1.0,
+    ) -> None:
+        super().__init__(
+            dipole_id,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            name="DC Current",
+            state="dc",
+            dc_current=dc_current,
+        )
+
+
+class CurrentSourceAC(CurrentSource):
+    """Source de courant alternative sinusoidale."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "CurrentSourceAC",
+        amplitude: float = 1.0,
+        frequency: float = 50.0,
+        phase: float = 0.0,
+        offset: float = 0.0,
+    ) -> None:
+        super().__init__(
+            dipole_id,
+            node_a,
+            node_b,
+            x,
+            y,
+            rotation,
+            name="AC Current",
+            state="ac",
+            amplitude=amplitude,
+            frequency=frequency,
+            phase=phase,
+            offset=offset,
+        )
 
 class VoltageSourceDC(Dipole):
     """Source de tension continue ideale"""
@@ -491,3 +779,145 @@ class LED(Diode):
             ideality_factor=ideality_factor,
             thermal_voltage=thermal_voltage,
         )
+
+
+class Ammeter(Dipole):
+    """Ampèremètre ideal, approximé comme une resistance quasi-nulle."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Ammeter",
+        resistance: float = 1e-9,
+    ) -> None:
+        super().__init__(dipole_id, "Ammeter", node_a, node_b, x, y, rotation)
+        self.resistance = float(resistance)
+
+    def get_params(self) -> dict[str, float]:
+        return {"resistance": self.resistance}
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.resistance = _get_float_param(params, "resistance", 1e-9)
+
+
+class Voltmeter(Dipole):
+    """Voltmètre ideal, approximé comme une resistance quasi-infinie."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Voltmeter",
+        resistance: float = 1e12,
+    ) -> None:
+        super().__init__(dipole_id, "Voltmeter", node_a, node_b, x, y, rotation)
+        self.resistance = float(resistance)
+
+    def get_params(self) -> dict[str, float]:
+        return {"resistance": self.resistance}
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.resistance = _get_float_param(params, "resistance", 1e12)
+
+
+class Ground(Dipole):
+    """Symbole de masse, attache a un noeud mis a la masse."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b=None,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Ground",
+    ) -> None:
+        if node_a is not None and hasattr(node_a, "is_ground"):
+            node_a.is_ground = True
+        super().__init__(dipole_id, "Ground", node_a, node_b, x, y, rotation)
+
+
+class OpAmp(Dipole):
+    """AOP ideal simplifie pour l'interface."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "OpAmp",
+        gain: float = 1e5,
+    ) -> None:
+        super().__init__(dipole_id, "OpAmp", node_a, node_b, x, y, rotation)
+        self.gain = float(gain)
+
+    def get_params(self) -> dict[str, float]:
+        return {"gain": self.gain}
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.gain = _get_float_param(params, "gain", 1e5)
+
+
+class Transformer(Dipole):
+    """Transformateur ideal simplifie."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        node_c=None,
+        node_d=None,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Transformer",
+        ratio: float = 1.0,
+    ) -> None:
+        super().__init__(dipole_id, "Transformer", node_a, node_b, x, y, rotation)
+        self.node_c = node_c
+        self.node_d = node_d
+        self.ratio = float(ratio)
+
+    def get_params(self) -> dict[str, float]:
+        return {"ratio": self.ratio}
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.ratio = _get_float_param(params, "ratio", 1.0)
+
+
+class Transistor(Dipole):
+    """Transistor ideal simplifie."""
+
+    def __init__(
+        self,
+        dipole_id: int,
+        node_a,
+        node_b,
+        x: float = 0.0,
+        y: float = 0.0,
+        rotation: float = 0.0,
+        name: str = "Transistor",
+        beta: float = 100.0,
+    ) -> None:
+        super().__init__(dipole_id, "Transistor", node_a, node_b, x, y, rotation)
+        self.beta = float(beta)
+
+    def get_params(self) -> dict[str, float]:
+        return {"beta": self.beta}
+
+    def set_params(self, params: dict[str, Any]) -> None:
+        self.beta = _get_float_param(params, "beta", 100.0)

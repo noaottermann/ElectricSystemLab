@@ -16,18 +16,26 @@ from PyQt5.QtWidgets import (
 
 # Modele et elements graphiques
 from model.components import (
+    Ammeter,
     Capacitor,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
+    CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
+    Ground,
     Inductor,
     LED,
+    OpAmp,
     Resistor,
     Switch,
+    Transformer,
+    Transistor,
+    Voltmeter,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
+    VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
 )
@@ -226,7 +234,7 @@ class CircuitView(QGraphicsView):
     def _component_id_to_tool(self, component_id: str) -> Optional[str]:
         """Convertit un identifiant de composant en outil interne."""
         if component_id.startswith("source_fake_"):
-            return "source_dc"
+            return "source"
         if component_id.startswith("passive_fake_"):
             return "resistor"
         if component_id.startswith("measurement_fake_"):
@@ -310,8 +318,10 @@ class CircuitScene(QGraphicsScene):
         self._max_undo_steps = 100
         self._component_classes = {
             "Resistor": Resistor,
+            "VoltageSource": VoltageSource,
             "VoltageSourceDC": VoltageSourceDC,
             "VoltageSourceAC": VoltageSourceAC,
+            "CurrentSource": CurrentSource,
             "CurrentSourceDC": CurrentSourceDC,
             "CurrentSourceAC": CurrentSourceAC,
             "VoltageControlledCurrentSource": VoltageControlledCurrentSource,
@@ -323,6 +333,12 @@ class CircuitScene(QGraphicsScene):
             "Diode": Diode,
             "LED": LED,
             "Switch": Switch,
+            "Ammeter": Ammeter,
+            "Voltmeter": Voltmeter,
+            "Ground": Ground,
+            "Transformer": Transformer,
+            "Transistor": Transistor,
+            "OpAmp": OpAmp,
         }
         self._clipboard_payload: Optional[dict] = None
 
@@ -420,8 +436,7 @@ class CircuitScene(QGraphicsScene):
             if isinstance(
                 dipole,
                 (
-                    VoltageSourceDC,
-                    VoltageSourceAC,
+                    VoltageSource,
                     VoltageControlledVoltageSource,
                     CurrentControlledVoltageSource,
                 ),
@@ -1217,6 +1232,8 @@ class CircuitScene(QGraphicsScene):
             return True
         if self.current_tool in [
             "resistor",
+            "source",
+            "current_source",
             "source_dc",
             "source_ac",
             "current_source_dc",
@@ -1228,8 +1245,14 @@ class CircuitScene(QGraphicsScene):
             "capacitor",
             "inductor",
             "diode",
+            "transformer",
+            "transistor",
+            "opamp",
             "led",
             "switch",
+            "voltmeter",
+            "ammeter",
+            "ground",
         ]:
             self.add_component_at(self.current_tool, grid_x, grid_y)
             event.accept()
@@ -1414,8 +1437,18 @@ class CircuitScene(QGraphicsScene):
         """Cree un composant a la position donnee."""
         self._push_undo_snapshot()
 
-        node_a = self.model.create_node(x - 30, y)
-        node_b = self.model.create_node(x + 30, y)
+        node_a = None
+        node_b = None
+        node_c = None
+        node_d = None
+        if tool_type == "ground":
+            node_a = self.model.create_node(x, y, is_ground=True)
+        else:
+            node_a = self.model.create_node(x - 30, y)
+            node_b = self.model.create_node(x + 30, y)
+            if tool_type == "transformer":
+                node_c = self.model.create_node(x - 30, y + 20)
+                node_d = self.model.create_node(x + 30, y + 20)
         
         dipole = None
         d_id = self.model.get_next_dipole_id()
@@ -1429,6 +1462,10 @@ class CircuitScene(QGraphicsScene):
         # Creation du modele
         if tool_type == "resistor":
             dipole = Resistor(d_id, node_a, node_b, x, y, name=f"R{d_id}")
+        elif tool_type == "source":
+            dipole = VoltageSource(d_id, node_a, node_b, x, y, name=f"V{d_id}")
+        elif tool_type == "current_source":
+            dipole = CurrentSource(d_id, node_a, node_b, x, y, name=f"I{d_id}")
         elif tool_type == "source_dc":
             dipole = VoltageSourceDC(d_id, node_a, node_b, x, y, name=f"V{d_id}")
         elif tool_type == "source_ac":
@@ -1437,6 +1474,18 @@ class CircuitScene(QGraphicsScene):
             dipole = CurrentSourceDC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
         elif tool_type == "current_source_ac":
             dipole = CurrentSourceAC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
+        elif tool_type == "transformer":
+            dipole = Transformer(d_id, node_a, node_b, node_c, node_d, x, y, name=f"T{d_id}")
+        elif tool_type == "transistor":
+            dipole = Transistor(d_id, node_a, node_b, x, y, name=f"Q{d_id}")
+        elif tool_type == "opamp":
+            dipole = OpAmp(d_id, node_a, node_b, x, y, name=f"A{d_id}")
+        elif tool_type == "voltmeter":
+            dipole = Voltmeter(d_id, node_a, node_b, x, y, name=f"V{d_id}")
+        elif tool_type == "ammeter":
+            dipole = Ammeter(d_id, node_a, node_b, x, y, name=f"A{d_id}")
+        elif tool_type == "ground":
+            dipole = Ground(d_id, node_a, None, x, y)
         elif tool_type == "source_vccs":
             dipole = VoltageControlledCurrentSource(
                 d_id,

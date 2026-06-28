@@ -10,6 +10,7 @@ from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
+    CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
@@ -19,6 +20,7 @@ from model.components import (
     Switch,
     VoltageControlledCurrentSource,
     VoltageControlledVoltageSource,
+    VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
 )
@@ -327,12 +329,13 @@ class VoltageSourceItem(ComponentItem):
         
         # Symboles +/- ou ~
         painter.setPen(self._pen_light())
-        
-        if isinstance(self.component, VoltageSourceDC):
+
+        state = (getattr(self.component, "get_state", lambda: "dc")() or "dc").lower()
+        if state == "dc":
             painter.drawLine(-10, 0, -4, 0)
             painter.drawLine(-7, -3, -7, 3)
             painter.drawLine(4, 0, 10, 0)
-        elif isinstance(self.component, VoltageSourceAC):
+        else:
             # Sinusoidal curve
             path = QPainterPath()
             path.moveTo(-8, 0)
@@ -341,9 +344,10 @@ class VoltageSourceItem(ComponentItem):
 
     def get_value_text(self) -> str:
         """Retourne la valeur de tension a afficher."""
-        if isinstance(self.component, VoltageSourceDC):
+        state = (getattr(self.component, "get_state", lambda: "dc")() or "dc").lower()
+        if state == "dc":
             return f"{self.component.dc_voltage} V"
-        elif isinstance(self.component, VoltageSourceAC):
+        if state == "ac":
             return f"{self.component.amplitude} V"
         return ""
 
@@ -361,11 +365,12 @@ class CurrentSourceItem(ComponentItem):
         painter.drawEllipse(QPointF(0, 0), 15, 15)
 
         painter.setPen(self._pen_light())
-        if isinstance(self.component, CurrentSourceDC):
+        state = (getattr(self.component, "get_state", lambda: "dc")() or "dc").lower()
+        if state == "dc":
             painter.drawLine(-6, 0, 6, 0)
             painter.drawLine(6, 0, 2, -3)
             painter.drawLine(6, 0, 2, 3)
-        elif isinstance(self.component, CurrentSourceAC):
+        else:
             painter.drawLine(-6, 6, 6, 6)
             painter.drawLine(6, 6, 2, 3)
             painter.drawLine(6, 6, 2, 9)
@@ -376,9 +381,10 @@ class CurrentSourceItem(ComponentItem):
 
     def get_value_text(self) -> str:
         """Retourne la valeur de courant a afficher."""
-        if isinstance(self.component, CurrentSourceDC):
+        state = (getattr(self.component, "get_state", lambda: "dc")() or "dc").lower()
+        if state == "dc":
             return f"{self.component.dc_current} A"
-        if isinstance(self.component, CurrentSourceAC):
+        if state == "ac":
             return f"{self.component.amplitude} A"
         return ""
 
@@ -616,9 +622,9 @@ def create_component_item(component_model) -> ComponentItem:
     """Retourne l'element graphique adapte a un objet modele."""
     if isinstance(component_model, Resistor):
         return ResistorItem(component_model)
-    elif isinstance(component_model, (VoltageSourceDC, VoltageSourceAC)):
+    elif isinstance(component_model, (VoltageSource, VoltageSourceDC, VoltageSourceAC)):
         return VoltageSourceItem(component_model)
-    elif isinstance(component_model, (CurrentSourceDC, CurrentSourceAC)):
+    elif isinstance(component_model, (CurrentSource, CurrentSourceDC, CurrentSourceAC)):
         return CurrentSourceItem(component_model)
     elif isinstance(component_model, (VoltageControlledCurrentSource, CurrentControlledCurrentSource)):
         return DependentCurrentSourceItem(component_model)

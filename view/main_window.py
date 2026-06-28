@@ -33,6 +33,7 @@ from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
+    CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
@@ -42,6 +43,7 @@ from model.components import (
     Switch,
     VoltageControlledVoltageSource,
     VoltageControlledCurrentSource,
+    VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
 )
@@ -465,14 +467,6 @@ class MainWindow(QMainWindow):
             return "capacitance", "F"
         if isinstance(component, Inductor):
             return "inductance", "H"
-        if isinstance(component, VoltageSourceDC):
-            return "dc_voltage", "V"
-        if isinstance(component, VoltageSourceAC):
-            return "amplitude", "V"
-        if isinstance(component, CurrentSourceDC):
-            return "dc_current", "A"
-        if isinstance(component, CurrentSourceAC):
-            return "amplitude", "A"
         if isinstance(component, VoltageControlledCurrentSource):
             return "transconductance", "S"
         if isinstance(component, CurrentControlledCurrentSource):
@@ -1341,8 +1335,8 @@ class MainWindow(QMainWindow):
                 if hasattr(self.scene, "update"):
                     self.scene.update()
             return
-        if isinstance(component, (VoltageSourceAC, CurrentSourceAC)):
-            if self._edit_ac_source_parameters(component):
+        if isinstance(component, (VoltageSource, CurrentSource)):
+            if self._edit_source_parameters(component):
                 if hasattr(self.scene, "_push_undo_snapshot"):
                     self.scene._push_undo_snapshot()
                 item.update()
@@ -1461,18 +1455,45 @@ class MainWindow(QMainWindow):
         component.control_dipole_id = int(control_input.currentData() or 0)
         return True
 
-    def _edit_ac_source_parameters(self, component: Dipole) -> bool:
-        """Affiche un dialogue multi-parametres pour les sources AC."""
-        if not isinstance(component, (VoltageSourceAC, CurrentSourceAC)):
+    def _edit_source_parameters(self, component: Dipole) -> bool:
+        """Affiche un dialogue multi-parametres pour les sources de tension ou de courant."""
+        if not isinstance(component, (VoltageSource, CurrentSource)):
             return False
 
-        unit = "V" if isinstance(component, VoltageSourceAC) else "A"
+        unit = "V" if isinstance(component, VoltageSource) else "A"
         title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
 
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         layout = QVBoxLayout(dialog)
         form_layout = QFormLayout()
+
+        state_input = QComboBox(dialog)
+        for value, label in self._get_component_state_options(component):
+            state_input.addItem(Translator.tr(str(label)), value)
+        current_state = None
+        if hasattr(component, "get_state"):
+            current_state = component.get_state()
+        if current_state is not None:
+            idx = state_input.findData(str(current_state))
+            if idx >= 0:
+                state_input.setCurrentIndex(idx)
+        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+
+        if isinstance(component, VoltageSource):
+            dc_value = float(getattr(component, "dc_voltage", 0.0))
+        else:
+            dc_value = float(getattr(component, "dc_current", 0.0))
+
+        dc_input = QDoubleSpinBox(dialog)
+        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
+        dc_input.setRange(min_value, max_value)
+        dc_input.setDecimals(6)
+        dc_input.setValue(dc_value)
+        form_layout.addRow(
+            f"{Translator.tr('dialog_edit_value_label')} ({unit})",
+            dc_input,
+        )
 
         amplitude_input = QDoubleSpinBox(dialog)
         min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
@@ -1522,6 +1543,14 @@ class MainWindow(QMainWindow):
 
         if dialog.exec_() != QDialog.Accepted:
             return False
+
+        if hasattr(component, "set_state"):
+            component.set_state(str(state_input.currentData()))
+
+        if isinstance(component, VoltageSource):
+            component.dc_voltage = float(dc_input.value())
+        else:
+            component.dc_current = float(dc_input.value())
 
         component.amplitude = float(amplitude_input.value())
         component.frequency = float(frequency_input.value())
