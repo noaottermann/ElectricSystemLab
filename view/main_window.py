@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QInputDialog,
     QMainWindow,
     QMessageBox,
+    QColorDialog,
     QPushButton,
     QShortcut,
     QStatusBar,
@@ -29,6 +30,7 @@ from controller.circuit_controller import CircuitController
 from controller.edit_controller import EditController
 from controller.file_controller import FileController
 from controller.simulation_controller import SimulationController
+from controller.ui_callbacks import MessageType
 from model.components import (
     Capacitor,
     CurrentControlledCurrentSource,
@@ -206,11 +208,11 @@ class MainWindow(QMainWindow):
     def _init_controllers(self) -> None:
         """Initialise les controleurs MVC et leurs dependances."""
         self.app_controller = AppController(self, view=getattr(self, "view", None))
-        self.file_controller = FileController(self, self.model, getattr(self, "scene", None))
+        self.file_controller = FileController(self.model, self)
         self.edit_controller = EditController(
-            self,
             getattr(self, "scene", None),
             view=getattr(self, "view", None),
+            ui_callbacks=self,
             app_controller=self.app_controller,
         )
         self.circuit_controller = CircuitController(
@@ -1119,6 +1121,75 @@ class MainWindow(QMainWindow):
         """Expose la mise a jour du fichier courant pour la barre de simulation."""
         self._current_filename = filename
         self._update_simulation_filename_label(filename)
+
+    def set_status_message(self, message: str, timeout_ms: int = 3000) -> None:
+        """Met a jour la barre de statut via l'interface de callbacks."""
+        if hasattr(self, "status_bar") and self.status_bar is not None:
+            self.status_bar.showMessage(message, timeout_ms)
+
+    def show_message(self, title: str, message: str, message_type: MessageType = MessageType.INFO) -> None:
+        """Affiche une boite de message standard."""
+        if message_type == MessageType.ERROR:
+            QMessageBox.critical(self, title, message)
+        elif message_type == MessageType.WARNING:
+            QMessageBox.warning(self, title, message)
+        else:
+            QMessageBox.information(self, title, message)
+
+    def apply_tool(self, tool_name: str) -> None:
+        """Applique un outil de selection ou de dessin."""
+        self.set_tool(tool_name)
+
+    def refresh_scene_from_model(self) -> None:
+        """Reconstruit la scene a partir du modele courant."""
+        if hasattr(self, "scene") and self.scene is not None and hasattr(self.scene, "refresh_from_model"):
+            self.scene.refresh_from_model()
+
+    def update_transform_actions_visibility(self) -> None:
+        """Expose la mise a jour de la visibilite des actions de transformation."""
+        self._update_transform_actions_visibility()
+
+    def push_undo_snapshot(self) -> None:
+        """Empile un instantane d'annulation si la scene le supporte."""
+        if hasattr(self, "scene") and self.scene is not None and hasattr(self.scene, "_push_undo_snapshot"):
+            self.scene._push_undo_snapshot()
+
+    def update_toolbar_geometry(self) -> None:
+        """Expose le recalcul de la geometrie de la barre d'outils."""
+        self._update_toolbar_geometry()
+
+    def toggle_grid(self) -> None:
+        """Bascule l'affichage de la grille."""
+        self.on_toggle_grid()
+
+    def toggle_snap(self) -> None:
+        """Bascule l'aimantation a la grille."""
+        self.on_snap_grid()
+
+    def toggle_nodes(self) -> None:
+        """Bascule l'affichage des noeuds."""
+        self.on_toggle_nodes()
+
+    def toggle_wire_direction(self) -> None:
+        """Bascule l'affichage du sens du courant."""
+        self.on_toggle_wire_dir()
+
+    def set_meter_label_mode(self, mode: str) -> None:
+        """Definit le mode d'etiquette des instruments sur la scene."""
+        if hasattr(self, "scene") and self.scene is not None and hasattr(self.scene, "set_meter_label_mode"):
+            self.scene.set_meter_label_mode(mode)
+
+    def pick_color(self) -> object | None:
+        """Ouvre un selecteur de couleur."""
+        color = QColorDialog.getColor(parent=self)
+        if not color.isValid():
+            return None
+        return color
+
+    def apply_view_background_color(self, color: object) -> None:
+        """Applique une couleur de fond a la vue principale."""
+        if hasattr(self, "view") and self.view is not None:
+            self.view.setBackgroundBrush(color)
 
     def _set_action_icon_from_asset(self, action: QAction, relative_asset_path: str, fallback_icon=None) -> None:
         """Assigne une icone depuis assets, avec fallback optionnel."""

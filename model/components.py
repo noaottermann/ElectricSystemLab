@@ -4,18 +4,18 @@ from typing import Any
 from .dipole import Dipole, StatefulDipole
 
 
+_COMPONENT_REGISTRY: dict[str, type] = {}
+
+
+def register_component(component_name: str, component_class: type) -> type:
+    """Enregistre une classe de composant dans le registre global."""
+    _COMPONENT_REGISTRY[component_name] = component_class
+    return component_class
+
+
 def get_component_registry() -> dict[str, type]:
     """Retourne la correspondance entre nom de type et classe de composant."""
-    registry: dict[str, type] = {}
-    for name, value in globals().items():
-        if not isinstance(value, type):
-            continue
-        if not issubclass(value, Dipole):
-            continue
-        if value in (Dipole, StatefulDipole):
-            continue
-        registry[name] = value
-    return registry
+    return _COMPONENT_REGISTRY.copy()
 
 
 def _get_float_param(params: dict[str, Any], key: str, default: float) -> float:
@@ -921,3 +921,38 @@ class Transistor(Dipole):
 
     def set_params(self, params: dict[str, Any]) -> None:
         self.beta = _get_float_param(params, "beta", 100.0)
+
+
+def _populate_component_registry() -> None:
+    """Enregistre les composants concrets disponibles dans ce module."""
+    for component_name in [
+        "Resistor",
+        "Capacitor",
+        "Inductor",
+        "Switch",
+        "VoltageSource",
+        "VoltageSourceDC",
+        "VoltageSourceAC",
+        "CurrentSource",
+        "CurrentSourceDC",
+        "CurrentSourceAC",
+        "VoltageControlledCurrentSource",
+        "CurrentControlledCurrentSource",
+        "VoltageControlledVoltageSource",
+        "CurrentControlledVoltageSource",
+        "Diode",
+        "LED",
+        "Ammeter",
+        "Voltmeter",
+        "Ground",
+        "OpAmp",
+        "Transformer",
+        "Transistor",
+    ]:
+        component_class = globals().get(component_name)
+        if isinstance(component_class, type) and issubclass(component_class, Dipole):
+            if component_class not in (Dipole, StatefulDipole):
+                register_component(component_name, component_class)
+
+
+_populate_component_registry()

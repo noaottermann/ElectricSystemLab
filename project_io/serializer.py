@@ -5,15 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Union
 
+from model import get_component_registry
 from model.circuit import Circuit
-from model.components import get_component_registry
 
 
 def get_component_class_map() -> dict[str, type]:
 	"""Retourne la correspondance type -> classe de composant.
 	
-	Utilise le registre automatique rempli par les décorateurs @register_component
-	sur les classes dans model/components.py.
+	Utilise le registre partagé exposé par le package model.
 	"""
 	return get_component_registry()
 
