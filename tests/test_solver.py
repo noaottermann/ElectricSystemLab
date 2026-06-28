@@ -31,7 +31,7 @@ class TestDCSolver(unittest.TestCase):
 
     def test_simple_ohm_law(self):
         """
-        Source 10V + resistance 5 Ohms
+        Source 10V + résistance 5 Ohms
         Attendu : I = U/R = 2A
         """
         n_gnd = self.circuit.create_node(0, 0, is_ground=True)
@@ -70,12 +70,12 @@ class TestDCSolver(unittest.TestCase):
 
     def test_wire_handling(self):
         """
-        Verifie que le solveur fusionne les noeuds relies par un fil
-        Source 5V -- fil -- resistance 10 Ohms -- GND
+        Verifie que le solveur fusionne les noeuds reliés par un fil
+        Source 5V -- fil -- résistance 10 Ohms -- GND
         """
         n_gnd = self.circuit.create_node(0, 0, is_ground=True)
         n_src = self.circuit.create_node(0, 10)
-        n_res = self.circuit.create_node(10, 10)  # Noeud eloigne relie par un fil
+        n_res = self.circuit.create_node(10, 10)
         src = VoltageSourceDC(self.circuit.get_next_dipole_id(), n_src, n_gnd, dc_voltage=5.0)
         self.circuit.add_dipole(src)
         self.circuit.create_wire(n_src, n_res)
@@ -89,7 +89,7 @@ class TestDCSolver(unittest.TestCase):
 
     def test_auto_ground_fallback(self):
         """
-        Attribue automatiquement la masse si l'utilisateur oublie de la definir
+        Attribue automatiquement la masse si l'utilisateur oublie de la définir
         """
         n1 = self.circuit.create_node(0, 0, is_ground=False)  # Pas de masse explicite
         n2 = self.circuit.create_node(10, 0, is_ground=False)

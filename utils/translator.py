@@ -4,7 +4,7 @@ import logging
 
 class Translator:
     """
-    Gere l'internationalisation a partir de fichiers JSON
+    Gère l'internationalisation à partir de fichiers JSON
     """
     _translations = {}
     _current_lang = "fr"
@@ -15,7 +15,7 @@ class Translator:
     @classmethod
     def load_language(cls, lang_code):
         """
-        Charge le fichier JSON de la langue demandee
+        Charge le fichier JSON de la langue demandée
         """
         filepath = os.path.join(cls.LOCALES_DIR, f"{lang_code}.json")
         if not os.path.exists(filepath):
@@ -35,7 +35,7 @@ class Translator:
     @classmethod
     def tr(cls, key):
         """
-        Retourne la traduction de la cle ou la cle elle-meme si elle est absente
+        Retourne la traduction de la clé ou la clé elle-même si elle est absente
         """
         return cls._translations.get(key, key)
 

@@ -42,7 +42,7 @@ def test_components_panel_drag_requests_dragged_tool() -> None:
     target_item = None
     for row in range(panel.components_list.count()):
         item = panel.components_list.item(row)
-        if item.data(Qt.UserRole) == "source_dc":
+        if item.data(Qt.UserRole) == "source":
             target_item = item
             break
 
@@ -65,4 +65,4 @@ def test_components_panel_drag_requests_dragged_tool() -> None:
     with patch("view.components_panel.QDrag", _FakeDrag):
         panel.components_list.startDrag(Qt.CopyAction)
 
-    assert emitted_tools == ["source_dc"]
+    assert emitted_tools == ["source"]

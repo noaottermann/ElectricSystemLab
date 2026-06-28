@@ -87,6 +87,13 @@ class CircuitController:
 		if self.app_controller is not None:
 			self.app_controller.not_implemented("Direction du courant")
 
+	def set_meter_label_mode(self, mode: str) -> None:
+		"""Definit le mode d'etiquette pour les instruments."""
+		if self.scene is None:
+			return
+		if hasattr(self.scene, "set_meter_label_mode"):
+			self.scene.set_meter_label_mode(mode)
+
 	def toggle_fullscreen(self) -> None:
 		if self.app_controller is not None:
 			self.app_controller.toggle_fullscreen()

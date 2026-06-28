@@ -8,13 +8,13 @@ class Grid:
         # Couleur des points
         self.pen = QPen(QColor(200, 200, 200), 2)
         
-        # Ignore le rendu quand le zoom est trop eloigne
+        # Ignore le rendu quand le zoom est trop éloigné
         self.min_zoom_factor = 0.3 
 
     def draw(self, painter, rect, view_scale):
-        """Dessine la grille uniquement dans la zone visible"""
+        """Dessine la grille uniquement dans la zone visible."""
         
-        # Ignore le rendu quand le zoom est trop eloigne pour economiser le CPU
+        # Ignore le rendu quand le zoom est trop éloigné pour economiser le CPU
         if view_scale < self.min_zoom_factor:
             return
 
@@ -22,14 +22,14 @@ class Grid:
         left = rect.left()
         top = rect.top()
         
-        # Premier point aligne a la grille
+        # Premier point aligne à la grille
         first_x = left - (left % self.grid_size)
         first_y = top - (top % self.grid_size)
 
         # Construit les points
         points = []
         
-        # Parcourt X de gauche a droite
+        # Parcourt X de gauche à droite
         x = first_x
         while x < rect.right():
             # Parcourt Y de haut en bas

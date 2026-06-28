@@ -14,6 +14,7 @@ class WireItem(QGraphicsLineItem):
         self._locked = False
         self._drag_last_scene_pos = None
         self._drag_last_grid_pos = None
+        self._dragged = False
         
         self.setPen(QPen(Qt.black, 2))
         self.setFlags(
@@ -121,6 +122,9 @@ class WireItem(QGraphicsLineItem):
         """Indique si le noeud est reference par un dipole."""
         if node is None:
             return False
+        connected = getattr(node, "connected_dipoles", None)
+        if connected:
+            return len(connected) > 0
         for dipole in model.dipoles.values():
             if dipole.node_a is node or dipole.node_b is node:
                 return True
@@ -200,6 +204,7 @@ class WireItem(QGraphicsLineItem):
         ax, ay = self.wire.node_a.position
         bx, by = self.wire.node_b.position
 
+
         moved_node_ids = moved_node_ids or set()
         preserve_node_model_ids = preserve_node_model_ids or set()
 
@@ -222,6 +227,7 @@ class WireItem(QGraphicsLineItem):
                 self.wire.node_b = model.create_node(bx, by)
                 shared_b = False
 
+
         node_a_id = id(self.wire.node_a)
         if node_a_id not in moved_node_ids:
             if preserve_a_with_dipole:
@@ -235,7 +241,8 @@ class WireItem(QGraphicsLineItem):
                     should_snap_endpoints,
                     allow_grid_snap,
                 )
-                moved_node_ids.add(node_a_id)
+
+        moved_node_ids.add(node_a_id)
 
         node_b_id = id(self.wire.node_b)
         if node_b_id not in moved_node_ids:
@@ -311,9 +318,10 @@ class WireItem(QGraphicsLineItem):
             setattr(scene, "_wire_drag_active", False)
         
         # Si le fil entier a ete deplace
-        if self.pos().manhattanLength() > 0.1:
-             if self.scene():
-                 self.scene().handle_wire_move(self)
+        if self._dragged or self.pos().manhattanLength() > 0.1:
+            if self.scene():
+                self.scene().handle_wire_move(self)
+        self._dragged = False
 
     def mousePressEvent(self, event) -> None:
         """Prepare un glisser de fil entier."""
@@ -322,6 +330,7 @@ class WireItem(QGraphicsLineItem):
             return
         if event.button() == Qt.LeftButton:
             self._drag_last_scene_pos = event.scenePos()
+            self._dragged = False
             scene = self.scene()
             if scene is not None:
                 setattr(scene, "_wire_drag_active", True)
@@ -358,6 +367,7 @@ class WireItem(QGraphicsLineItem):
                 snap_endpoints=False,
                 allow_grid_snap=True,
             )
+            self._dragged = True
             self._drag_last_grid_pos = current_grid_pos
             self._drag_last_scene_pos = event.scenePos()
         else:
@@ -370,6 +380,7 @@ class WireItem(QGraphicsLineItem):
                 snap_endpoints=False,
                 allow_grid_snap=False,
             )
+            self._dragged = True
             self._drag_last_scene_pos = event.scenePos()
         self.setPos(0, 0)
         event.accept()

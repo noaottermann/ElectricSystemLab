@@ -1,16 +1,16 @@
 from PyQt5.QtCore import QPointF, QRectF, Qt
-from PyQt5.QtGui import QBrush, QColor, QPainterPath, QPen
+from PyQt5.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
 
 class NodeItem(QGraphicsEllipseItem):
-    """Element graphique representant un noeud libre"""
+    """Élement graphique représentant un noeud libre"""
 
     RADIUS = 2
     HIT_RADIUS = 8
 
     def __init__(self, node_model) -> None:
-        """Initialise l'item graphique associe au noeud."""
+        """Initialise l'item graphique associé au noeud."""
         super().__init__(-self.RADIUS, -self.RADIUS, self.RADIUS * 2, self.RADIUS * 2)
         self.node = node_model
         self._drag_active = False
@@ -48,20 +48,19 @@ class NodeItem(QGraphicsEllipseItem):
         )
 
     def shape(self) -> QPainterPath:
-        """Definit une zone de clic autour du noeud."""
+        """Définit une zone de clic autour du noeud."""
         path = QPainterPath()
         path.addEllipse(QPointF(0, 0), self.HIT_RADIUS, self.HIT_RADIUS)
         return path
 
     def paint(self, painter, option, widget=None) -> None:
-        """Dessine le noeud sans marqueur de selection par defaut."""
-        # Keep node selection behavior without the default square selection marker.
+        """Dessine le noeud sans marqueur de sélection par défaut."""
         painter.setPen(self.pen())
         painter.setBrush(self.brush())
         painter.drawEllipse(self.rect())
 
     def set_snap_candidate(self, is_candidate: bool) -> None:
-        """Marque le noeud comme candidat a l'aimantation."""
+        """Marque le noeud comme candidat à l'aimantation."""
         self._snap_candidate = bool(is_candidate)
         if self._snap_candidate:
             self.setBrush(QBrush(QColor(0, 200, 100)))
@@ -71,7 +70,7 @@ class NodeItem(QGraphicsEllipseItem):
             self.setBrush(QBrush(QColor(Qt.black)))
 
     def mousePressEvent(self, event) -> None:
-        """Demarre un glisser du noeud."""
+        """Démarre un glisser du noeud."""
         if event.button() == Qt.LeftButton:
             if self._locked:
                 event.ignore()
@@ -82,7 +81,7 @@ class NodeItem(QGraphicsEllipseItem):
             self._press_scene_pos = event.scenePos()
             self._drag_started = False
             if scene is not None:
-                # Si le noeud est une extremite de fil, selectionne le fil au clic (apres release).
+                # Si le noeud est une extremité de fil, sélectionne le fil au clic (après release).
                 model = getattr(scene, "model", None)
                 if model is not None and getattr(model, "wires", None):
                     for wire in model.wires.values():
@@ -143,7 +142,7 @@ class NodeItem(QGraphicsEllipseItem):
         super().mouseReleaseEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
-        """Met a jour la position du noeud pendant le glisser."""
+        """Met à jour la position du noeud pendant le glisser."""
         if self._drag_active:
             scene = self.scene()
             if scene is None:
@@ -175,7 +174,7 @@ class NodeItem(QGraphicsEllipseItem):
         super().mouseMoveEvent(event)
 
     def hoverEnterEvent(self, event) -> None:
-        """Met a jour le curseur selon l'outil actif."""
+        """Met à jour le curseur selon l'outil actif."""
         scene = self.scene()
         if scene is not None and getattr(scene, "current_tool", "pointer") != "pointer":
             self.setCursor(Qt.CrossCursor)
@@ -184,7 +183,7 @@ class NodeItem(QGraphicsEllipseItem):
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event) -> None:
-        """Met a jour le curseur lors du survol."""
+        """Met à jour le curseur lors du survol."""
         scene = self.scene()
         if scene is not None and getattr(scene, "current_tool", "pointer") != "pointer":
             self.setCursor(Qt.CrossCursor)
@@ -201,17 +200,4 @@ class NodeItem(QGraphicsEllipseItem):
             self.setCursor(Qt.OpenHandCursor)
         super().hoverLeaveEvent(event)
 
-    def itemChange(self, change, value):
-        """Laisse Qt gerer la position pour eviter un re-snapping."""
-        # La position est deja geree par le flux de drag (mouseMoveEvent/finalize_node_move).
-        # Evite un re-snapping implicite a la grille qui peut decaler un noeud connecte
-        # a une borne de dipole hors grille.
-        return super().itemChange(change, value)
 
-    def set_locked(self, locked: bool) -> None:
-        """Verrouille ou deverrouille l'item."""
-        self._locked = bool(locked)
-
-    def is_locked(self) -> bool:
-        """Indique si l'item est verrouille."""
-        return self._locked

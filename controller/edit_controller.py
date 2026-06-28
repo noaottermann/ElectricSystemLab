@@ -1,26 +1,43 @@
-"""Controleur des operations d'edition."""
-
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING, Any
 
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QGraphicsItem
 
-from view.component_item import ComponentItem
-from view.node_item import NodeItem
-from view.wire_item import WireItem
+from controller.ui_callbacks import UICallbacks
+
+if TYPE_CHECKING:
+    from view.canvas import GraphicsCanvas
 
 
 class EditController:
-	"""Gere les actions d'edition et de selection."""
+	"""Gère les actions d'édition et de sélection."""
 
-	def __init__(self, window, scene, view=None, app_controller=None) -> None:
-		self.window = window
+	def __init__(self, scene: GraphicsCanvas | None, view: Any = None, ui_callbacks: Optional[UICallbacks] = None, app_controller: Any = None) -> None:
+		"""
+		Initialise le contrôleur d'édition.
+		
+		Args:
+			scene: La scène graphique
+			view: La vue graphique (optionnelle)
+			ui_callbacks: Interface de communication avec la Vue
+			app_controller: Référence au contrôleur d'application (optionnelle)
+		"""
 		self.scene = scene
 		self.view = view
+		self.ui_callbacks = ui_callbacks
 		self.app_controller = app_controller
+
+	def _is_component_item(self, item: Any) -> bool:
+		return hasattr(item, "component")
+
+	def _is_node_item(self, item: Any) -> bool:
+		return hasattr(item, "node")
+
+	def _is_wire_item(self, item: Any) -> bool:
+		return hasattr(item, "wire")
 
 	def cut(self) -> None:
 		if self.scene is not None:
@@ -124,14 +141,14 @@ class EditController:
 		self._refresh_actions()
 
 	def filter_nodes(self) -> None:
-		self._filter_selection(lambda item: isinstance(item, NodeItem))
+		self._filter_selection(self._is_node_item)
 
 	def filter_wires(self) -> None:
-		self._filter_selection(lambda item: isinstance(item, WireItem))
+		self._filter_selection(self._is_wire_item)
 
 	def filter_sources(self) -> None:
 		def _predicate(item) -> bool:
-			return isinstance(item, ComponentItem) and item.component.__class__.__name__ in {
+			return self._is_component_item(item) and item.component.__class__.__name__ in {
 				"VoltageSourceDC",
 				"VoltageSourceAC",
 				"CurrentSourceDC",
@@ -146,17 +163,17 @@ class EditController:
 
 	def filter_resistors(self) -> None:
 		self._filter_selection(
-			lambda item: isinstance(item, ComponentItem) and item.component.__class__.__name__ == "Resistor"
+			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Resistor"
 		)
 
 	def filter_capacitors(self) -> None:
 		self._filter_selection(
-			lambda item: isinstance(item, ComponentItem) and item.component.__class__.__name__ == "Capacitor"
+			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Capacitor"
 		)
 
 	def filter_inductors(self) -> None:
 		self._filter_selection(
-			lambda item: isinstance(item, ComponentItem) and item.component.__class__.__name__ == "Inductor"
+			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Inductor"
 		)
 
 	def filter_add(self) -> None:
@@ -226,10 +243,11 @@ class EditController:
 	def _mirror_selection(self, axis: str) -> None:
 		if self.scene is None:
 			return
-		items = [item for item in self.scene.selectedItems() if isinstance(item, (ComponentItem, NodeItem))]
+		items = [item for item in self.scene.selectedItems() if self._is_component_item(item) or self._is_node_item(item)]
 		if not items:
 			return
-		self.scene._push_undo_snapshot()
+		if self.ui_callbacks is not None:
+			self.ui_callbacks.push_undo_snapshot()
 		centers = [item.sceneBoundingRect().center() for item in items]
 		center_x = sum(p.x() for p in centers) / len(centers)
 		center_y = sum(p.y() for p in centers) / len(centers)
@@ -250,10 +268,11 @@ class EditController:
 	def _align_selection(self, direction: str) -> None:
 		if self.scene is None:
 			return
-		items = [item for item in self.scene.selectedItems() if isinstance(item, (ComponentItem, NodeItem))]
+		items = [item for item in self.scene.selectedItems() if self._is_component_item(item) or self._is_node_item(item)]
 		if len(items) < 2:
 			return
-		self.scene._push_undo_snapshot()
+		if self.ui_callbacks is not None:
+			self.ui_callbacks.push_undo_snapshot()
 		rects = [item.sceneBoundingRect() for item in items]
 		if direction == "left":
 			target = min(rect.left() for rect in rects)
@@ -285,10 +304,11 @@ class EditController:
 	def _distribute_selection(self, axis: str) -> None:
 		if self.scene is None:
 			return
-		items = [item for item in self.scene.selectedItems() if isinstance(item, (ComponentItem, NodeItem))]
+		items = [item for item in self.scene.selectedItems() if self._is_component_item(item) or self._is_node_item(item)]
 		if len(items) < 3:
 			return
-		self.scene._push_undo_snapshot()
+		if self.ui_callbacks is not None:
+			self.ui_callbacks.push_undo_snapshot()
 		items.sort(key=lambda item: item.sceneBoundingRect().center().x() if axis == "x" else item.sceneBoundingRect().center().y())
 		centers = [item.sceneBoundingRect().center() for item in items]
 		if axis == "x":
@@ -313,9 +333,9 @@ class EditController:
 		self._finalize_transform(items)
 
 	def _sync_item_model(self, item) -> None:
-		if isinstance(item, ComponentItem):
+		if self._is_component_item(item):
 			item.update_model_nodes()
-		elif isinstance(item, NodeItem):
+		elif self._is_node_item(item):
 			item.node.position = (item.pos().x(), item.pos().y())
 			if self.scene is not None:
 				self.scene.preview_node_move(item.node, item.pos())
@@ -324,14 +344,14 @@ class EditController:
 		if self.scene is None:
 			return
 		for item in items:
-			if isinstance(item, ComponentItem):
+			if self._is_component_item(item):
 				self.scene.handle_component_move(item)
-			elif isinstance(item, NodeItem):
+			elif self._is_node_item(item):
 				self.scene.finalize_node_move(item)
 		self.scene._merge_overlaps_and_refresh()
 		self.scene._sync_free_node_items_from_model()
 		self._refresh_actions()
 
 	def _refresh_actions(self) -> None:
-		if hasattr(self.window, "_update_transform_actions_visibility"):
-			self.window._update_transform_actions_visibility()
+		if self.ui_callbacks is not None:
+			self.ui_callbacks.update_transform_actions_visibility()

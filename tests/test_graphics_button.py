@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Test simple du bouton Graphiques flottant."""
-
 import sys
 from PyQt5.QtWidgets import QApplication
 from model.circuit import Circuit
@@ -20,7 +17,7 @@ if __name__ == "__main__":
     print("✓ Bouton Graphiques créé et positionné")
     print("✓ Position: 2/3 de la hauteur, tout à droite")
     print("✓ Style: Rectangle portrait (80x120px)")
-    print("✓ Fonction: Ouvre/ferme le panneau des graphiques")
+    print("✓ Fonction: Ouvre/fermé le panneau des graphiques")
     print("\nTestez le bouton en cliquant dessus dans l'interface pour basculer l'affichage du panneau de droite.")
     
     sys.exit(app.exec_())

@@ -45,9 +45,13 @@ class Circuit:
                 dipole.node_a.add_connection(dipole)
             if dipole.node_b is not None and dipole.node_b.id in self.nodes:
                 dipole.node_b.add_connection(dipole)
+            if hasattr(dipole, "node_c") and dipole.node_c is not None and dipole.node_c.id in self.nodes:
+                dipole.node_c.add_connection(dipole)
+            if hasattr(dipole, "node_d") and dipole.node_d is not None and dipole.node_d.id in self.nodes:
+                dipole.node_d.add_connection(dipole)
 
     def _merge_node_into_keeper(self, keeper: Optional[Node], node_to_merge: Optional[Node]) -> bool:
-        """Fusionne un noeud dans un noeud gardien et met a jour les references."""
+        """Fusionne un noeud dans un noeud commun et met a jour les references."""
         if keeper is None or node_to_merge is None or keeper is node_to_merge:
             return False
 
@@ -60,6 +64,12 @@ class Circuit:
                 changed = True
             if dipole.node_b is node_to_merge:
                 dipole.node_b = keeper
+                changed = True
+            if hasattr(dipole, "node_c") and dipole.node_c is node_to_merge:
+                dipole.node_c = keeper
+                changed = True
+            if hasattr(dipole, "node_d") and dipole.node_d is node_to_merge:
+                dipole.node_d = keeper
                 changed = True
 
         # Met a jour les references sur les fils.
@@ -139,6 +149,10 @@ class Circuit:
                 dipole_nodes.add(dipole.node_a)
             if dipole.node_b is not None:
                 dipole_nodes.add(dipole.node_b)
+            if hasattr(dipole, "node_c") and dipole.node_c is not None:
+                dipole_nodes.add(dipole.node_c)
+            if hasattr(dipole, "node_d") and dipole.node_d is not None:
+                dipole_nodes.add(dipole.node_d)
 
         # Noeuds de dipôles
         for node in dipole_nodes:
@@ -182,6 +196,10 @@ class Circuit:
             raise ValueError(f"Le Node A ({dipole.node_a.id}) n'existe pas dans ce circuit.")
         if dipole.node_b and dipole.node_b.id not in self.nodes:
             raise ValueError(f"Le Node B ({dipole.node_b.id}) n'existe pas dans ce circuit.")
+        if hasattr(dipole, "node_c") and dipole.node_c and dipole.node_c.id not in self.nodes:
+            raise ValueError(f"Le Node C ({dipole.node_c.id}) n'existe pas dans ce circuit.")
+        if hasattr(dipole, "node_d") and dipole.node_d and dipole.node_d.id not in self.nodes:
+            raise ValueError(f"Le Node D ({dipole.node_d.id}) n'existe pas dans ce circuit.")
         self.dipoles[dipole.id] = dipole
         if dipole.id >= self._next_dipole_id:
             self._next_dipole_id = dipole.id + 1

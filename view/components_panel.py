@@ -13,10 +13,35 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QSizePolicy,
+    QStyleOptionGraphicsItem,
     QVBoxLayout,
     QWidget,
 )
 from utils.translator import Translator
+
+from model.components import (
+	Ammeter,
+	Capacitor,
+	CurrentControlledCurrentSource,
+	CurrentControlledVoltageSource,
+	CurrentSource,
+	Diode,
+	Ground,
+	Inductor,
+	OpAmp,
+	Resistor,
+	Switch,
+	Transformer,
+	Transistor,
+	Voltmeter,
+	VoltageControlledCurrentSource,
+	VoltageControlledVoltageSource,
+	VoltageSource,
+)
+from model.node import Node
+from model.wire import Wire
+from .component_item import create_component_item
+from .wire_item import WireItem
 
 
 class ComponentsPanel(QWidget):
@@ -57,7 +82,7 @@ class ComponentsPanel(QWidget):
 		self.components_list = ComponentsListWidget()
 		self.components_list.setObjectName("componentsList")
 		self.components_list.setViewMode(QListWidget.ListMode)
-		self.components_list.setIconSize(QSize(44, 44))
+		self.components_list.setIconSize(QSize(60, 60))
 		self.components_list.setSpacing(0)
 		self.components_list.setUniformItemSizes(True)
 		self.components_list.setSelectionMode(QListWidget.SingleSelection)
@@ -162,12 +187,12 @@ class ComponentsPanel(QWidget):
 		frame = QFrame()
 		frame.setObjectName("componentsPane")
 		layout = QVBoxLayout(frame)
-		layout.setContentsMargins(10, 0, 10, 8)
+		layout.setContentsMargins(0, 0, 1, 2)
 		layout.setSpacing(0)
 		self._components_layout = layout
-		self._components_left_margin = 10
+		self._components_left_margin = 0
 		self._components_top_margin = 0
-		self._components_right_margin = 10
+		self._components_right_margin = 2
 		self._components_bottom_margin = 8
 
 		self.header_widget = QWidget()
@@ -243,7 +268,7 @@ class ComponentsPanel(QWidget):
 				background: transparent;
 			}
 			QListWidget::item {
-				padding: 1px 6px 1px 0px;
+				padding: 0px 1px 0px 0px;
 				border-radius: 8px;
 				color: #2a2a2a;
 			}
@@ -291,7 +316,24 @@ class ComponentsPanel(QWidget):
 				"icon": "categories/semiconductors.png",
 				"color": "#6d597a",
 			},
-
+			{
+				"key": "analog_ics",
+				"label_key": "components_category_analog_ics",
+				"icon": "categories/analog_ics.png",
+				"color": "#c1666b",
+			},
+			{
+				"key": "electromechanical",
+				"label_key": "components_category_electromechanical",
+				"icon": "categories/electromechanical.png",
+				"color": "#7f5539",
+			},
+			{
+				"key": "instruments",
+				"label_key": "components_category_instruments",
+				"icon": "categories/instruments.png",
+				"color": "#386641",
+			},
 		]
 
 	def _build_default_components(self) -> dict[str, list[dict]]:
@@ -303,28 +345,22 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_wire",
 					"icon": "components/wire.png",
 				},
-
+				{
+					"id": "ground",
+					"label_key": "components_item_ground",
+					"icon": "components/ground.png",
+				},
 			],
 			"sources": [
 				{
-					"id": "source_dc",
-					"label_key": "components_item_source_dc",
+					"id": "source",
+					"label_key": "components_item_source",
 					"icon": "components/source_dc.png",
 				},
 				{
-					"id": "source_ac",
-					"label_key": "components_item_source_ac",
-					"icon": "components/source_ac.png",
-				},
-				{
-					"id": "current_source_dc",
-					"label_key": "components_item_current_source_dc",
+					"id": "current_source",
+					"label_key": "components_item_current_source",
 					"icon": "components/current_source_dc.png",
-				},
-				{
-					"id": "current_source_ac",
-					"label_key": "components_item_current_source_ac",
-					"icon": "components/current_source_ac.png",
 				},
 				{
 					"id": "source_vccs",
@@ -363,7 +399,11 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_inductor",
 					"icon": "components/inductor.png",
 				},
-
+				{
+					"id": "transformer",
+					"label_key": "components_item_transformer",
+					"icon": "components/transformer.png",
+				},
 			],
 			"semiconductors": [
 				{
@@ -372,12 +412,37 @@ class ComponentsPanel(QWidget):
 					"icon": "components/diode.png",
 				},
 				{
-					"id": "led",
-					"label_key": "components_item_led",
-					"icon": "components/led.png",
+					"id": "transistor",
+					"label_key": "components_item_transistor",
+					"icon": "components/diode.png",
 				},
 			],
-
+			"analog_ics": [
+				{
+					"id": "opamp",
+					"label_key": "components_item_opamp",
+					"icon": "components/source_vcvs.png",
+				},
+			],
+			"electromechanical": [
+				{
+					"id": "switch",
+					"label_key": "components_item_switch",
+					"icon": "components/switch.png",
+				},
+			],
+			"instruments": [
+				{
+					"id": "voltmeter",
+					"label_key": "components_item_voltmeter",
+					"icon": "components/voltmeter.png",
+				},
+				{
+					"id": "ammeter",
+					"label_key": "components_item_ammeter",
+					"icon": "components/ammeter.png",
+				},
+			],
 		}
 
 	def _populate_categories(self) -> None:
@@ -444,28 +509,144 @@ class ComponentsPanel(QWidget):
 
 	def _add_category_header(self, category: dict) -> None:
 		"""Ajoute un en-tete de categorie dans la liste."""
-		header_item = QListWidgetItem(Translator.tr(category["label_key"]))
+		header_item = QListWidgetItem(" " + Translator.tr(category["label_key"]))
 		header_item.setData(Qt.UserRole, f"header:{category['key']}")
 		header_item.setFlags(Qt.NoItemFlags)
-		header_item.setSizeHint(QSize(160, 34))
+		header_item.setSizeHint(QSize(160, 12))
 		self.components_list.addItem(header_item)
 
 	def _add_empty_category(self) -> None:
 		"""Ajoute une ligne vide lorsqu'une categorie n'a pas de composants."""
 		empty_item = QListWidgetItem(Translator.tr("components_empty_category"))
 		empty_item.setFlags(Qt.NoItemFlags)
-		empty_item.setSizeHint(QSize(160, 22))
+		empty_item.setSizeHint(QSize(160, 14))
 		self.components_list.addItem(empty_item)
 
 	def _add_component_row(self, component: dict, category_key: str) -> None:
 		"""Ajoute une ligne pour un composant."""
-		icon = self._load_icon(component["icon"], "#d7d7d7", QSize(44, 44))
+		icon = self._build_component_icon(component)
 		item = QListWidgetItem(icon, Translator.tr(component["label_key"]))
 		item.setData(Qt.UserRole, component["id"])
 		item.setData(Qt.UserRole + 1, category_key)
 		item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-		item.setSizeHint(QSize(160, 54))
+		item.setSizeHint(QSize(160, 52))
 		self.components_list.addItem(item)
+
+	def set_component_icon(self, component_id: str, icon_path: str) -> None:
+		"""Met a jour l'icone d'un composant dans la liste."""
+		if not component_id or not icon_path:
+			return
+		for category_key, components in self._component_data.items():
+			for component in components:
+				if component.get("id") == component_id:
+					component["icon"] = icon_path
+
+		icon = self._load_icon(icon_path, "#d7d7d7", QSize(44, 44))
+		for row in range(self.components_list.count()):
+			item = self.components_list.item(row)
+			if item is None:
+				continue
+			if item.data(Qt.UserRole) == component_id:
+				item.setIcon(icon)
+
+	def set_component_state_icon(self, component_id: str, state_value: str | None) -> None:
+		"""Met a jour l'icone d'un composant selon un etat."""
+		if not component_id:
+			return
+		icon = self._build_component_icon({"id": component_id}, state_value=state_value)
+		for row in range(self.components_list.count()):
+			item = self.components_list.item(row)
+			if item is None:
+				continue
+			if item.data(Qt.UserRole) == component_id:
+				item.setIcon(icon)
+
+	def _build_component_icon(self, component: dict, state_value: str | None = None) -> QIcon:
+		"""Construit une icone a partir du rendu canvas du composant."""
+		component_id = component.get("id") if isinstance(component, dict) else None
+		icon_size = self.components_list.iconSize() if hasattr(self, "components_list") else QSize(44, 44)
+		if not component_id:
+			return self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
+
+		item = self._create_component_item_for_icon(str(component_id), state_value)
+		if item is None:
+			return self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
+		return self._render_component_item_icon(item, icon_size)
+
+	def _create_component_item_for_icon(self, component_id: str, state_value: str | None):
+		"""Cree un item graphique pour la liste de composants."""
+		if component_id == "wire":
+			node_a = Node(1, -20.0, 0.0)
+			node_b = Node(2, 20.0, 0.0)
+			wire = Wire(1, node_a, node_b)
+			return WireItem(wire)
+
+		component_cls = {
+			"resistor": Resistor,
+			"capacitor": Capacitor,
+			"inductor": Inductor,
+			"transformer": Transformer,
+			"source": VoltageSource,
+			"current_source": CurrentSource,
+			"source_vccs": VoltageControlledCurrentSource,
+			"source_vcvs": VoltageControlledVoltageSource,
+			"source_cccs": CurrentControlledCurrentSource,
+			"source_ccvs": CurrentControlledVoltageSource,
+			"diode": Diode,
+			"transistor": Transistor,
+			"opamp": OpAmp,
+			"switch": Switch,
+			"voltmeter": Voltmeter,
+			"ammeter": Ammeter,
+			"ground": Ground,
+		}.get(component_id)
+
+		if component_cls is None:
+			return None
+
+		node_a = Node(1, -30.0, -12.0)
+		node_b = Node(2, -30.0, 12.0)
+		node_c = Node(3, 30.0, -12.0)
+		node_d = Node(4, 30.0, 12.0)
+		if component_cls is Ground:
+			node_a = Node(1, 0.0, 0.0, is_ground=True)
+			node_b = node_a
+			node_c = None
+			node_d = None
+
+		if component_cls is Transformer:
+			component = component_cls(1, node_a, node_b, node_c, node_d, 0.0, 0.0)
+		else:
+			component = component_cls(1, node_a, node_b, 0.0, 0.0)
+		if state_value and hasattr(component, "set_state"):
+			component.set_state(str(state_value))
+		return create_component_item(component)
+
+	def _render_component_item_icon(self, item, icon_size: QSize) -> QIcon:
+		"""Rendu de l'item graphique dans un pixmap d'icone."""
+		pixmap = QPixmap(icon_size)
+		pixmap.fill(Qt.transparent)
+		painter = QPainter(pixmap)
+		painter.setRenderHint(QPainter.Antialiasing)
+		rect = item.boundingRect()
+		width = max(1.0, rect.width())
+		height = max(1.0, rect.height())
+		available_w = max(1, icon_size.width() - 6)
+		available_h = max(1, icon_size.height() - 6)
+		scale = min(available_w / width, available_h / height)
+		painter.translate(icon_size.width() / 2, icon_size.height() / 2)
+		painter.scale(scale, scale)
+		option = QStyleOptionGraphicsItem()
+		item.paint(painter, option)
+		if isinstance(item, WireItem):
+			line = item.line()
+			painter.setPen(Qt.NoPen)
+			painter.setBrush(QColor("#1f2937"))
+			node_radius = 2
+			painter.drawEllipse(line.p1(), node_radius, node_radius)
+			painter.drawEllipse(line.p2(), node_radius, node_radius)
+		painter.end()
+		return QIcon(pixmap)
 
 	def _scroll_to_category(self, category_key: str) -> None:
 		"""Fait defiler jusqu'a l'en-tete de la categorie cible."""

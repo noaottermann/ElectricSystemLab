@@ -10,11 +10,11 @@ from model.components import Resistor, VoltageSourceDC, Capacitor
 class TestCircuitModel(unittest.TestCase):
     
     def setUp(self):
-        """Execute avant chaque test en partant d'un circuit vide"""
+        """Éxecute avant chaque test en partant d'un circuit vide"""
         self.circuit = Circuit()
 
     def test_node_creation(self):
-        """Teste la creation et le stockage des noeuds"""
+        """Teste la création et le stockage des noeuds"""
         n1 = self.circuit.create_node(10, 20, is_ground=True)
         n2 = self.circuit.create_node(30, 40)
 
@@ -30,7 +30,7 @@ class TestCircuitModel(unittest.TestCase):
         self.assertNotEqual(n1.id, n2.id)
 
     def test_dipole_connection(self):
-        """Teste l'ajout d'un dipole entre deux noeuds"""
+        """Teste l'ajout d'un dipôle entre deux noeuds"""
         n1 = self.circuit.create_node(0, 0)
         n2 = self.circuit.create_node(100, 0)
         uid = self.circuit.get_next_dipole_id()
@@ -44,7 +44,7 @@ class TestCircuitModel(unittest.TestCase):
         self.assertIn(resistor, n2.connected_dipoles)
 
     def test_wire_creation(self):
-        """Teste la creation d'un fil"""
+        """Teste la création d'un fil"""
         n1 = self.circuit.create_node(0, 0)
         n2 = self.circuit.create_node(50, 50)
         
@@ -99,7 +99,7 @@ class TestCircuitModel(unittest.TestCase):
         self.assertTrue(has_ground)
 
     def test_merge_overlapping_nodes_keeps_ground(self):
-        """Teste la fusion des noeuds superposes en conservant la masse."""
+        """Teste la fusion des noeuds superposés en conservant la masse."""
         n1 = self.circuit.create_node(10, 10, is_ground=True)
         n2 = self.circuit.create_node(10, 10, is_ground=False)
 

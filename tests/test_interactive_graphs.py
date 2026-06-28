@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Démonstration des contrôles interactifs du GraphPanel.
-"""
-
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QTextEdit
 from PyQt5.QtCore import Qt
@@ -11,6 +6,7 @@ from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC, Capacitor
 from view.graphs_panel import GraphPanel
 
+# TODO outdated
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
@@ -66,31 +62,8 @@ if __name__ == "__main__":
     layout.addWidget(title)
     
     # Instructions
-    instructions_text = """
-Nouvelles Fonctionnalités:
-
-1. 📊 Sélection Interactive (Onglet Transitoire)
-   • Checkboxes pour chaque nœud (N0, N1, N2...)
-   • Checkboxes pour chaque dipôle (D0, D1...)
-   • Tous cochés par défaut
-   • Les graphiques se mettent à jour instantanément
-
-2. 📈 Graphiques Adaptatifs
-   • Nombre de courbes = nœuds sélectionnés + dipôles sélectionnés
-   • Layout automatique (1, 2 ou 4 graphiques)
-   • Chaque courbe a titre, légende et grille
-
-Instructions:
-1. Regarder le panel de droite
-2. Cocher/décocher les nœuds et dipôles
-3. Observer comment le graphique se met à jour
-4. Utiliser la toolbar pour zoomer (clic sur 🔍 puis région)
-5. Pan avec 🖱️ pour déplacer
-6. Save (💾) pour exporter en PNG
-    """
-    
     instructions = QTextEdit()
-    instructions.setPlainText(instructions_text)
+    instructions.setPlainText("test")
     instructions.setReadOnly(True)
     instructions.setMaximumHeight(300)
     layout.addWidget(instructions)
@@ -103,25 +76,7 @@ Instructions:
     window.show()
     
     # Affiche les résultats
-    print("\n✅ GraphPanel Interactif Créé")
-    print("=" * 50)
-    print("Graphiques natifs actifs (sans matplotlib)")
-    print(f"Nœuds du circuit: N0 (ground), N1, N2")
-    print(f"Dipôles: V1, R1, R2, C1")
-    print("=" * 50)
-    print("\nTest DC:")
     graph_panel.set_dc_results(circuit)
-    print("✓ Résultats DC affichés")
-    
-    print("\nTest Transitoire:")
     graph_panel.set_transient_results(transient_result, circuit)
-    print("✓ Résultats Transitoires affichés")
-    print("  - Checkboxes créées pour chaque nœud/dipôle")
-    print("  - Tous les éléments cochés par défaut")
-    print("  - Graphiques affichés dynamiquement")
-    
-    print("\n💡 Testez les fonctionnalités:")
-    print("  1. Décochez des checkboxes pour voir les graphiques se mettre à jour")
-    print("  2. Les stats se mettent a jour avec la selection")
     
     sys.exit(app.exec_())

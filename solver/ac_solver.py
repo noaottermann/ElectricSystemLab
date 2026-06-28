@@ -6,17 +6,21 @@ from typing import Optional
 import numpy as np
 
 from model.components import (
+    Ammeter,
     Capacitor,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
+    CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
     Inductor,
     LED,
     Resistor,
+    Voltmeter,
     VoltageControlledCurrentSource,
     VoltageControlledVoltageSource,
+    VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
 )
@@ -156,7 +160,7 @@ class ACSolver(BaseSolver):
             for dipole in circuit.dipoles.values()
             if isinstance(
                 dipole,
-                (VoltageSourceDC, VoltageSourceAC, VoltageControlledVoltageSource, CurrentControlledVoltageSource),
+                (VoltageSource, VoltageSourceDC, VoltageSourceAC, VoltageControlledVoltageSource, CurrentControlledVoltageSource),
             )
         ]
 
@@ -169,7 +173,7 @@ class ACSolver(BaseSolver):
 
     def _stamp_resistors(self, circuit, node_groups, group_to_idx, ground_group_id, matrix_a) -> None:
         for dipole in circuit.dipoles.values():
-            if not isinstance(dipole, Resistor):
+            if not isinstance(dipole, (Resistor, Voltmeter, Ammeter)):
                 continue
             idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
             idx_b = matrix_index_for_node(dipole.node_b, node_groups, group_to_idx, ground_group_id)
@@ -207,6 +211,8 @@ class ACSolver(BaseSolver):
                 current = self._phasor_from_ac_source(dipole)
             elif isinstance(dipole, CurrentSourceDC):
                 current = 0.0
+            elif isinstance(dipole, CurrentSource):
+                current = self._phasor_from_ac_source(dipole) if dipole.is_ac() else 0.0
             if current is None:
                 continue
             idx_a = matrix_index_for_node(dipole.node_a, node_groups, group_to_idx, ground_group_id)
@@ -309,6 +315,9 @@ class ACSolver(BaseSolver):
             if isinstance(source, VoltageSourceDC):
                 vector_z[idx_src] = 0.0
                 continue
+            if isinstance(source, VoltageSource):
+                vector_z[idx_src] = self._phasor_from_ac_source(source) if source.is_ac() else 0.0
+                continue
             if isinstance(source, VoltageControlledVoltageSource):
                 control = circuit.dipoles.get(source.control_dipole_id)
                 if control is None:
@@ -397,7 +406,7 @@ class ACSolver(BaseSolver):
         voltage_source_indices: dict[int, int],
         omega: float,
     ) -> complex:
-        if isinstance(dipole, Resistor):
+        if isinstance(dipole, (Resistor, Voltmeter, Ammeter)):
             return self._voltage_across(dipole, node_groups, group_to_idx, ground_group_id, state_vector) / dipole.resistance
         if isinstance(dipole, Capacitor):
             return 1j * omega * dipole.capacitance * self._voltage_across(
@@ -413,6 +422,8 @@ class ACSolver(BaseSolver):
             return self._phasor_from_ac_source(dipole)
         if isinstance(dipole, CurrentSourceDC):
             return 0.0 + 0.0j
+        if isinstance(dipole, CurrentSource):
+            return self._phasor_from_ac_source(dipole) if dipole.is_ac() else 0.0 + 0.0j
         if isinstance(dipole, VoltageControlledCurrentSource):
             control = circuit.dipoles.get(dipole.control_dipole_id)
             if control is None:
@@ -432,7 +443,10 @@ class ACSolver(BaseSolver):
                 omega,
             )
             return float(dipole.gain) * control_current
-        if isinstance(dipole, (VoltageSourceDC, VoltageSourceAC, VoltageControlledVoltageSource, CurrentControlledVoltageSource)):
+        if isinstance(
+            dipole,
+            (VoltageSource, VoltageSourceDC, VoltageSourceAC, VoltageControlledVoltageSource, CurrentControlledVoltageSource),
+        ):
             idx = voltage_source_indices.get(dipole.id)
             if idx is None:
                 return 0.0 + 0.0j
@@ -464,7 +478,7 @@ class ACSolver(BaseSolver):
         ctrl_idx = voltage_source_indices.get(control.id)
         if ctrl_idx is not None:
             return -state_vector[ctrl_idx]
-        if isinstance(control, Resistor):
+        if isinstance(control, (Resistor, Voltmeter, Ammeter)):
             return self._voltage_across(control, node_groups, group_to_idx, ground_group_id, state_vector) / control.resistance
         if isinstance(control, Capacitor):
             return 1j * omega * control.capacitance * self._voltage_across(
@@ -480,6 +494,8 @@ class ACSolver(BaseSolver):
             return self._phasor_from_ac_source(control)
         if isinstance(control, CurrentSourceDC):
             return 0.0 + 0.0j
+        if isinstance(control, CurrentSource):
+            return self._phasor_from_ac_source(control) if control.is_ac() else 0.0 + 0.0j
         if isinstance(control, VoltageControlledCurrentSource):
             ctrl = circuit.dipoles.get(control.control_dipole_id)
             if ctrl is None:

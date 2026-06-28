@@ -188,7 +188,7 @@ class TimeSeriesPlotWidget(QWidget):
 
 
 class GraphPanel(QWidget):
-	"""Panneau persistant avec graphiques et controles interactifs."""
+	"""Panneau persistant avec graphiques et contrôles interactifs."""
 
 	collapse_requested = pyqtSignal()
 
@@ -392,14 +392,14 @@ class GraphPanel(QWidget):
 			self.transient_stats_text.setPlainText(Translator.tr("graph_no_measure"))
 
 	def set_transient_window(self, window_seconds: Optional[float]) -> None:
-		"""Definit la fenetre temporelle affichee pour le mode transitoire."""
+		"""Définit la fenêtre temporelle affichée pour le mode transitoire."""
 		if window_seconds is None or window_seconds <= 0:
 			self.transient_window_seconds = None
 		else:
 			self.transient_window_seconds = float(window_seconds)
 
 	def _compute_time_window(self, time_values: np.ndarray) -> tuple[np.ndarray, float, float]:
-		"""Retourne le masque de fenetre [t-delta, t] et ses bornes."""
+		"""Retourne le masque de fenêtre [t-delta, t] et ses bornes."""
 		if time_values.size == 0:
 			return np.array([], dtype=bool), 0.0, 0.0
 
@@ -503,7 +503,7 @@ class GraphPanel(QWidget):
 			)
 
 	def _set_checkboxes_selection(self, checkboxes: dict[str, QCheckBox], checked: bool) -> None:
-		"""Coche/decoches toutes les checkboxes d'un groupe."""
+		"""Coche/décoche toutes les checkboxes d'un groupe."""
 		for checkbox in checkboxes.values():
 			checkbox.blockSignals(True)
 			checkbox.setChecked(checked)
@@ -538,7 +538,7 @@ class GraphPanel(QWidget):
 		self._update_transient_stats(window_time, selected_nodes, selected_dipoles)
 
 	def clear_results(self) -> None:
-		"""Reinitialise le contenu affiche."""
+		"""Réinitialise le contenu affiché."""
 		self._clear_checkboxes()
 		self.selected_nodes = set()
 		self.selected_dipoles = set()
@@ -555,13 +555,13 @@ class GraphPanel(QWidget):
 			self.transient_current_plot.set_series([])
 
 	def set_dc_results(self, circuit) -> None:
-		"""Compatibilite: les resultats DC ne sont plus affiches dans ce panneau."""
+		"""Cache les résultats AC si on reçoit des résultats DC."""
 		if hasattr(self, "ac_options"):
 			self.ac_options.setVisible(False)
 		return
 
 	def set_ac_results(self, result: dict | None, circuit=None) -> None:
-		"""Affiche les resultats AC (frequence)."""
+		"""Affiche les résultats AC (fréquence)."""
 		if not result:
 			self.clear_results()
 			return
@@ -662,8 +662,8 @@ class GraphPanel(QWidget):
 				self._create_dipole_checkbox,
 			)
 		
-		# N'applique des etats que lorsque la liste des courbes change.
-		# Sinon, on conserve strictement la selection utilisateur en cours.
+		# N'applique des états que lorsque la liste des courbes change.
+		# Sinon, on conserve strictement la sélection utilisateur en cours.
 		if node_ids_changed:
 			for node_id, checkbox in self.node_checkboxes.items():
 				target_checked = previous_node_states.get(node_id, True)
@@ -693,7 +693,7 @@ class GraphPanel(QWidget):
 		self,
 		result: dict,
 	) -> tuple[np.ndarray, list[tuple[str, np.ndarray, np.ndarray]], list[tuple[str, np.ndarray, np.ndarray]]]:
-		"""Retourne les traces selectionnees avec leur grille temporelle visible."""
+		"""Retourne les traces sélectionnées avec leur grille temporelle visible."""
 		time_values = np.asarray(result.get("time", []), dtype=float)
 		dipole_voltages = result.get("dipole_voltages", {})
 		dipole_currents = result.get("dipole_currents", {})
@@ -944,7 +944,7 @@ class GraphPanel(QWidget):
 		selected_nodes: list[tuple[str, np.ndarray, np.ndarray]],
 		selected_dipoles: list[tuple[str, np.ndarray, np.ndarray]],
 	) -> None:
-		"""Met a jour le panneau de mesures transitoires."""
+		"""Met à jour le panneau de mesures transitoires."""
 		scroll_bar = self.transient_stats_text.verticalScrollBar()
 		previous_value = scroll_bar.value()
 		previous_max = scroll_bar.maximum()
@@ -979,4 +979,3 @@ class GraphPanel(QWidget):
 			scroll_bar.setValue(new_max)
 		else:
 			scroll_bar.setValue(min(previous_value, new_max))
-

@@ -1,5 +1,3 @@
-"""Gestionnaire des ressources et assets du logiciel"""
-
 import os
 import sys
 from pathlib import Path

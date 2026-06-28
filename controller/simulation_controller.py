@@ -1,16 +1,19 @@
-"""Controleur de simulation."""
-
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from solver.ac_solver import ACSolver
 from solver.dc_solver import DCSolver
 from solver.transient_solver import TransientSolver
 
+if TYPE_CHECKING:
+    from model.circuit import Circuit
+
 
 class SimulationController:
-	"""Gere les executions de solveurs."""
+	"""Gère les éxecutions de solveurs."""
 
-	def __init__(self, model, app_controller=None) -> None:
+	def __init__(self, model: Circuit, app_controller: Any = None) -> None:
 		self.model = model
 		self.app_controller = app_controller
 		self._dc_solver = DCSolver()
@@ -34,7 +37,7 @@ class SimulationController:
 			return
 		self._dc_solver.solve(self.model)
 		if self.app_controller is not None:
-			self.app_controller.set_status("Simulation DC terminee")
+			self.app_controller.set_status("Simulation DC terminée")
 
 	def run_ac(
 		self,
@@ -63,11 +66,11 @@ class SimulationController:
 
 		self.last_ac_result = result
 		if self.app_controller is not None:
-			self.app_controller.set_status("Simulation AC terminee")
+			self.app_controller.set_status("Simulation AC terminée")
 		return result
 
 	def _solve_transient(self, duration: float, time_step: float, status_message: str | None):
-		"""Execute le solveur transitoire et met a jour l'etat interne."""
+		"""Éxecute le solveur transitoire et met à jour l'état interne."""
 		if self.model is None:
 			if self.app_controller is not None:
 				self.app_controller.set_status("Aucun circuit pour la simulation")
@@ -92,7 +95,7 @@ class SimulationController:
 		start_time: float,
 		status_message: str | None,
 	):
-		"""Execute le solveur transitoire sur une fenetre temporelle locale."""
+		"""Éxecute le solveur transitoire sur une fenêtre temporelle locale."""
 		if self.model is None:
 			if self.app_controller is not None:
 				self.app_controller.set_status("Aucun circuit pour la simulation")
@@ -116,11 +119,11 @@ class SimulationController:
 		return result
 
 	def set_realtime_history_limit(self, max_points: int) -> None:
-		"""Configure la taille maximale d'historique conservee en temps reel."""
+		"""Configure la taille maximale d'historique conservée en temps réel."""
 		self._realtime_max_points = max(20, int(max_points))
 
 	def run_transient(self, duration: float = 1.0, time_step: float = 0.01):
-		"""Lance une simulation transitoire avec des parametres simples."""
+		"""Lance une simulation transitoire avec des paramètres simples."""
 		result = self._solve_transient(
 			duration=duration,
 			time_step=time_step,
@@ -131,13 +134,13 @@ class SimulationController:
 
 		if self.app_controller is not None:
 			self.app_controller.set_status(
-				f"Simulation transitoire terminee ({len(result.get('time', []))} points)"
+				f"Simulation transitoire terminée ({len(result.get('time', []))} points)"
 			)
 		return result
 
 	@property
 	def is_realtime_running(self) -> bool:
-		"""Indique si la simulation temps reel est active."""
+		"""Indique si la simulation temps réel est active."""
 		return self._realtime_running
 
 	def start_realtime_transient(
@@ -153,7 +156,7 @@ class SimulationController:
 			return False
 		if time_step <= 0:
 			if self.app_controller is not None:
-				self.app_controller.set_status("Parametres temps reel invalides")
+				self.app_controller.set_status("Paramètres temps réel invalides")
 			return False
 
 		self._realtime_running = True
@@ -169,11 +172,11 @@ class SimulationController:
 		self._realtime_on_finished = on_finished
 
 		if self.app_controller is not None:
-			self.app_controller.set_status("Simulation temps reel demarree")
+			self.app_controller.set_status("Simulation temps réel démarree")
 		return True
 
 	def tick_realtime_transient(self):
-		"""Calcule l'etat suivant de la simulation temps reel."""
+		"""Calcule l'état suivant de la simulation temps réel."""
 		if not self._realtime_running:
 			return None
 
@@ -186,7 +189,7 @@ class SimulationController:
 			status_message=None,
 		)
 		if window_result is None:
-			self.stop_realtime_transient("Simulation temps reel interrompue")
+			self.stop_realtime_transient("Simulation temps réel interrompue")
 			return None
 
 		self._realtime_current_time = next_time
@@ -196,13 +199,13 @@ class SimulationController:
 
 		if self.app_controller is not None:
 			self.app_controller.set_status(
-				f"Simulation temps reel: t={self._realtime_current_time:.4g}s"
+				f"Simulation temps réel: t={self._realtime_current_time:.4g}s"
 			)
 
 		return result
 
 	def _append_realtime_sample(self, window_result: dict[str, object]) -> dict[str, object]:
-		"""Ajoute un echantillon au buffer temps reel en conservant une taille bornee."""
+		"""Ajoute un échantillon au buffer temps réel en conservant une taille bornée."""
 		if self._realtime_result_buffer is None:
 			self._realtime_result_buffer = {
 				"time": [],
@@ -233,7 +236,7 @@ class SimulationController:
 		return buffer
 
 	def _trim_realtime_buffer(self, buffer: dict[str, object]) -> None:
-		"""Limite l'historique temps reel pour garder un cout constant."""
+		"""Limite l'historique temps réel pour garder un coût constant."""
 		time_values = buffer.get("time", [])
 		overflow = len(time_values) - self._realtime_max_points
 		if overflow <= 0:
@@ -247,16 +250,16 @@ class SimulationController:
 
 	@property
 	def realtime_elapsed_time(self) -> float:
-		"""Temps simule cumule en mode temps reel."""
+		"""Temps simule cumule en mode temps réel."""
 		return self._realtime_current_time
 
 	@property
 	def realtime_time_step(self) -> float:
-		"""Pas de temps du mode temps reel."""
+		"""Pas de temps du mode temps réel."""
 		return self._realtime_time_step
 
-	def stop_realtime_transient(self, status_message: str | None = "Simulation temps reel arretee") -> None:
-		"""Arrete la simulation temps reel en cours."""
+	def stop_realtime_transient(self, status_message: str | None = "Simulation temps réel arrêtée") -> None:
+		"""Arrête la simulation temps réel en cours."""
 		was_running = self._realtime_running
 		on_finished = self._realtime_on_finished
 
@@ -269,3 +272,11 @@ class SimulationController:
 			self.app_controller.set_status(status_message)
 		if was_running and callable(on_finished):
 			on_finished()
+
+	def reset_simulation_state(self) -> None:
+		"""Réinitialise les résultats et l'état du modèle."""
+		self.stop_realtime_transient(status_message=None)
+		self.last_transient_result = None
+		self.last_ac_result = None
+		if self.model is not None:
+			self.model.reset_simulation()

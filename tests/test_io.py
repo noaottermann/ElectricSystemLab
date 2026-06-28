@@ -1,51 +1,19 @@
 import json
-import importlib.util
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC
+from project_io import serializer, importer, exporter
 
 
-def _load_project_io_modules():
-	root = Path(__file__).resolve().parents[1]
-	io_dir = root / "io"
-
-	pkg_name = "project_io"
-	if pkg_name not in sys.modules:
-		pkg_spec = importlib.util.spec_from_file_location(
-			pkg_name,
-			io_dir / "__init__.py",
-			submodule_search_locations=[str(io_dir)],
-		)
-		pkg_module = importlib.util.module_from_spec(pkg_spec)
-		sys.modules[pkg_name] = pkg_module
-		pkg_spec.loader.exec_module(pkg_module)
-
-	loaded = {}
-	for module_name in ("serializer", "importer", "exporter"):
-		full_name = f"{pkg_name}.{module_name}"
-		if full_name in sys.modules:
-			loaded[module_name] = sys.modules[full_name]
-			continue
-		module_spec = importlib.util.spec_from_file_location(full_name, io_dir / f"{module_name}.py")
-		module = importlib.util.module_from_spec(module_spec)
-		sys.modules[full_name] = module
-		module_spec.loader.exec_module(module)
-		loaded[module_name] = module
-
-	return loaded
-
-
-_io_modules = _load_project_io_modules()
-serialize_circuit = _io_modules["serializer"].serialize_circuit
-deserialize_circuit = _io_modules["serializer"].deserialize_circuit
-load_circuit_from_file = _io_modules["serializer"].load_circuit_from_file
-save_circuit_to_file = _io_modules["serializer"].save_circuit_to_file
-import_circuit = _io_modules["importer"].import_circuit
-export_circuit = _io_modules["exporter"].export_circuit
+serialize_circuit = serializer.serialize_circuit
+deserialize_circuit = serializer.deserialize_circuit
+load_circuit_from_file = serializer.load_circuit_from_file
+save_circuit_to_file = serializer.save_circuit_to_file
+import_circuit = importer.import_circuit
+export_circuit = exporter.export_circuit
 
 
 class TestIO(unittest.TestCase):

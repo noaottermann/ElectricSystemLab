@@ -47,7 +47,7 @@ class TestSimulationController(unittest.TestCase):
         controller.run_dc()
 
         self.assertTrue(app.messages)
-        self.assertIn("Simulation DC terminee", app.messages[-1][0])
+        self.assertIn("Simulation DC terminée", app.messages[-1][0])
 
     def test_run_transient_returns_result_and_stores_last(self) -> None:
         app = FakeAppController()
@@ -58,7 +58,7 @@ class TestSimulationController(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["time"], [0.0, 0.25, 0.5])
         self.assertIs(controller.last_transient_result, result)
-        self.assertIn("Simulation transitoire terminee", app.messages[-1][0])
+        self.assertIn("Simulation transitoire terminée", app.messages[-1][0])
 
     def test_run_transient_handles_invalid_args(self) -> None:
         app = FakeAppController()
@@ -101,7 +101,7 @@ class TestSimulationController(unittest.TestCase):
 
         self.assertFalse(started)
         self.assertFalse(controller.is_realtime_running)
-        self.assertIn("Parametres temps reel invalides", app.messages[-1][0])
+        self.assertIn("Paramètres temps réel invalides", app.messages[-1][0])
 
     def test_realtime_stop_sets_state(self) -> None:
         app = FakeAppController()
@@ -111,7 +111,7 @@ class TestSimulationController(unittest.TestCase):
         controller.stop_realtime_transient()
 
         self.assertFalse(controller.is_realtime_running)
-        self.assertIn("Simulation temps reel arretee", app.messages[-1][0])
+        self.assertIn("Simulation temps réel arrêtée", app.messages[-1][0])
 
     def test_realtime_history_is_bounded(self) -> None:
         app = FakeAppController()
@@ -129,6 +129,19 @@ class TestSimulationController(unittest.TestCase):
         self.assertLessEqual(len(latest["time"]), 20)
         self.assertAlmostEqual(latest["time"][-1], 3.0, places=6)
         self.assertAlmostEqual(latest["time"][0], 1.1, places=6)
+
+    def test_reset_simulation_state_clears_results(self) -> None:
+        app = FakeAppController()
+        controller = SimulationController(self._build_dc_circuit(), app_controller=app)
+        controller.last_transient_result = {"time": [0.0]}
+        controller.last_ac_result = {"freq": [1.0]}
+        controller.start_realtime_transient(time_step=0.1)
+
+        controller.reset_simulation_state()
+
+        self.assertFalse(controller.is_realtime_running)
+        self.assertIsNone(controller.last_transient_result)
+        self.assertIsNone(controller.last_ac_result)
 
 
 if __name__ == "__main__":

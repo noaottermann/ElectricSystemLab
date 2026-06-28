@@ -1,1 +1,1 @@
-"""Emplacements pour les parametres d'application"""
+"""Emplacements pour les paramètres d'application"""

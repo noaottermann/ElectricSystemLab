@@ -1,1 +1,1 @@
-"""Emplacements pour la configuration des themes"""
+"""Emplacements pour la configuration des thèmes"""
