@@ -52,6 +52,14 @@ from model.components import (
 from model.dipole import Dipole
 from utils.translator import Translator
 from utils.assets import get_asset_path, get_logo_icon, logo_exists
+from view.file_actions import (
+    export_circuit_dialog,
+    export_simulation_results_dialog,
+    export_transient_csv_dialog,
+    import_circuit_dialog,
+    open_circuit_dialog,
+    save_circuit_as_dialog,
+)
 from view.canvas import CircuitView, CircuitScene
 from view.components_panel import ComponentsPanel
 from view.graphs_panel import GraphPanel
@@ -1365,7 +1373,7 @@ class MainWindow(QMainWindow):
     def on_open_file(self) -> None:
         """Declenche l'ouverture d'un fichier."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.open_circuit()
+            open_circuit_dialog(self, self.file_controller)
 
     def on_save_file(self) -> None:
         """Declenche la sauvegarde du fichier courant."""
@@ -1375,12 +1383,12 @@ class MainWindow(QMainWindow):
     def on_save_as(self) -> None:
         """Declenche la sauvegarde sous un nouveau nom."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.save_circuit_as()
+            save_circuit_as_dialog(self, self.file_controller)
 
     def on_import(self) -> None:
         """Declenche l'import de donnees."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.import_circuit()
+            import_circuit_dialog(self, self.file_controller)
 
     def on_edit_value(self) -> None:
         """Affiche un dialogue pour modifier la valeur principale d'un dipole."""
@@ -1697,7 +1705,10 @@ class MainWindow(QMainWindow):
     def on_export(self) -> None:
         """Declenche l'export de donnees."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.export_circuit()
+            simulation_data = None
+            if self.include_simulation_in_export and hasattr(self, "simulation_controller"):
+                simulation_data = getattr(self.simulation_controller, "last_transient_result", None)
+            export_circuit_dialog(self, self.file_controller, simulation_data=simulation_data)
 
     def on_version_history(self) -> None:
         """Affiche l'historique des versions."""
@@ -2299,12 +2310,12 @@ class MainWindow(QMainWindow):
     def on_export_simulation_results(self) -> None:
         """Exporte uniquement les resultats de simulation."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.export_simulation_results()
+            export_simulation_results_dialog(self, self.file_controller, self.simulation_controller)
 
     def on_export_transient_csv(self) -> None:
         """Exporte les traces transitoires au format CSV."""
         if hasattr(self, "file_controller") and self.file_controller is not None:
-            self.file_controller.export_transient_results_csv()
+            export_transient_csv_dialog(self, self.file_controller, self.simulation_controller)
 
     def on_toggle_view_graphs(self) -> None:
         """Affiche la fenetre des graphiques."""
