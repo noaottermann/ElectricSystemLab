@@ -30,10 +30,33 @@ class Circuit:
         return node
 
     def remove_node(self, node_id: int) -> None:
-        """Supprime un noeud du circuit par identifiant."""
+        """Supprime un noeud du circuit et nettoie toutes ses connexions."""
         node_id = int(node_id)
-        if node_id in self.nodes:
-            del self.nodes[node_id]
+        if node_id not in self.nodes:
+            return
+
+        node = self.nodes[node_id]
+
+        # 1. Supprimer tous les fils connectés à ce nœud
+        wires_to_remove = [
+            wire_id for wire_id, wire in self.wires.items()
+            if wire.node_a is node or wire.node_b is node
+        ]
+        for wire_id in wires_to_remove:
+            self.remove_wire(wire_id)
+
+        # 2. Supprimer tous les dipôles connectés à ce nœud
+        dipoles_to_remove = [
+            dipole_id for dipole_id, dipole in self.dipoles.items()
+            if dipole.node_a is node or dipole.node_b is node
+               or (hasattr(dipole, 'node_c') and dipole.node_c is node)
+               or (hasattr(dipole, 'node_d') and dipole.node_d is node)
+        ]
+        for dipole_id in dipoles_to_remove:
+            self.remove_dipole(dipole_id)
+
+        # 3. Maintenant on peut supprimer le nœud en toute sécurité
+        del self.nodes[node_id]
 
     def _rebuild_node_connections(self) -> None:
         """Reconstruit les listes de connexions pour chaque noeud."""

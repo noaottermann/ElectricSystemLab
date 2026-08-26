@@ -136,5 +136,6 @@ class BaseSolver:
 			idx = voltage_source_indices.get(control.id)
 			if idx is not None:
 				return -float(state_vector[idx])
-		return control.voltage / getattr(control, 'resistance', 1.0)
+		# Pour les autres types de composants, retourner 0.0 par défaut
+		return 0.0
 

@@ -432,155 +432,6 @@ class CurrentSourceAC(CurrentSource):
             offset=offset,
         )
 
-class VoltageSourceDC(Dipole):
-    """Source de tension continue ideale"""
-
-    def __init__(
-        self,
-        dipole_id: int,
-        node_a,
-        node_b,
-        x: float = 0.0,
-        y: float = 0.0,
-        rotation: float = 0.0,
-        name: str = "VoltageSourceDC",
-        dc_voltage: float = 5.0,
-    ) -> None:
-        """Initialise une source de tension continue."""
-        super().__init__(dipole_id, "DC Source", node_a, node_b, x, y, rotation)
-        self.dc_voltage = float(dc_voltage)
-
-    def get_params(self) -> dict[str, float]:
-        """Retourne les parametres de la source DC."""
-        return {"dc_voltage": self.dc_voltage}
-
-    def set_params(self, params: dict[str, Any]) -> None:
-        """Met a jour les parametres de la source DC."""
-        self.dc_voltage = _get_float_param(params, "dc_voltage", 5.0)
-
-
-class VoltageSourceAC(Dipole):
-    """Source de tension alternative sinusoidale"""
-
-    def __init__(
-        self,
-        dipole_id: int,
-        node_a,
-        node_b,
-        x: float = 0.0,
-        y: float = 0.0,
-        rotation: float = 0.0,
-        name: str = "VoltageSourceAC",
-        amplitude: float = 10.0,
-        frequency: float = 50.0,
-        phase: float = 0.0,
-        offset: float = 0.0,
-    ) -> None:
-        """Initialise une source de tension alternative."""
-        super().__init__(dipole_id, "AC Source", node_a, node_b, x, y, rotation)
-        self.amplitude = float(amplitude)
-        self.frequency = float(frequency)
-        self.phase = float(phase)
-        self.offset = float(offset)
-
-    def get_value_at_time(self, t: float) -> float:
-        """Retourne la tension instantanee a l'instant t."""
-        # Utilise une sinusoide amplitude * sin(omega * t + phi) + offset.
-        omega = 2 * math.pi * self.frequency
-        phi = math.radians(self.phase)
-        return self.offset + self.amplitude * math.sin(omega * t + phi)
-
-    def get_params(self) -> dict[str, float]:
-        """Retourne les parametres de la source AC."""
-        return {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-            "phase": self.phase,
-            "offset": self.offset
-        }
-
-    def set_params(self, params: dict[str, Any]) -> None:
-        """Met a jour les parametres de la source AC."""
-        self.amplitude = _get_float_param(params, "amplitude", 10.0)
-        self.frequency = _get_float_param(params, "frequency", 50.0)
-        self.phase = _get_float_param(params, "phase", 0.0)
-        self.offset = _get_float_param(params, "offset", 0.0)
-
-
-class CurrentSourceDC(Dipole):
-    """Source de courant continue ideale."""
-
-    def __init__(
-        self,
-        dipole_id: int,
-        node_a,
-        node_b,
-        x: float = 0.0,
-        y: float = 0.0,
-        rotation: float = 0.0,
-        name: str = "CurrentSourceDC",
-        dc_current: float = 1.0,
-    ) -> None:
-        """Initialise une source de courant continue."""
-        super().__init__(dipole_id, "DC Current", node_a, node_b, x, y, rotation)
-        self.dc_current = float(dc_current)
-
-    def get_params(self) -> dict[str, float]:
-        """Retourne les parametres de la source de courant DC."""
-        return {"dc_current": self.dc_current}
-
-    def set_params(self, params: dict[str, Any]) -> None:
-        """Met a jour les parametres de la source de courant DC."""
-        self.dc_current = _get_float_param(params, "dc_current", 1.0)
-
-
-class CurrentSourceAC(Dipole):
-    """Source de courant alternative sinusoidale."""
-
-    def __init__(
-        self,
-        dipole_id: int,
-        node_a,
-        node_b,
-        x: float = 0.0,
-        y: float = 0.0,
-        rotation: float = 0.0,
-        name: str = "CurrentSourceAC",
-        amplitude: float = 1.0,
-        frequency: float = 50.0,
-        phase: float = 0.0,
-        offset: float = 0.0,
-    ) -> None:
-        """Initialise une source de courant alternative."""
-        super().__init__(dipole_id, "AC Current", node_a, node_b, x, y, rotation)
-        self.amplitude = float(amplitude)
-        self.frequency = float(frequency)
-        self.phase = float(phase)
-        self.offset = float(offset)
-
-    def get_value_at_time(self, t: float) -> float:
-        """Retourne le courant instantane a l'instant t."""
-        omega = 2 * math.pi * self.frequency
-        phi = math.radians(self.phase)
-        return self.offset + self.amplitude * math.sin(omega * t + phi)
-
-    def get_params(self) -> dict[str, float]:
-        """Retourne les parametres de la source AC."""
-        return {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-            "phase": self.phase,
-            "offset": self.offset,
-        }
-
-    def set_params(self, params: dict[str, Any]) -> None:
-        """Met a jour les parametres de la source AC."""
-        self.amplitude = _get_float_param(params, "amplitude", 1.0)
-        self.frequency = _get_float_param(params, "frequency", 50.0)
-        self.phase = _get_float_param(params, "phase", 0.0)
-        self.offset = _get_float_param(params, "offset", 0.0)
-
-
 class VoltageControlledCurrentSource(Dipole):
     """Source de courant dependante (VCCS)."""
 
@@ -829,6 +680,7 @@ class Voltmeter(Dipole):
         self.resistance = _get_float_param(params, "resistance", 1e12)
 
 
+
 class Ground(Dipole):
     """Symbole de masse, attache a un noeud mis a la masse."""
 
@@ -845,6 +697,12 @@ class Ground(Dipole):
         if node_a is not None and hasattr(node_a, "is_ground"):
             node_a.is_ground = True
         super().__init__(dipole_id, "Ground", node_a, node_b, x, y, rotation)
+
+    def disconnect(self) -> None:
+        """Déconnecte le ground et remet is_ground à False."""
+        if self.node_a is not None and hasattr(self.node_a, "is_ground"):
+            self.node_a.is_ground = False
+        super().disconnect()
 
 
 class OpAmp(Dipole):

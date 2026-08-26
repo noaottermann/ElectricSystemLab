@@ -202,7 +202,9 @@ class MatrixStamper:
 				else:
 					# Fallback sur control.voltage
 					control_current = control.voltage / getattr(control, 'resistance', 1.0)
-		else:
-			control_current = control.voltage / getattr(control, 'resistance', 1.0)
-		
+			else:
+				control_current = control.voltage / getattr(control, 'resistance', 1.0)
+
+			return control_current * dipole.gain
+
 		return 0.0

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .dipole import Component
+    from .dipole import Dipole
 
 
 class Node:
@@ -15,7 +15,7 @@ class Node:
         self.position = (float(x), float(y))
         self.is_ground = bool(is_ground)
         self._potential = 0.0
-        self.connected_dipoles: list[Component] = []
+        self.connected_dipoles: list[Dipole] = []
 
     @property
     def potential(self) -> float:
@@ -30,12 +30,12 @@ class Node:
         else:
             self._potential = float(value)
 
-    def add_connection(self, dipole: Component) -> None:
+    def add_connection(self, dipole: "Dipole") -> None:
         """Ajoute un dipôle aux connexions de ce noeud."""
         if dipole not in self.connected_dipoles:
             self.connected_dipoles.append(dipole)
 
-    def remove_connection(self, dipole: Component) -> None:
+    def remove_connection(self, dipole: "Dipole") -> None:
         """Supprime un dipôle des connexions de ce noeud."""
         if dipole in self.connected_dipoles:
             self.connected_dipoles.remove(dipole)
