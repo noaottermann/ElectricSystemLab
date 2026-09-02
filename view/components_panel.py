@@ -342,7 +342,7 @@ class ComponentsPanel(QWidget):
 			{
 				"key": "logic",
 				"label_key": "components_category_logic",
-				"icon": "categories/analog_ics.png",
+				"icon": "categories/logic.png",
 				"color": "#3d5a80",
 			},
 			{

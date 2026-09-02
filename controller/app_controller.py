@@ -22,7 +22,8 @@ class AppController:
 
 	def change_language(self, lang: str) -> None:
 		"""Change la langue de l'application."""
-		pass
+		if hasattr(self.ui_callbacks, "change_language"):
+			self.ui_callbacks.change_language(lang)
 
 	def change_theme(self, theme_name: str) -> None:
 		"""Applique un thème visuel."""

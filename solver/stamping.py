@@ -537,6 +537,9 @@ def _limit_diode_voltage(v_new: float, v_old: float, vt: float = 0.026) -> float
 
 def stamp_diode_dc(component, context: StampingContext) -> None:
     """Estampille une diode ou LED par linéarisation exponentielle de Shockley avec limitation de tension."""
+    if getattr(component, "diode_type", None) == "zener":
+        stamp_zener_diode_dc(component, context)
+        return
     idx_a = context.get_matrix_index(component.node_a)
     idx_b = context.get_matrix_index(component.node_b)
     v_a = 0.0 if idx_a is None else float(np.real(context.state_vector[idx_a]))
@@ -553,6 +556,9 @@ def stamp_diode_dc(component, context: StampingContext) -> None:
 
 def stamp_diode_ac(component, context: StampingContext) -> None:
     """Estampille une diode en AC (admittance dynamique aux bornes du point de repos)."""
+    if getattr(component, "diode_type", None) == "zener":
+        stamp_zener_diode_ac(component, context)
+        return
     idx_a = context.get_matrix_index(component.node_a)
     idx_b = context.get_matrix_index(component.node_b)
     v_d = float(getattr(component, "voltage", 0.0))
@@ -562,6 +568,9 @@ def stamp_diode_ac(component, context: StampingContext) -> None:
 
 def stamp_diode_transient(component, context: StampingContext, dt: float = 0.0) -> None:
     """Estampille une diode en transitoire."""
+    if getattr(component, "diode_type", None) == "zener":
+        stamp_zener_diode_transient(component, context, dt)
+        return
     stamp_diode_dc(component, context)
 
 
@@ -708,6 +717,14 @@ def stamp_opamp_transient(component, context: StampingContext, dt: float = 0.0) 
     v_sat_pos = float(getattr(component, "v_sat_pos", 15.0))
     v_sat_neg = float(getattr(component, "v_sat_neg", -15.0))
 
+    if getattr(component, "mode", "3_terminal") == "5_terminal":
+        idx_vcc_p = context.get_matrix_index(getattr(component, "node_vcc_pos", None))
+        idx_vcc_n = context.get_matrix_index(getattr(component, "node_vcc_neg", None))
+        if idx_vcc_p is not None:
+            v_sat_pos = float(np.real(context.state_vector[idx_vcc_p]))
+        if idx_vcc_n is not None:
+            v_sat_neg = float(np.real(context.state_vector[idx_vcc_n]))
+
     context.stamp_conductance(idx_p, idx_m, 1.0 / r_in)
 
     vp = 0.0 if idx_p is None else float(np.real(context.state_vector[idx_p]))
@@ -796,22 +813,43 @@ def stamp_transistor_dc(component, context: StampingContext) -> None:
     v_be0 = float(getattr(component, "v_be0", 0.7))
     is_pnp = str(getattr(component, "transistor_type", "NPN")).upper() == "PNP"
 
-    vb = 0.0 if idx_b is None else float(np.real(context.state_vector[idx_b]))
-    ve = 0.0 if idx_e is None else float(np.real(context.state_vector[idx_e]))
+    vb = context.get_node_voltage(component.node_base)
+    ve = context.get_node_voltage(component.node_emitter)
     vbe = (ve - vb) if is_pnp else (vb - ve)
+
+    if vbe < v_be0:
+        # Transistor bloqué (cut-off)
+        context.stamp_conductance(idx_b, idx_e, 1e-9)
+        context.stamp_conductance(idx_c, idx_e, 1e-9)
+        return
 
     g_be = 1.0 / r_in
     gm = beta * g_be
 
     # Jonction Base-Émetteur
     context.stamp_conductance(idx_b, idx_e, g_be)
-    i_offset = g_be * v_be0
+    i_offset = -g_be * v_be0
     if is_pnp:
         context.stamp_current_source(idx_e, idx_b, i_offset)
     else:
         context.stamp_current_source(idx_b, idx_e, i_offset)
 
-    # Source de courant commandée Ic = beta * Ib = gm * (Vb - Ve - Vbe0)
+    vc = context.get_node_voltage(component.node_collector)
+    vce = (ve - vc) if is_pnp else (vc - ve)
+
+    v_sat = 0.2
+    if vce <= v_sat:
+        # Transistor en saturation : chute de tension résiduelle Vsat
+        r_sat = 1.0
+        context.stamp_conductance(idx_c, idx_e, 1.0 / r_sat)
+        i_sat = -v_sat / r_sat
+        if not is_pnp:
+            context.stamp_current_source(idx_c, idx_e, i_sat)
+        else:
+            context.stamp_current_source(idx_e, idx_c, i_sat)
+        return
+
+    # Régime actif normal : Source de courant commandée Ic = beta * Ib = gm * (Vb - Ve - Vbe0)
     if not is_pnp:
         # NPN : Courant entre C et E
         if idx_c is not None:
@@ -1033,7 +1071,9 @@ def stamp_logic_gate_dc(component, context: StampingContext) -> None:
 
     r_out = max(float(getattr(component, "r_out", 50.0)), 0.1)
     g_out = 1.0 / r_out
-    v_target = float(component.evaluate_output_voltage())
+    va = context.get_node_voltage(component.node_in_a)
+    vb = context.get_node_voltage(component.node_in_b)
+    v_target = float(component.evaluate_output_voltage(va=va, vb=vb))
 
     context.matrix_A[idx_out, idx_out] += g_out
     context.vector_Z[idx_out] += g_out * v_target

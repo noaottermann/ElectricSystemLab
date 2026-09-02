@@ -566,7 +566,7 @@ class CurrentControlledVoltageSource(Dipole):
 
 
 class Diode(Dipole):
-    """Diode ideale avec loi exponentielle."""
+    """Diode non lineaire unifiee (standard, zener, led)."""
 
     def __init__(
         self,
@@ -577,29 +577,76 @@ class Diode(Dipole):
         y: float = 0.0,
         rotation: float = 0.0,
         name: str = "Diode",
+        diode_type: str = "standard",
         saturation_current: float = 1e-12,
         ideality_factor: float = 1.0,
         thermal_voltage: float = 0.02585,
+        zener_voltage: float = 5.1,
+        zener_resistance: float = 10.0,
+        zener_current: float = 1e-3,
+        forward_voltage: float = 2.0,
+        led_color: str = "#ef4444",
     ) -> None:
         """Initialise une diode non lineaire."""
-        super().__init__(dipole_id, "Diode", node_a, node_b, x, y, rotation)
+        super().__init__(dipole_id, name, node_a, node_b, x, y, rotation)
+        self.diode_type = str(diode_type).lower()
+        if self.diode_type not in ("standard", "zener", "led"):
+            self.diode_type = "standard"
         self.saturation_current = float(saturation_current)
         self.ideality_factor = float(ideality_factor)
         self.thermal_voltage = float(thermal_voltage)
+        self.zener_voltage = float(zener_voltage)
+        self.zener_resistance = float(zener_resistance)
+        self.zener_current = float(zener_current)
+        self.forward_voltage = float(forward_voltage)
+        self.led_color = str(led_color)
+
+    def get_state(self) -> str:
+        return self.diode_type
+
+    def set_state(self, value: str) -> None:
+        val = str(value).lower()
+        if "zener" in val:
+            self.diode_type = "zener"
+        elif "led" in val:
+            self.diode_type = "led"
+        else:
+            self.diode_type = "standard"
+
+    def get_state_options(self) -> list[tuple[str, str]]:
+        return [
+            ("standard", "diode_state_standard"),
+            ("zener", "diode_state_zener"),
+            ("led", "diode_state_led"),
+        ]
 
     def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la diode."""
         return {
+            "diode_type": self.diode_type,
             "saturation_current": self.saturation_current,
             "ideality_factor": self.ideality_factor,
             "thermal_voltage": self.thermal_voltage,
+            "zener_voltage": self.zener_voltage,
+            "zener_resistance": self.zener_resistance,
+            "zener_current": self.zener_current,
+            "forward_voltage": self.forward_voltage,
+            "led_color": self.led_color,
         }
 
     def set_params(self, params: dict[str, Any]) -> None:
         """Met a jour les parametres de la diode."""
-        self.saturation_current = _get_float_param(params, "saturation_current", 1e-12)
-        self.ideality_factor = _get_float_param(params, "ideality_factor", 1.0)
-        self.thermal_voltage = _get_float_param(params, "thermal_voltage", 0.02585)
+        if "diode_type" in params:
+            self.set_state(params["diode_type"])
+        self.saturation_current = _get_float_param(params, "saturation_current", self.saturation_current)
+        self.ideality_factor = _get_float_param(params, "ideality_factor", self.ideality_factor)
+        self.thermal_voltage = _get_float_param(params, "thermal_voltage", self.thermal_voltage)
+        self.zener_voltage = _get_float_param(params, "zener_voltage", self.zener_voltage)
+        self.zener_resistance = _get_float_param(params, "zener_resistance", self.zener_resistance)
+        self.zener_current = _get_float_param(params, "zener_current", self.zener_current)
+        self.forward_voltage = _get_float_param(params, "forward_voltage", self.forward_voltage)
+        if "led_color" in params:
+            self.led_color = str(params["led_color"])
 
 
 class LED(Diode):
@@ -617,6 +664,7 @@ class LED(Diode):
         saturation_current: float = 1e-9,
         ideality_factor: float = 2.0,
         thermal_voltage: float = 0.02585,
+        **kwargs,
     ) -> None:
         """Initialise une LED non lineaire."""
         super().__init__(
@@ -627,9 +675,11 @@ class LED(Diode):
             y=y,
             rotation=rotation,
             name=name,
+            diode_type="led",
             saturation_current=saturation_current,
             ideality_factor=ideality_factor,
             thermal_voltage=thermal_voltage,
+            **kwargs,
         )
 
 
@@ -710,7 +760,7 @@ class Ground(Dipole):
 
 
 class OpAmp(Component):
-    """Amplificateur Opérationnel (AOP à 3 bornes : Entrée+, Entrée-, Sortie)."""
+    """Amplificateur Opérationnel (AOP à 3 bornes ou 5 bornes avec alimentations)."""
 
     def __init__(
         self,
@@ -718,17 +768,27 @@ class OpAmp(Component):
         node_a=None,
         node_b=None,
         node_c=None,
+        node_d=None,
+        node_e=None,
         x: float = 0.0,
         y: float = 0.0,
         rotation: float = 0.0,
         name: str = "OpAmp",
+        mode: str = "3_terminal",
         gain: float = 1e5,
         v_sat_pos: float = 15.0,
         v_sat_neg: float = -15.0,
         r_in: float = 1e6,
         r_out: float = 10.0,
     ) -> None:
-        super().__init__(dipole_id, name, node_a, node_b, node_c, x=x, y=y, rotation=rotation)
+        nodes = [node_a, node_b, node_c]
+        if "5" in str(mode) or node_d is not None or node_e is not None:
+            nodes.extend([node_d, node_e])
+            mode = "5_terminal"
+        else:
+            mode = "3_terminal"
+        super().__init__(dipole_id, name, *nodes, x=x, y=y, rotation=rotation)
+        self.mode = mode
         self.gain = float(gain)
         self.v_sat_pos = float(v_sat_pos)
         self.v_sat_neg = float(v_sat_neg)
@@ -736,7 +796,24 @@ class OpAmp(Component):
         self.r_out = float(r_out)
 
     def get_terminal_offsets(self) -> list[tuple[float, float]]:
+        if self.mode == "5_terminal":
+            return [(-30.0, -12.0), (-30.0, 12.0), (30.0, 0.0), (0.0, -25.0), (0.0, 25.0)]
         return [(-30.0, -12.0), (-30.0, 12.0), (30.0, 0.0)]
+
+    def get_state(self) -> str:
+        return "opamp_state_5" if self.mode == "5_terminal" else "opamp_state_3"
+
+    def set_state(self, value: str) -> None:
+        val = str(value).lower()
+        if "5" in val:
+            self.mode = "5_terminal"
+            while len(self.nodes) < 5:
+                self.nodes.append(None)
+        else:
+            self.mode = "3_terminal"
+
+    def get_state_options(self) -> list[tuple[str, str]]:
+        return [("opamp_state_3", "opamp_state_3"), ("opamp_state_5", "opamp_state_5")]
 
     @property
     def node_a(self):
@@ -773,6 +850,26 @@ class OpAmp(Component):
         self.nodes[2] = value
 
     @property
+    def node_vcc_pos(self):
+        return self.nodes[3] if len(self.nodes) > 3 else None
+
+    @node_vcc_pos.setter
+    def node_vcc_pos(self, value):
+        while len(self.nodes) < 4:
+            self.nodes.append(None)
+        self.nodes[3] = value
+
+    @property
+    def node_vcc_neg(self):
+        return self.nodes[4] if len(self.nodes) > 4 else None
+
+    @node_vcc_neg.setter
+    def node_vcc_neg(self, value):
+        while len(self.nodes) < 5:
+            self.nodes.append(None)
+        self.nodes[4] = value
+
+    @property
     def node_in_plus(self):
         return self.node_a
 
@@ -786,6 +883,7 @@ class OpAmp(Component):
 
     def get_params(self) -> dict[str, Any]:
         return {
+            "mode": self.mode,
             "gain": self.gain,
             "v_sat_pos": self.v_sat_pos,
             "v_sat_neg": self.v_sat_neg,
@@ -794,6 +892,8 @@ class OpAmp(Component):
         }
 
     def set_params(self, params: dict[str, Any]) -> None:
+        if "mode" in params:
+            self.set_state(params["mode"])
         self.gain = _get_float_param(params, "gain", 1e5)
         self.v_sat_pos = _get_float_param(params, "v_sat_pos", 15.0)
         self.v_sat_neg = _get_float_param(params, "v_sat_neg", -15.0)
@@ -1209,7 +1309,7 @@ class MOSFET(Component):
         return self.mosfet_type
 
     def get_state_options(self) -> list[tuple[str, str]]:
-        return [("NMOS", "NMOS (Canal N)"), ("PMOS", "PMOS (Canal P)")]
+        return [("NMOS", "mosfet_state_nmos"), ("PMOS", "mosfet_state_pmos")]
 
     def set_state(self, value: str) -> None:
         self.mosfet_type = "PMOS" if str(value).upper() == "PMOS" else "NMOS"

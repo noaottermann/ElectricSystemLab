@@ -583,10 +583,9 @@ class CircuitScene(QGraphicsScene):
                 if component is None:
                     continue
                 components.append(self._serialize_component_for_clipboard(component))
-                if component.node_a is not None:
-                    selected_nodes.add(component.node_a)
-                if component.node_b is not None:
-                    selected_nodes.add(component.node_b)
+                for node in getattr(component, "nodes", [getattr(component, "node_a", None), getattr(component, "node_b", None)]):
+                    if node is not None:
+                        selected_nodes.add(node)
             elif isinstance(item, WireItem):
                 wire = item.wire
                 if wire is None:
@@ -1059,46 +1058,45 @@ class CircuitScene(QGraphicsScene):
     def get_smart_snapped_component_position(
         self, component_model, proposed_pos: QPointF, rotation: float
     ) -> QPointF:
-        """Retourne une position de centre aimantee en temps reel pour un dipole en deplacement
+        """Retourne une position de centre aimantee en temps reel pour un dipole ou multipole en deplacement.
 
-        Si une borne s'approche d'une cible connectable (noeud d'un autre dipole ou
+        Si l'une des bornes s'approche d'une cible connectable (noeud d'un autre composant ou
         extremite libre de fil), ajuste le centre pour que la borne tombe exactement
-        sur la cible pendant le glisser
+        sur la cible pendant le glisser.
         """
         if component_model is None:
             return proposed_pos
         if self._group_move_active and len(self.selectedItems()) > 1:
             return proposed_pos
 
-        threshold = 15
-        offset = 30
+        threshold = 15.0
         rad = math.radians(rotation)
-        dx = offset * math.cos(rad)
-        dy = offset * math.sin(rad)
+        cos_r = math.cos(rad)
+        sin_r = math.sin(rad)
 
         cx, cy = proposed_pos.x(), proposed_pos.y()
-        ax, ay = cx - dx, cy - dy
-        bx, by = cx + dx, cy + dy
+        offsets = getattr(component_model, "get_terminal_offsets", lambda: [(-30.0, 0.0), (30.0, 0.0)])()
 
-        candidate_a = self._find_nearest_external_connectable_node(component_model, ax, ay, threshold)
-        candidate_b = self._find_nearest_external_connectable_node(component_model, bx, by, threshold)
+        best_cand = None
+        best_dist = float("inf")
+        best_delta = (0.0, 0.0)
 
-        best = None
-        if candidate_a and candidate_b:
-            best = ("a", candidate_a[0]) if candidate_a[1] <= candidate_b[1] else ("b", candidate_b[0])
-        elif candidate_a:
-            best = ("a", candidate_a[0])
-        elif candidate_b:
-            best = ("b", candidate_b[0])
+        for ox, oy in offsets:
+            dx = ox * cos_r - oy * sin_r
+            dy = ox * sin_r + oy * cos_r
+            tx, ty = cx + dx, cy + dy
 
-        if best is None:
+            cand = self._find_nearest_external_connectable_node(component_model, tx, ty, threshold)
+            if cand is not None and cand[1] < best_dist:
+                best_dist = cand[1]
+                best_cand = cand[0]
+                best_delta = (dx, dy)
+
+        if best_cand is None:
             return proposed_pos
 
-        terminal, target_node = best
-        tx, ty = target_node.position
-        if terminal == "a":
-            return QPointF(tx + dx, ty + dy)
-        return QPointF(tx - dx, ty - dy)
+        nx, ny = best_cand.position
+        return QPointF(nx - best_delta[0], ny - best_delta[1])
 
     def mousePressEvent(self, event: object) -> None:
         """Gere les pressions souris dans la scene."""
@@ -1453,73 +1451,52 @@ class CircuitScene(QGraphicsScene):
         self._sync_free_node_items_from_model()
 
     def _smart_connect_component_to_nearby_dipole_nodes(self, component_item: ComponentItem) -> None:
-        """Aimante et connecte un dipole deplace vers des noeuds proches."""
+        """Aimante et connecte un composant deplace (dipole ou multipole) vers des noeuds proches."""
         component_model = component_item.component
-        threshold = 15
+        threshold = 15.0
 
-        # Choisit la meilleure ancre vers un noeud connectable proche
-        ax, ay = component_model.node_a.position
-        bx, by = component_model.node_b.position
-        candidate_a = self._find_nearest_external_connectable_node(component_model, ax, ay, threshold)
-        candidate_b = self._find_nearest_external_connectable_node(component_model, bx, by, threshold)
+        nodes = getattr(component_model, "nodes", [getattr(component_model, "node_a", None), getattr(component_model, "node_b", None)])
 
-        if candidate_a and candidate_b and candidate_a[0] is not candidate_b[0]:
-            mapping = self._try_snap_component_between_nodes(
-                component_item,
-                candidate_a[0],
-                candidate_b[0],
-                threshold,
-            )
-            if mapping is not None:
-                node_for_a, node_for_b = mapping
-                self._reattach_component_terminal_node(component_model, "node_a", node_for_a)
-                self._reattach_component_terminal_node(component_model, "node_b", node_for_b)
-                component_item.update_model_nodes()
-                self._refresh_component_wires(component_model)
-                return
+        # Pour les composants standard à 2 bornes : essai d'aimantation simultanee entre deux noeuds
+        if len(nodes) == 2 and nodes[0] is not None and nodes[1] is not None:
+            ax, ay = nodes[0].position
+            bx, by = nodes[1].position
+            candidate_a = self._find_nearest_external_connectable_node(component_model, ax, ay, threshold)
+            candidate_b = self._find_nearest_external_connectable_node(component_model, bx, by, threshold)
+            if candidate_a and candidate_b and candidate_a[0] is not candidate_b[0]:
+                mapping = self._try_snap_component_between_nodes(
+                    component_item,
+                    candidate_a[0],
+                    candidate_b[0],
+                    threshold,
+                )
+                if mapping is not None:
+                    node_for_a, node_for_b = mapping
+                    self._reattach_component_terminal_node(component_model, 0, node_for_a)
+                    self._reattach_component_terminal_node(component_model, 1, node_for_b)
+                    component_item.update_model_nodes()
+                    self._refresh_component_wires(component_model)
+                    return
 
-        best = None
-        if candidate_a and candidate_b:
-            best = ("a", candidate_a[0]) if candidate_a[1] <= candidate_b[1] else ("b", candidate_b[0])
-        elif candidate_a:
-            best = ("a", candidate_a[0])
-        elif candidate_b:
-            best = ("b", candidate_b[0])
-
-        if best is not None:
-            terminal, target_node = best
-            self._snap_component_terminal_to_node(component_item, terminal, target_node)
-            component_item.update_model_nodes()
-
-        # Reevalue et rattache les deux bornes quand c'est applicable
+        # Pour tout type de composant : rattache chaque borne proche d'un noeud connectable cible
         used_target_nodes = set()
-        for terminal in ("a", "b"):
-            if terminal == "a":
-                tx, ty = component_model.node_a.position
-            else:
-                tx, ty = component_model.node_b.position
-
+        current_node_ids = {n.id for n in nodes if n is not None}
+        for idx, node in enumerate(nodes):
+            if node is None:
+                continue
+            tx, ty = node.position
             candidate = self._find_nearest_external_connectable_node(component_model, tx, ty, threshold)
             if candidate is None:
                 continue
 
             target_node = candidate[0]
-            if target_node in used_target_nodes:
+            if target_node.id in current_node_ids or target_node in used_target_nodes:
                 continue
 
-            if terminal == "a" and component_model.node_b is target_node:
-                continue
-            if terminal == "b" and component_model.node_a is target_node:
-                continue
-
-            if terminal == "a":
-                self._reattach_component_terminal_node(component_model, "node_a", target_node)
-            else:
-                self._reattach_component_terminal_node(component_model, "node_b", target_node)
-
+            self._reattach_component_terminal_node(component_model, idx, target_node)
             used_target_nodes.add(target_node)
 
-        # Rafraichit tous les fils lies a ce dipole apres d'eventuels rattachements de noeuds
+        component_item.update_model_nodes()
         self._refresh_component_wires(component_model)
 
     def _try_snap_component_between_nodes(
@@ -1566,12 +1543,13 @@ class CircuitScene(QGraphicsScene):
         return node_for_a, node_for_b
 
     def _refresh_component_wires(self, component_model) -> None:
-        """Rafraichit les fils relies a un dipole."""
-        node_ids = {component_model.node_a.id, component_model.node_b.id}
+        """Rafraichit les fils relies a un composant (2 bornes ou multi-bornes)."""
+        nodes = getattr(component_model, "nodes", [getattr(component_model, "node_a", None), getattr(component_model, "node_b", None)])
+        node_ids = {node.id for node in nodes if node is not None}
         for item in self.items():
             if isinstance(item, WireItem):
                 wire = item.wire
-                if wire.node_a.id in node_ids or wire.node_b.id in node_ids:
+                if (wire.node_a and wire.node_a.id in node_ids) or (wire.node_b and wire.node_b.id in node_ids):
                     item.refresh_geometry()
 
     def _find_nearest_external_connectable_node(
@@ -1580,17 +1558,18 @@ class CircuitScene(QGraphicsScene):
         """Retourne (noeud, distance) pour le noeud connectable le plus proche dans le seuil
 
         Les noeuds connectables sont :
-        - les bornes d'autres dipoles
+        - les bornes d'autres dipoles / composants
         - les extremites libres de fil (aucun dipole rattache, utilisees par un seul fil)
         """
         nearest_node = None
         nearest_dist = None
 
-        # Candidat 1 : noeuds provenant d'autres dipoles
+        # Candidat 1 : noeuds provenant d'autres dipoles / composants
         for dipole in self.model.dipoles.values():
             if dipole is component_model:
                 continue
-            for node in (dipole.node_a, dipole.node_b):
+            nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
+            for node in nodes:
                 if node is None:
                     continue
                 nx, ny = node.position
@@ -1653,24 +1632,57 @@ class CircuitScene(QGraphicsScene):
         component_item.setPos(QPointF(cx, cy))
 
     def _reattach_component_terminal_node(
-        self, component_model, attr_name: str, target_node
+        self, component_model, terminal_ref, target_node
     ) -> None:
         """Rattache la borne du composant au noeud cible et migre les references."""
-        old_node = getattr(component_model, attr_name)
+        if isinstance(terminal_ref, int):
+            nodes = getattr(component_model, "nodes", [])
+            if 0 <= terminal_ref < len(nodes):
+                old_node = nodes[terminal_ref]
+            else:
+                return
+        else:
+            old_node = getattr(component_model, terminal_ref, None)
+
         if old_node is target_node:
             return
 
         if old_node is not None:
             old_node.position = target_node.position
-
-        if old_node is not None:
             old_node.remove_connection(component_model)
 
-        setattr(component_model, attr_name, target_node)
-        target_node.add_connection(component_model)
+        if isinstance(terminal_ref, int):
+            component_model.nodes[terminal_ref] = target_node
+            if terminal_ref == 0 and hasattr(component_model, "node_a"):
+                component_model.node_a = target_node
+            elif terminal_ref == 1 and hasattr(component_model, "node_b"):
+                component_model.node_b = target_node
+            elif terminal_ref == 2 and hasattr(component_model, "node_c"):
+                component_model.node_c = target_node
+            elif terminal_ref == 3 and hasattr(component_model, "node_d"):
+                component_model.node_d = target_node
+            elif terminal_ref == 4 and hasattr(component_model, "node_e"):
+                component_model.node_e = target_node
+        else:
+            setattr(component_model, terminal_ref, target_node)
 
+        target_node.add_connection(component_model)
         merged_node = self.model.merge_nodes(old_node, target_node)
-        setattr(component_model, attr_name, merged_node)
+
+        if isinstance(terminal_ref, int):
+            component_model.nodes[terminal_ref] = merged_node
+            if terminal_ref == 0 and hasattr(component_model, "node_a"):
+                component_model.node_a = merged_node
+            elif terminal_ref == 1 and hasattr(component_model, "node_b"):
+                component_model.node_b = merged_node
+            elif terminal_ref == 2 and hasattr(component_model, "node_c"):
+                component_model.node_c = merged_node
+            elif terminal_ref == 3 and hasattr(component_model, "node_d"):
+                component_model.node_d = merged_node
+            elif terminal_ref == 4 and hasattr(component_model, "node_e"):
+                component_model.node_e = merged_node
+        else:
+            setattr(component_model, terminal_ref, merged_node)
 
     def _remove_node_if_unused(self, node) -> None:
         """Supprime un noeud s'il n'est plus utilise."""
@@ -1680,7 +1692,7 @@ class CircuitScene(QGraphicsScene):
             return
 
         used_by_dipole = any(
-            dipole.node_a is node or dipole.node_b is node
+            node in getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
             for dipole in self.model.dipoles.values()
         )
         used_by_wire = any(

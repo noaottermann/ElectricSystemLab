@@ -1,9 +1,10 @@
 
 from PyQt5.QtCore import QSize, Qt, QTimer
-from PyQt5.QtGui import QIcon, QKeySequence
+from PyQt5.QtGui import QIcon, QKeySequence, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
+    QButtonGroup,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -285,27 +286,13 @@ class MainWindow(QMainWindow):
         if content_width <= 0 or content_height <= 0:
             return
 
-        # Positionne le bouton Graphiques aux 2/3 de la hauteur de l'écran, tout à droite
+        # Positionne le bouton Graphiques aux 2/3 de la hauteur de la fenetre, tout a droite
         if hasattr(self, "graphics_button") and self.graphics_button is not None:
             button_width = self.graphics_button.width()
             button_height = self.graphics_button.height()
 
-            screen_geometry = None
-            screen = self.screen()
-            if screen is not None:
-                screen_geometry = screen.availableGeometry()
-            elif QApplication.primaryScreen() is not None:
-                screen_geometry = QApplication.primaryScreen().availableGeometry()
-
-            if screen_geometry is not None:
-                btn_x = screen_geometry.right() - button_width - 10
-                btn_y = screen_geometry.top() + int(screen_geometry.height() * 1 / 3) - button_height // 2
-            else:
-                btn_x = self.width() - button_width - 10
-                btn_y = int(self.height() * 1 / 3 - button_height / 2)
-
-            btn_x = max(0, btn_x)
-            btn_y = max(0, btn_y)
+            btn_x = max(0, self.width() - button_width - 10)
+            btn_y = max(0, int(self.height() * 1 / 3 - button_height / 2))
 
             self.graphics_button.move(btn_x, btn_y)
             self.graphics_button.raise_()
@@ -532,33 +519,119 @@ class MainWindow(QMainWindow):
             options = component.get_state_options() or []
         return [(str(value), str(label)) for value, label in options]
 
+    def _render_state_icon(self, component: Dipole, state_val: str) -> QIcon:
+        """Genere une icone avec le dessin du composant dans un etat donne."""
+        try:
+            from view.component_item import create_component_item
+            import copy
+            comp_class = component.__class__
+            # Instancie un composant temporaire pour capturer le rendu graphique
+            dummy = comp_class(9999, None, None)
+            if hasattr(dummy, "set_state"):
+                dummy.set_state(state_val)
+            item = create_component_item(dummy)
+            pixmap = QPixmap(52, 34)
+            pixmap.fill(Qt.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.translate(26, 17)
+            item.draw_symbol(painter)
+            painter.end()
+            return QIcon(pixmap)
+        except Exception:
+            return QIcon()
+
+    def _create_state_selector_widget(
+        self,
+        component: Dipole,
+        state_options: list[tuple[str, str]],
+        initial_state: str,
+        on_change=None,
+    ) -> tuple[QWidget, callable]:
+        """Cree un groupe de boutons interactifs avec dessins et libelles pour choisir l'etat."""
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        button_group = QButtonGroup(container)
+        button_group.setExclusive(True)
+
+        selected_state = [str(initial_state)]
+        buttons = []
+
+        for val, label_key in state_options:
+            val_str = str(val)
+            label_text = Translator.tr(str(label_key))
+            btn = QPushButton(label_text, container)
+            btn.setCheckable(True)
+            icon = self._render_state_icon(component, val_str)
+            if not icon.isNull():
+                btn.setIcon(icon)
+                btn.setIconSize(QSize(44, 28))
+
+            btn.setStyleSheet("""
+                QPushButton {
+                    border: 2px solid #cbd5e1;
+                    border-radius: 8px;
+                    background-color: #f8fafc;
+                    color: #1e293b;
+                    font-weight: bold;
+                    padding: 8px 12px;
+                    min-width: 85px;
+                    text-align: center;
+                }
+                QPushButton:hover {
+                    background-color: #f1f5f9;
+                    border-color: #94a3b8;
+                }
+                QPushButton:checked {
+                    background-color: #e0f2fe;
+                    border-color: #0284c7;
+                    color: #0369a1;
+                }
+            """)
+
+            if val_str == str(initial_state):
+                btn.setChecked(True)
+
+            def make_handler(state_value=val_str):
+                def handler(checked):
+                    if checked:
+                        selected_state[0] = state_value
+                        if on_change:
+                            on_change(state_value)
+                return handler
+
+            btn.toggled.connect(make_handler(val_str))
+            button_group.addButton(btn)
+            layout.addWidget(btn)
+            buttons.append(btn)
+
+        if buttons and not any(b.isChecked() for b in buttons):
+            buttons[0].setChecked(True)
+
+        return container, lambda: selected_state[0]
+
     def _edit_state_only(self, component: Dipole, state_options: list[tuple[str, str]]) -> bool:
-        """Ouvre un dialogue pour modifier uniquement l'etat."""
+        """Ouvre un dialogue pour modifier l'etat via des boutons illustres."""
         if not state_options:
             return False
         title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         layout = QVBoxLayout(dialog)
-        form_layout = QFormLayout()
+        layout.setSpacing(14)
 
-        state_input = QComboBox(dialog)
-        for value, label in state_options:
-            state_input.addItem(Translator.tr(str(label)), value)
-        current_state = None
-        if hasattr(component, "get_state"):
-            current_state = component.get_state()
-        if current_state is not None:
-            idx = state_input.findData(str(current_state))
-            if idx >= 0:
-                state_input.setCurrentIndex(idx)
+        current_state = component.get_state() if hasattr(component, "get_state") else state_options[0][0]
+        state_widget, get_state = self._create_state_selector_widget(
+            component, state_options, str(current_state)
+        )
 
-        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
-        layout.addLayout(form_layout)
-
-        ideal_button = QPushButton(Translator.tr("dialog_edit_value_switch_ideal"), dialog)
-        ideal_button.clicked.connect(lambda: self._reset_switch_ideal(closed_input, open_input))
-        layout.addWidget(ideal_button)
+        state_label = QLabel(Translator.tr("dialog_edit_value_state"), dialog)
+        state_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        layout.addWidget(state_label)
+        layout.addWidget(state_widget)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         buttons.accepted.connect(dialog.accept)
@@ -569,7 +642,7 @@ class MainWindow(QMainWindow):
             return False
 
         if hasattr(component, "set_state"):
-            component.set_state(str(state_input.currentData()))
+            component.set_state(get_state())
         return True
 
     def _edit_value_with_optional_state(
@@ -579,35 +652,33 @@ class MainWindow(QMainWindow):
         unit: str,
         state_options: list[tuple[str, str]],
     ) -> bool:
-        """Ouvre un dialogue avec valeur + etat optionnel."""
+        """Ouvre un dialogue avec valeur + boutons illustres d'etat optionnel."""
         title = f"{Translator.tr('dialog_edit_value_title')} - {component.name}"
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         layout = QVBoxLayout(dialog)
-        form_layout = QFormLayout()
+        layout.setSpacing(12)
 
-        state_input = None
+        get_state = None
         if state_options:
-            state_input = QComboBox(dialog)
-            for value, label in state_options:
-                state_input.addItem(Translator.tr(str(label)), value)
-            current_state = None
-            if hasattr(component, "get_state"):
-                current_state = component.get_state()
-            if current_state is not None:
-                idx = state_input.findData(str(current_state))
-                if idx >= 0:
-                    state_input.setCurrentIndex(idx)
-            form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
+            current_state = component.get_state() if hasattr(component, "get_state") else state_options[0][0]
+            state_widget, get_state = self._create_state_selector_widget(
+                component, state_options, str(current_state)
+            )
+            state_label = QLabel(Translator.tr("dialog_edit_value_state"), dialog)
+            state_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+            layout.addWidget(state_label)
+            layout.addWidget(state_widget)
 
+        form_layout = QFormLayout()
         value_input = QDoubleSpinBox(dialog)
         min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
         value_input.setRange(min_value, max_value)
         value_input.setDecimals(6)
         value_input.setValue(float(getattr(component, param_key, 0.0)))
         form_layout.addRow(f"{Translator.tr('dialog_edit_value_label')} ({unit})", value_input)
-
         layout.addLayout(form_layout)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -617,8 +688,8 @@ class MainWindow(QMainWindow):
             return False
 
         setattr(component, param_key, float(value_input.value()))
-        if state_input is not None and hasattr(component, "set_state"):
-            component.set_state(str(state_input.currentData()))
+        if get_state is not None and hasattr(component, "set_state"):
+            component.set_state(get_state())
         return True
 
     def create_actions(self) -> None:
@@ -763,6 +834,13 @@ class MainWindow(QMainWindow):
         self.custom_actions["action_sim_export"].setChecked(self.include_simulation_in_export)
         self._make_action("action_bg_color", None, self.on_change_bg_color)
         self._make_action("action_keybinds", None, self.on_show_keybinds)
+
+        self._make_action("action_snap_tolerance", None, self.on_set_snap_tolerance)
+        self._make_action("action_show_terminal_dots", None, self.on_toggle_show_terminal_dots)
+        self.custom_actions["action_show_terminal_dots"].setCheckable(True)
+        self.custom_actions["action_show_terminal_dots"].setChecked(True)
+        self._make_action("action_wire_width", None, self.on_set_wire_width)
+        self._make_action("action_export_resolution", None, self.on_set_export_resolution)
 
         self._make_action("action_color_pos", None, self.on_set_color_positive)
         self._make_action("action_color_neg", None, self.on_set_color_negative)
@@ -987,6 +1065,12 @@ class MainWindow(QMainWindow):
         
         self.menu_options.addAction(self.custom_actions["action_bg_color"])
         self.menu_options.addAction(self.custom_actions["action_keybinds"])
+        self.menu_options.addSeparator()
+
+        self.menu_options.addAction(self.custom_actions["action_snap_tolerance"])
+        self.menu_options.addAction(self.custom_actions["action_show_terminal_dots"])
+        self.menu_options.addAction(self.custom_actions["action_wire_width"])
+        self.menu_options.addAction(self.custom_actions["action_export_resolution"])
 
         self.menu_colors = self.menu_options.addMenu('')
         self.menu_colors.addAction(self.custom_actions["action_color_pos"])
@@ -1571,7 +1655,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _edit_source_parameters(self, component: Dipole) -> bool:
-        """Affiche un dialogue multi-parametres pour les sources de tension ou de courant."""
+        """Affiche un dialogue avec boutons illustres DC/AC et champs adaptatifs."""
         if not isinstance(component, (VoltageSource, CurrentSource)):
             return False
 
@@ -1581,20 +1665,15 @@ class MainWindow(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         layout = QVBoxLayout(dialog)
+        layout.setSpacing(14)
+
+        current_state = component.get_state() if hasattr(component, "get_state") else "dc"
+        state_options = self._get_component_state_options(component)
+
+        # Conteneur des champs de formulaire
         form_layout = QFormLayout()
 
-        state_input = QComboBox(dialog)
-        for value, label in self._get_component_state_options(component):
-            state_input.addItem(Translator.tr(str(label)), value)
-        current_state = None
-        if hasattr(component, "get_state"):
-            current_state = component.get_state()
-        if current_state is not None:
-            idx = state_input.findData(str(current_state))
-            if idx >= 0:
-                state_input.setCurrentIndex(idx)
-        form_layout.addRow(Translator.tr("dialog_edit_value_state"), state_input)
-
+        # Champ DC
         if isinstance(component, VoltageSource):
             dc_value = float(getattr(component, "dc_voltage", 0.0))
         else:
@@ -1605,52 +1684,58 @@ class MainWindow(QMainWindow):
         dc_input.setRange(min_value, max_value)
         dc_input.setDecimals(6)
         dc_input.setValue(dc_value)
-        form_layout.addRow(
-            f"{Translator.tr('dialog_edit_value_label')} ({unit})",
-            dc_input,
-        )
+        dc_label_text = f"{Translator.tr('dialog_edit_value_label')} ({unit})"
 
+        # Champs AC
         amplitude_input = QDoubleSpinBox(dialog)
-        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
         amplitude_input.setRange(min_value, max_value)
         amplitude_input.setDecimals(6)
         amplitude_input.setValue(float(component.amplitude))
-        form_layout.addRow(
-            f"{Translator.tr('dialog_edit_value_amplitude')} ({unit})",
-            amplitude_input,
-        )
 
         frequency_input = QDoubleSpinBox(dialog)
-        min_value, max_value = self._dialog_double_limits(0.0, 1e12)
-        frequency_input.setRange(min_value, max_value)
+        frequency_input.setRange(0.0, 1e12)
         frequency_input.setDecimals(6)
         frequency_input.setValue(float(component.frequency))
-        form_layout.addRow(
-            f"{Translator.tr('dialog_edit_value_frequency')} (Hz)",
-            frequency_input,
-        )
 
         phase_input = QDoubleSpinBox(dialog)
-        min_value, max_value = self._dialog_double_limits(-360.0, 360.0)
-        phase_input.setRange(min_value, max_value)
+        phase_input.setRange(-360.0, 360.0)
         phase_input.setDecimals(4)
         phase_input.setValue(float(component.phase))
-        form_layout.addRow(
-            f"{Translator.tr('dialog_edit_value_phase')} (deg)",
-            phase_input,
-        )
 
         offset_input = QDoubleSpinBox(dialog)
-        min_value, max_value = self._dialog_double_limits(-1e12, 1e12)
         offset_input.setRange(min_value, max_value)
         offset_input.setDecimals(6)
         offset_input.setValue(float(component.offset))
-        form_layout.addRow(
-            f"{Translator.tr('dialog_edit_value_offset')} ({unit})",
-            offset_input,
+
+        form_layout.addRow(dc_label_text, dc_input)
+        form_layout.addRow(f"{Translator.tr('dialog_edit_value_amplitude')} ({unit})", amplitude_input)
+        form_layout.addRow(f"{Translator.tr('dialog_edit_value_frequency')} (Hz)", frequency_input)
+        form_layout.addRow(f"{Translator.tr('dialog_edit_value_phase')} (deg)", phase_input)
+        form_layout.addRow(f"{Translator.tr('dialog_edit_value_offset')} ({unit})", offset_input)
+
+        def update_fields_visibility(state_val: str):
+            is_dc = (state_val.lower() == "dc")
+            # DC row is index 0
+            form_layout.setRowVisible(0, is_dc)
+            # AC rows are indices 1, 2, 3, 4
+            form_layout.setRowVisible(1, not is_dc)
+            form_layout.setRowVisible(2, not is_dc)
+            form_layout.setRowVisible(3, not is_dc)
+            form_layout.setRowVisible(4, not is_dc)
+
+        state_widget, get_state = self._create_state_selector_widget(
+            component, state_options, str(current_state), on_change=update_fields_visibility
         )
 
+        state_label = QLabel(Translator.tr("dialog_edit_value_state"), dialog)
+        state_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        layout.addWidget(state_label)
+        layout.addWidget(state_widget)
         layout.addLayout(form_layout)
+
+        # Initialise la visibilité des champs selon l'état actuel
+        update_fields_visibility(str(current_state))
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -1659,8 +1744,9 @@ class MainWindow(QMainWindow):
         if dialog.exec_() != QDialog.Accepted:
             return False
 
+        selected_state = get_state()
         if hasattr(component, "set_state"):
-            component.set_state(str(state_input.currentData()))
+            component.set_state(selected_state)
 
         if isinstance(component, VoltageSource):
             component.dc_voltage = float(dc_input.value())
@@ -2494,6 +2580,71 @@ class MainWindow(QMainWindow):
         """Ouvre la selection de couleur de fond."""
         if hasattr(self, "app_controller") and self.app_controller is not None:
             self.app_controller.change_background_color()
+
+    def on_set_snap_tolerance(self) -> None:
+        """Modifie la distance de tolerance pour l'aimantation des bornes."""
+        current = int(getattr(self.scene, "snap_tolerance", 15))
+        val, ok = QInputDialog.getInt(
+            self,
+            Translator.tr("dialog_snap_tolerance_title"),
+            Translator.tr("dialog_snap_tolerance_label"),
+            current,
+            5,
+            50,
+            1,
+        )
+        if ok:
+            self.scene.snap_tolerance = val
+            if hasattr(self, "app_controller") and self.app_controller is not None:
+                self.app_controller.set_status(f"Tolérance d'aimantation : {val}px")
+
+    def on_toggle_show_terminal_dots(self) -> None:
+        """Affiche ou masque les pastilles de connexion des bornes."""
+        action = self.custom_actions.get("action_show_terminal_dots")
+        if action:
+            self.scene.show_terminal_dots = action.isChecked()
+            self.scene.update()
+            if hasattr(self, "app_controller") and self.app_controller is not None:
+                status = "Pastilles affichées" if action.isChecked() else "Pastilles masquées"
+                self.app_controller.set_status(status)
+
+    def on_set_wire_width(self) -> None:
+        """Modifie l'epaisseur de trace des fils du circuit."""
+        current = int(getattr(self.scene, "wire_width", 2))
+        val, ok = QInputDialog.getInt(
+            self,
+            Translator.tr("dialog_wire_width_title"),
+            Translator.tr("dialog_wire_width_label"),
+            current,
+            1,
+            6,
+            1,
+        )
+        if ok:
+            self.scene.wire_width = val
+            for item in self.scene.items():
+                if hasattr(item, "refresh_geometry"):
+                    item.refresh_geometry()
+            self.scene.update()
+            if hasattr(self, "app_controller") and self.app_controller is not None:
+                self.app_controller.set_status(f"Épaisseur des fils : {val}px")
+
+    def on_set_export_resolution(self) -> None:
+        """Modifie le facteur d'echelle pour l'exportation d'images."""
+        current = int(getattr(self, "export_resolution_scale", 2))
+        val, ok = QInputDialog.getInt(
+            self,
+            Translator.tr("dialog_export_resolution_title"),
+            Translator.tr("dialog_export_resolution_label"),
+            current,
+            1,
+            8,
+            1,
+        )
+        if ok:
+            self.export_resolution_scale = val
+            if hasattr(self, "app_controller") and self.app_controller is not None:
+                self.app_controller.set_status(f"Échelle d'export : {val}x")
 
     def on_show_keybinds(self) -> None:
         """Affiche la liste des raccourcis."""

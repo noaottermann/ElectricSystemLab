@@ -41,6 +41,14 @@ class WireItem(QGraphicsLineItem):
         # Place la ligne a ces coordonnees
         self.setLine(QLineF(p1, p2))
 
+        # Ajuste l'epaisseur du fil selon les options de scene
+        scene = self.scene()
+        target_width = getattr(scene, "wire_width", 2) if scene else 2
+        pen = self.pen()
+        if pen.width() != target_width:
+            pen.setWidth(target_width)
+            self.setPen(pen)
+
     def paint(self, painter: QPainter, option, widget=None) -> None:
         """Dessine le fil et, si actif, la fleche de courant."""
         super().paint(painter, option, widget)

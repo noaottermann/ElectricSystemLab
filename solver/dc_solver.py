@@ -25,6 +25,11 @@ from model.components import (
     VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
+    Comparator,
+    LogicGate,
+    MOSFET,
+    Transistor,
+    ZenerDiode,
 )
 from solver.base_solver import BaseSolver, StampingContext
 import solver.stamping_registry  # noqa: F401 - Garantit l'enregistrement des méthodes polymorphes
@@ -75,7 +80,10 @@ class DCSolver(BaseSolver):
             if idx is not None:
                 x[idx] = float(node.potential)
 
-        has_nonlinear = any(isinstance(d, (Diode, LED)) for d in circuit.dipoles.values())
+        has_nonlinear = any(
+            isinstance(d, (Diode, LED, ZenerDiode, Transistor, MOSFET, Comparator, LogicGate))
+            for d in circuit.dipoles.values()
+        )
         has_dependent = self._has_dependent_non_voltage_control(circuit, voltage_source_indices)
         iterations = self._MAX_ITERATIONS if (has_nonlinear or has_dependent) else 1
 

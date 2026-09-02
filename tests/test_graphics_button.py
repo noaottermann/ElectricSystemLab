@@ -1,23 +1,21 @@
-import sys
+import pytest
 from PyQt5.QtWidgets import QApplication
 from model.circuit import Circuit
 from view.main_window import MainWindow
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    
-    # Crée un circuit vide
+
+def test_graphics_toggle_button():
+    """Vérifie le fonctionnement du bouton basculant le panneau de graphiques."""
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+
     circuit = Circuit()
-    
-    # Ouvre la fenêtre principale
     window = MainWindow(circuit)
+
+    assert hasattr(window, "graphics_button")
     window.show()
-    
-    # Affiche un message de test
-    print("✓ Bouton Graphiques créé et positionné")
-    print("✓ Position: 2/3 de la hauteur, tout à droite")
-    print("✓ Style: Rectangle portrait (80x120px)")
-    print("✓ Fonction: Ouvre/fermé le panneau des graphiques")
-    print("\nTestez le bouton en cliquant dessus dans l'interface pour basculer l'affichage du panneau de droite.")
-    
-    sys.exit(app.exec_())
+    assert not window.graph_panel.isVisible()
+    window.graphics_button.click()
+    assert window.graph_panel.isVisible()
+    window.close()
