@@ -59,13 +59,13 @@ def _register_stamping_methods() -> None:
 
     for comp_class, dc_fn, ac_fn, transient_fn in registry:
         if dc_fn is not None:
-            comp_class.stamp_dc = dc_fn
+            setattr(comp_class, "stamp_dc", dc_fn)
             logger.debug("Enregistre stamp_dc pour %s", comp_class.__name__)
         if ac_fn is not None:
-            comp_class.stamp_ac = ac_fn
+            setattr(comp_class, "stamp_ac", ac_fn)
             logger.debug("Enregistre stamp_ac pour %s", comp_class.__name__)
         if transient_fn is not None:
-            comp_class.stamp_transient = transient_fn
+            setattr(comp_class, "stamp_transient", transient_fn)
             logger.debug("Enregistre stamp_transient pour %s", comp_class.__name__)
 
 

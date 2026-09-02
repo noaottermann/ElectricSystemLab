@@ -9,13 +9,13 @@ from PyQt5.QtWidgets import QGraphicsItem
 from controller.ui_callbacks import UICallbacks
 
 if TYPE_CHECKING:
-    from view.canvas import GraphicsCanvas
+    from view.canvas import CircuitScene
 
 
 class EditController:
 	"""Gère les actions d'édition et de sélection."""
 
-	def __init__(self, scene: GraphicsCanvas | None, view: Any = None, ui_callbacks: Optional[UICallbacks] = None, app_controller: Any = None) -> None:
+	def __init__(self, scene: Optional[CircuitScene] = None, view: Any = None, ui_callbacks: Optional[UICallbacks] = None, app_controller: Any = None) -> None:
 		"""
 		Initialise le contrôleur d'édition.
 		
@@ -121,8 +121,9 @@ class EditController:
 	def select_all(self) -> None:
 		if self.scene is None:
 			return
+		flag = int(getattr(QGraphicsItem, "ItemIsSelectable", 1))
 		for item in self.scene.items():
-			if item.flags() & QGraphicsItem.ItemIsSelectable:
+			if int(item.flags()) & flag:
 				item.setSelected(True)
 		self._refresh_actions()
 
@@ -135,8 +136,9 @@ class EditController:
 	def select_invert(self) -> None:
 		if self.scene is None:
 			return
+		flag = int(getattr(QGraphicsItem, "ItemIsSelectable", 1))
 		for item in self.scene.items():
-			if item.flags() & QGraphicsItem.ItemIsSelectable:
+			if int(item.flags()) & flag:
 				item.setSelected(not item.isSelected())
 		self._refresh_actions()
 
@@ -147,8 +149,9 @@ class EditController:
 		self._filter_selection(self._is_wire_item)
 
 	def filter_sources(self) -> None:
-		def _predicate(item) -> bool:
-			return self._is_component_item(item) and item.component.__class__.__name__ in {
+		def _predicate(item: Any) -> bool:
+			comp = getattr(item, "component", None)
+			return self._is_component_item(item) and comp is not None and comp.__class__.__name__ in {
 				"VoltageSourceDC",
 				"VoltageSourceAC",
 				"CurrentSourceDC",
@@ -163,17 +166,17 @@ class EditController:
 
 	def filter_resistors(self) -> None:
 		self._filter_selection(
-			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Resistor"
+			lambda item: self._is_component_item(item) and getattr(getattr(item, "component", None), "__class__", None) is not None and getattr(item, "component").__class__.__name__ == "Resistor"
 		)
 
 	def filter_capacitors(self) -> None:
 		self._filter_selection(
-			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Capacitor"
+			lambda item: self._is_component_item(item) and getattr(getattr(item, "component", None), "__class__", None) is not None and getattr(item, "component").__class__.__name__ == "Capacitor"
 		)
 
 	def filter_inductors(self) -> None:
 		self._filter_selection(
-			lambda item: self._is_component_item(item) and item.component.__class__.__name__ == "Inductor"
+			lambda item: self._is_component_item(item) and getattr(getattr(item, "component", None), "__class__", None) is not None and getattr(item, "component").__class__.__name__ == "Inductor"
 		)
 
 	def filter_add(self) -> None:
@@ -234,9 +237,10 @@ class EditController:
 				if not predicate(item):
 					item.setSelected(False)
 		else:
+			flag = int(getattr(QGraphicsItem, "ItemIsSelectable", 1))
 			for item in self.scene.items():
 				if predicate(item):
-					if item.flags() & QGraphicsItem.ItemIsSelectable:
+					if int(item.flags()) & flag:
 						item.setSelected(True)
 		self._refresh_actions()
 
@@ -340,7 +344,7 @@ class EditController:
 			if self.scene is not None:
 				self.scene.preview_node_move(item.node, item.pos())
 
-	def _finalize_transform(self, items: list[object]) -> None:
+	def _finalize_transform(self, items: list[Any]) -> None:
 		if self.scene is None:
 			return
 		for item in items:

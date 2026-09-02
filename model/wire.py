@@ -9,11 +9,11 @@ if TYPE_CHECKING:
 class Wire:
     """Représente un fil électrique idéal."""
 
-    def __init__(self, wire_id: int, node_a: "Node", node_b: "Node", color: str = "#000000") -> None:
+    def __init__(self, wire_id: int, node_a: Optional["Node"], node_b: Optional["Node"], color: str = "#000000") -> None:
         """Initialise un fil."""
         self.id = int(wire_id)
-        self.node_a = node_a
-        self.node_b = node_b
+        self.node_a: Optional["Node"] = node_a
+        self.node_b: Optional["Node"] = node_b
         self.color = color
 
     def disconnect(self) -> None:

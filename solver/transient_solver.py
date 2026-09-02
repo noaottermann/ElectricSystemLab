@@ -76,7 +76,7 @@ class TransientSolver(BaseSolver):
         }
 
         voltage_source_indices = {
-            source.id: num_v_vars + i for i, source in enumerate(voltage_sources)
+            int(getattr(source, "id", i)): num_v_vars + i for i, source in enumerate(voltage_sources)
         }
         last_solution = np.zeros(total_vars)
         for node_id, node in circuit.nodes.items():
@@ -271,9 +271,10 @@ class TransientSolver(BaseSolver):
                 capacitor_prev_voltage=capacitor_prev_voltage,
                 inductor_prev_current=inductor_prev_current,
             )
-            dipole.current = float(current)
+            val = float(current.real if isinstance(current, complex) else current)
+            dipole.current = val
             if dipole.id in dipole_currents:
-                dipole_currents[dipole.id].append(float(current))
+                dipole_currents[dipole.id].append(val)
 
         # Mise à jour des historiques pour le prochain pas de temps
         for dipole in circuit.dipoles.values():

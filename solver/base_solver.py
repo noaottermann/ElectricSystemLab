@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 
 
@@ -137,9 +137,9 @@ class BaseSolver:
 
 		def find(node_id: int) -> int:
 			if parent[node_id] == node_id:
-				return node_id
+				return int(node_id)
 			parent[node_id] = find(parent[node_id])
-			return parent[node_id]
+			return int(parent[node_id])
 
 		def union(left_id: int, right_id: int) -> None:
 			root_i = find(left_id)
@@ -164,7 +164,7 @@ class BaseSolver:
 			next_index += 1
 		return group_to_idx
 
-	def _collect_voltage_sources(self, circuit) -> list[object]:
+	def _collect_voltage_sources(self, circuit) -> list[Any]:
 		"""Retourne les sources de tension (indépendantes et commandées) du circuit."""
 		from model.components import (
 			VoltageSource,
@@ -220,7 +220,8 @@ class BaseSolver:
 		idx = group_to_idx.get(gid)
 		if idx is None or idx >= len(state_vector):
 			return 0.0
-		return state_vector[idx]
+		val = state_vector[idx]
+		return complex(val) if isinstance(val, (complex, np.complexfloating)) else float(val)
 
 	def _diode_current_and_conductance(self, voltage: float, dipole) -> tuple[float, float]:
 		"""Calcule le courant et la conductance linéarisée d'une diode (modèle Shockley borné)."""
@@ -293,7 +294,8 @@ class BaseSolver:
 		# 1. Sources de tension ayant un indice de courant dans MNA
 		ctrl_idx = voltage_source_indices.get(control.id) if voltage_source_indices else None
 		if ctrl_idx is not None and ctrl_idx < len(state_vector):
-			return -state_vector[ctrl_idx]
+			val = -state_vector[ctrl_idx]
+			return complex(val) if isinstance(val, (complex, np.complexfloating)) else float(val)
 
 		# 2. Résistances et dipôles linéaires passifs
 		if isinstance(control, (Resistor, Switch, Ammeter, Voltmeter)):
@@ -378,9 +380,11 @@ class BaseSolver:
 		if isinstance(control, (Diode, LED)):
 			if is_ac:
 				return 0.0 + 0.0j
-			v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
-			v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
-			current, _ = self._diode_current_and_conductance(float(v_a - v_b), control)
+			v_a_val = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
+			v_b_val = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
+			diff = v_a_val - v_b_val
+			v_diff = float(diff.real) if isinstance(diff, (complex, np.complexfloating)) else float(diff)
+			current, _ = self._diode_current_and_conductance(v_diff, control)
 			return current
 
 		return float(getattr(control, "current", 0.0)) if not is_ac else complex(getattr(control, "current", 0.0))

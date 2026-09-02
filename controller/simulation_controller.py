@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from solver.ac_solver import ACSolver
 from solver.dc_solver import DCSolver
@@ -19,15 +19,15 @@ class SimulationController:
 		self._dc_solver = DCSolver()
 		self._ac_solver = ACSolver()
 		self._transient_solver = TransientSolver()
-		self.last_transient_result = None
-		self.last_ac_result = None
-		self._realtime_running = False
-		self._realtime_time_step = 0.0
-		self._realtime_current_time = 0.0
-		self._realtime_max_points = 300
-		self._realtime_result_buffer = None
-		self._realtime_on_update = None
-		self._realtime_on_finished = None
+		self.last_transient_result: Optional[dict[str, Any]] = None
+		self.last_ac_result: Optional[dict[str, Any]] = None
+		self._realtime_running: bool = False
+		self._realtime_time_step: float = 0.0
+		self._realtime_current_time: float = 0.0
+		self._realtime_max_points: int = 300
+		self._realtime_result_buffer: Optional[dict[str, Any]] = None
+		self._realtime_on_update: Any = None
+		self._realtime_on_finished: Any = None
 
 	def run_dc(self) -> None:
 		"""Lance une simulation DC."""
@@ -204,7 +204,7 @@ class SimulationController:
 
 		return result
 
-	def _append_realtime_sample(self, window_result: dict[str, object]) -> dict[str, object]:
+	def _append_realtime_sample(self, window_result: dict[str, Any]) -> dict[str, Any]:
 		"""Ajoute un échantillon au buffer temps réel en conservant une taille bornée."""
 		if self._realtime_result_buffer is None:
 			self._realtime_result_buffer = {
@@ -223,21 +223,24 @@ class SimulationController:
 		for key in ("node_potentials", "dipole_voltages", "dipole_currents"):
 			source_map = window_result.get(key, {})
 			target_map = buffer[key]
-			for comp_id, values in source_map.items():
-				if comp_id not in target_map:
-					target_map[comp_id] = []
-				if values:
-					target_map[comp_id].append(float(values[-1]))
-				else:
-					target_map[comp_id].append(0.0)
+			if isinstance(source_map, dict):
+				for comp_id, values in source_map.items():
+					if comp_id not in target_map:
+						target_map[comp_id] = []
+					if values:
+						target_map[comp_id].append(float(values[-1]))
+					else:
+						target_map[comp_id].append(0.0)
 
 		self._trim_realtime_buffer(buffer)
 		self.last_transient_result = buffer
 		return buffer
 
-	def _trim_realtime_buffer(self, buffer: dict[str, object]) -> None:
+	def _trim_realtime_buffer(self, buffer: dict[str, Any]) -> None:
 		"""Limite l'historique temps réel pour garder un coût constant."""
 		time_values = buffer.get("time", [])
+		if not isinstance(time_values, list):
+			return
 		overflow = len(time_values) - self._realtime_max_points
 		if overflow <= 0:
 			return
@@ -245,8 +248,10 @@ class SimulationController:
 		del time_values[:overflow]
 		for key in ("node_potentials", "dipole_voltages", "dipole_currents"):
 			series_map = buffer.get(key, {})
-			for values in series_map.values():
-				del values[:overflow]
+			if isinstance(series_map, dict):
+				for values in series_map.values():
+					if isinstance(values, list):
+						del values[:overflow]
 
 	@property
 	def realtime_elapsed_time(self) -> float:

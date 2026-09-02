@@ -9,9 +9,9 @@ def group_connected_nodes(circuit) -> dict[int, int]:
 
 	def find(node_id: int) -> int:
 		if parent[node_id] == node_id:
-			return node_id
+			return int(node_id)
 		parent[node_id] = find(parent[node_id])
-		return parent[node_id]
+		return int(parent[node_id])
 
 	def union(left_id: int, right_id: int) -> None:
 		root_left = find(left_id)
@@ -180,17 +180,18 @@ class MatrixStamper:
 		"""
 		from model.components import VoltageControlledCurrentSource, CurrentControlledCurrentSource, VoltageSource, VoltageSourceDC
 		
+		dipoles = getattr(circuit, "dipoles", {})
 		if isinstance(dipole, VoltageControlledCurrentSource):
-			control = circuit.dipoles.get(dipole.control_dipole_id)
+			control = dipoles.get(dipole.control_dipole_id)
 			if control is not None:
-				return dipole.transconductance * control.voltage
+				return float(dipole.transconductance * control.voltage)
 			return 0.0
-		
+
 		elif isinstance(dipole, CurrentControlledCurrentSource):
-			control = circuit.dipoles.get(dipole.control_dipole_id)
+			control = dipoles.get(dipole.control_dipole_id)
 			if control is None:
 				return 0.0
-			
+
 			# Calculer le courant de contrôle
 			if isinstance(control, (VoltageSource, VoltageSourceDC)):
 				if voltage_source_indices and state_vector is not None:
@@ -201,10 +202,10 @@ class MatrixStamper:
 						control_current = 0.0
 				else:
 					# Fallback sur control.voltage
-					control_current = control.voltage / getattr(control, 'resistance', 1.0)
+					control_current = control.voltage / getattr(control, "resistance", 1.0)
 			else:
-				control_current = control.voltage / getattr(control, 'resistance', 1.0)
+				control_current = control.voltage / getattr(control, "resistance", 1.0)
 
-			return control_current * dipole.gain
+			return float(control_current * dipole.gain)
 
 		return 0.0

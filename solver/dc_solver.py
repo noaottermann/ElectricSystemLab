@@ -62,7 +62,7 @@ class DCSolver(BaseSolver):
             return
 
         voltage_source_indices = {
-            v_src.id: num_v_vars + index for index, v_src in enumerate(voltage_sources)
+            int(getattr(v_src, "id", index)): num_v_vars + index for index, v_src in enumerate(voltage_sources)
         }
 
         # 5. Vecteur d'état initial
@@ -220,14 +220,15 @@ class DCSolver(BaseSolver):
                     x,
                     voltage_source_indices,
                 )
-                dipole.current = dipole.gain * control_current
+                val = dipole.gain * control_current
+                dipole.current = float(val.real if isinstance(val, complex) else val)
             elif isinstance(dipole, (Diode, LED)):
                 current, _ = self._diode_current_and_conductance(dipole.voltage, dipole)
-                dipole.current = current
+                dipole.current = float(current)
 
         for i, v_src in enumerate(voltage_sources):
             idx_src = num_v_vars + i
-            v_src.current = -float(x[idx_src])
+            setattr(v_src, "current", -float(x[idx_src]))
 
     def _refresh_dependent_currents(
         self,
@@ -264,7 +265,8 @@ class DCSolver(BaseSolver):
                         state_vector,
                         voltage_source_indices,
                     )
-                    dipole.current = dipole.gain * control_current
+                    val = dipole.gain * control_current
+                    dipole.current = float(val.real if isinstance(val, complex) else val)
                 max_delta = max(max_delta, abs(float(getattr(dipole, "current", 0.0)) - previous))
             if max_delta <= self._CONVERGENCE_TOL:
                 break

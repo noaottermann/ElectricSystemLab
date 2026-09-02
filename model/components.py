@@ -41,7 +41,7 @@ class Resistor(Dipole):
         super().__init__(dipole_id, "Resistor", node_a, node_b, x, y, rotation)
         self.resistance = float(resistance)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la resistance."""
         return {"resistance": self.resistance}
 
@@ -68,7 +68,7 @@ class Capacitor(Dipole):
         super().__init__(dipole_id, "Capacitor", node_a, node_b, x, y, rotation)
         self.capacitance = float(capacitance)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres du condensateur."""
         return {"capacitance": self.capacitance}
 
@@ -95,7 +95,7 @@ class Inductor(Dipole):
         super().__init__(dipole_id, "Inductor", node_a, node_b, x, y, rotation)
         self.inductance = float(inductance)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de l'inductance."""
         return {"inductance": self.inductance}
 
@@ -142,7 +142,7 @@ class Switch(StatefulDipole):
             return self.resistance_closed if self.resistance_closed > 0.0 else 1e-9
         return self.resistance_open if self.resistance_open > 0.0 else 1e12
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres du switch."""
         params = super().get_params()
         params.update(
@@ -218,7 +218,7 @@ class VoltageSource(StatefulDipole):
             return self.offset + self.amplitude * math.sin(omega * t + phi)
         return self.dc_voltage
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {
             "state": self.get_state() or "dc",
             "dc_voltage": self.dc_voltage,
@@ -355,7 +355,7 @@ class CurrentSource(StatefulDipole):
             return self.offset + self.amplitude * math.sin(omega * t + phi)
         return self.dc_current
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {
             "state": self.get_state() or "dc",
             "dc_current": self.dc_current,
@@ -453,7 +453,7 @@ class VoltageControlledCurrentSource(Dipole):
         self.transconductance = float(transconductance)
         self.control_dipole_id = int(control_dipole_id)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la source dependante."""
         return {
             "transconductance": self.transconductance,
@@ -486,7 +486,7 @@ class CurrentControlledCurrentSource(Dipole):
         self.gain = float(gain)
         self.control_dipole_id = int(control_dipole_id)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la source dependante."""
         return {
             "gain": self.gain,
@@ -519,7 +519,7 @@ class VoltageControlledVoltageSource(Dipole):
         self.gain = float(gain)
         self.control_dipole_id = int(control_dipole_id)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la source dependante."""
         return {
             "gain": self.gain,
@@ -552,7 +552,7 @@ class CurrentControlledVoltageSource(Dipole):
         self.transresistance = float(transresistance)
         self.control_dipole_id = int(control_dipole_id)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la source dependante."""
         return {
             "transresistance": self.transresistance,
@@ -587,7 +587,7 @@ class Diode(Dipole):
         self.ideality_factor = float(ideality_factor)
         self.thermal_voltage = float(thermal_voltage)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         """Retourne les parametres de la diode."""
         return {
             "saturation_current": self.saturation_current,
@@ -650,7 +650,7 @@ class Ammeter(Dipole):
         super().__init__(dipole_id, "Ammeter", node_a, node_b, x, y, rotation)
         self.resistance = float(resistance)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {"resistance": self.resistance}
 
     def set_params(self, params: dict[str, Any]) -> None:
@@ -674,7 +674,7 @@ class Voltmeter(Dipole):
         super().__init__(dipole_id, "Voltmeter", node_a, node_b, x, y, rotation)
         self.resistance = float(resistance)
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {"resistance": self.resistance}
 
     def set_params(self, params: dict[str, Any]) -> None:
@@ -770,7 +770,7 @@ class OpAmp(Component):
     def node_out(self):
         return self.node_c
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {"gain": self.gain}
 
     def set_params(self, params: dict[str, Any]) -> None:
@@ -840,7 +840,7 @@ class Transformer(Component):
             self.nodes.append(None)
         self.nodes[3] = value
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {"ratio": self.ratio}
 
     def set_params(self, params: dict[str, Any]) -> None:
@@ -911,7 +911,7 @@ class Transistor(Component):
     def node_emitter(self):
         return self.node_c
 
-    def get_params(self) -> dict[str, float]:
+    def get_params(self) -> dict[str, Any]:
         return {"beta": self.beta}
 
     def set_params(self, params: dict[str, Any]) -> None:

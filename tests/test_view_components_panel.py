@@ -8,12 +8,18 @@ from view.components_panel import ComponentsPanel
 
 import sys
 
+_app_ref = None
+
 def _get_app() -> QApplication:
+    global _app_ref
     app = QApplication.instance()
     if app is None:
-        app = QApplication(sys.argv)
+        _app_ref = QApplication(sys.argv or [""])
+        return _app_ref
     return app
 
+
+from utils.translator import Translator
 
 def test_components_panel_filter_sources() -> None:
     _get_app()
@@ -21,16 +27,17 @@ def test_components_panel_filter_sources() -> None:
     visible_by_category = panel._apply_component_filter("source")
 
     assert visible_by_category.get("sources") is True
-    assert visible_by_category.get("passive") is False
+    assert visible_by_category.get("passives") is False
 
 
 def test_components_panel_default_labels_are_french() -> None:
     _get_app()
+    Translator.load_language("fr")
     panel = ComponentsPanel()
     categories = panel._build_default_categories()
-    labels = {category["label"] for category in categories}
+    labels = {Translator.tr(category["label_key"]) for category in categories}
 
-    assert "Connexions" in labels
+    assert "Topologie" in labels
     assert "Sources" in labels
     assert "Passifs" in labels
 

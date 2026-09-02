@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from .node import Node
 from .wire import Wire
@@ -13,7 +13,7 @@ class Circuit:
     def __init__(self) -> None:
         """Initialise un circuit vide."""
         self.nodes: dict[int, Node] = {}
-        self.dipoles: dict[int, object] = {}
+        self.dipoles: dict[int, Any] = {}
         self.wires: dict[int, Wire] = {}
         self._next_node_id = 1
         self._next_dipole_id = 1
@@ -29,9 +29,9 @@ class Circuit:
         self.nodes[node_id] = node
         return node
 
-    def remove_node(self, node_id: int) -> None:
+    def remove_node(self, node_or_id: int | Node) -> None:
         """Supprime un noeud du circuit et nettoie toutes ses connexions."""
-        node_id = int(node_id)
+        node_id = node_or_id.id if isinstance(node_or_id, Node) else int(node_or_id)
         if node_id not in self.nodes:
             return
 
@@ -67,7 +67,7 @@ class Circuit:
                 if node is not None and node.id in self.nodes:
                     node.add_connection(dipole)
 
-    def _merge_node_into_keeper(self, keeper: Optional[Node], node_to_merge: Optional[Node]) -> bool:
+    def _merge_node_into_keeper(self, keeper: Node, node_to_merge: Node) -> bool:
         """Fusionne un noeud dans un noeud commun et met a jour les references."""
         if keeper is None or node_to_merge is None or keeper is node_to_merge:
             return False
@@ -156,11 +156,11 @@ class Circuit:
     def get_node_at(self, x: float, y: float, tolerance: float = 10.0) -> Optional[Node]:
         """Retourne le noeud le plus proche dans le rayon de tolerance."""
         # Priorité aux noeuds des dipôles
-        dipole_nodes = set()
+        dipole_nodes: set[Node] = set()
         for dipole in self.dipoles.values():
             nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
             for node in nodes:
-                if node is not None:
+                if isinstance(node, Node):
                     dipole_nodes.add(node)
 
         # Noeuds de dipôles
@@ -199,7 +199,7 @@ class Circuit:
 
     # Gestion des dipoles
 
-    def add_dipole(self, dipole: object) -> None:
+    def add_dipole(self, dipole: Any) -> None:
         """Ajoute un composant/dipole au circuit en verifiant ses noeuds."""
         nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
         for node in nodes:
@@ -260,7 +260,7 @@ class Circuit:
         }
         return json.dumps(data, indent=4)
 
-    def load_from_json(self, json_str: str, component_classes: dict[str, object]) -> None:
+    def load_from_json(self, json_str: str, component_classes: dict[str, Any]) -> None:
         """Charge un circuit depuis une chaine JSON."""
         self.clear()
         data = json.loads(json_str)

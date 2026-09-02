@@ -74,7 +74,7 @@ class ACSolver(BaseSolver):
             raise ValueError("Aucune equation a resoudre")
 
         voltage_source_indices = {
-            source.id: num_v_vars + i for i, source in enumerate(voltage_sources)
+            int(getattr(source, "id", i)): num_v_vars + i for i, source in enumerate(voltage_sources)
         }
 
         # 3. Grille de fréquences
@@ -224,6 +224,6 @@ class ACSolver(BaseSolver):
             dipole_current_phase[dipole.id].append(float(np.degrees(np.angle(current))))
 
         for source in voltage_sources:
-            idx_src = voltage_source_indices.get(source.id)
+            idx_src = voltage_source_indices.get(int(getattr(source, "id", -1)))
             if idx_src is not None:
-                source.current = float(np.abs(state_vector[idx_src]))
+                setattr(source, "current", float(np.abs(state_vector[idx_src])))

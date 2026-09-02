@@ -39,10 +39,10 @@ from model.components import (
     VoltageSourceAC,
     VoltageSourceDC,
 )
-from .component_item import ComponentItem, create_component_item
-from .wire_item import WireItem
-from .node_item import NodeItem
-from .components_panel import ComponentsListWidget
+from view.component_item import ComponentItem, create_component_item
+from view.wire_item import WireItem
+from view.node_item import NodeItem
+from view.components_panel import ComponentsListWidget
 
 class CircuitView(QGraphicsView):
     """Vue graphique qui affiche la scene du circuit"""
