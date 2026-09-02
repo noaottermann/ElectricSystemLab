@@ -75,3 +75,17 @@ def test_components_panel_drag_requests_dragged_tool() -> None:
         panel.components_list.startDrag(Qt.CopyAction)
 
     assert emitted_tools == ["source"]
+
+
+def test_components_panel_icon_cache() -> None:
+    _get_app()
+    panel = ComponentsPanel()
+    assert hasattr(panel, "_icon_cache")
+    assert len(panel._icon_cache) > 0
+
+    # Première extraction
+    icon1 = panel._build_component_icon({"id": "resistor"})
+    # Deuxième extraction (doit retourner l'icône en cache)
+    icon2 = panel._build_component_icon({"id": "resistor"})
+    assert icon1 is icon2
+

@@ -59,6 +59,7 @@ class ComponentsPanel(QWidget):
 		self._component_data = self._build_default_components()
 		self._suppress_category_highlight = False
 		self._updating_category_highlight = False
+		self._icon_cache: dict[str, QIcon] = {}
 
 		layout = QHBoxLayout(self)
 		layout.setContentsMargins(0, 0, 0, 0)
@@ -562,16 +563,29 @@ class ComponentsPanel(QWidget):
 				item.setIcon(icon)
 
 	def _build_component_icon(self, component: dict, state_value: str | None = None) -> QIcon:
-		"""Construit une icone a partir du rendu canvas du composant."""
+		"""Construit une icône à partir du rendu canvas du composant (avec mise en cache)."""
 		component_id = component.get("id") if isinstance(component, dict) else None
 		icon_size = self.components_list.iconSize() if hasattr(self, "components_list") else QSize(44, 44)
+		cache_key = f"comp_{component_id}_{state_value}_{icon_size.width()}x{icon_size.height()}"
+
+		if hasattr(self, "_icon_cache") and cache_key in self._icon_cache:
+			return self._icon_cache[cache_key]
+
 		if not component_id:
-			return self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
+			icon = self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
+			if hasattr(self, "_icon_cache"):
+				self._icon_cache[cache_key] = icon
+			return icon
 
 		item = self._create_component_item_for_icon(str(component_id), state_value)
 		if item is None:
-			return self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
-		return self._render_component_item_icon(item, icon_size)
+			icon = self._load_icon(component.get("icon", ""), "#d7d7d7", icon_size)
+		else:
+			icon = self._render_component_item_icon(item, icon_size)
+
+		if hasattr(self, "_icon_cache"):
+			self._icon_cache[cache_key] = icon
+		return icon
 
 	def _create_component_item_for_icon(self, component_id: str, state_value: str | None):
 		"""Cree un item graphique pour la liste de composants."""
@@ -783,12 +797,19 @@ class ComponentsPanel(QWidget):
 					text_label.setFixedWidth(max(1, viewport_width))
 
 	def _load_icon(self, relative_path: str, fallback_color: str, size: QSize) -> QIcon:
-		"""Charge un icone ou genere un substitut si manquant."""
+		"""Charge une icône ou génère un substitut si manquant (avec mise en cache)."""
+		cache_key = f"load_{relative_path}_{fallback_color}_{size.width()}x{size.height()}"
+		if hasattr(self, "_icon_cache") and cache_key in self._icon_cache:
+			return self._icon_cache[cache_key]
+
 		icon_path = self.assets_root / relative_path
 		if icon_path.exists():
 			pixmap = QPixmap(str(icon_path))
 			if not pixmap.isNull():
-				return QIcon(pixmap)
+				icon = QIcon(pixmap)
+				if hasattr(self, "_icon_cache"):
+					self._icon_cache[cache_key] = icon
+				return icon
 
 		pixmap = QPixmap(size)
 		pixmap.fill(Qt.transparent)
@@ -803,7 +824,10 @@ class ComponentsPanel(QWidget):
 		painter.drawEllipse(center, size.width() / 4, size.height() / 4)
 		painter.end()
 
-		return QIcon(pixmap)
+		icon = QIcon(pixmap)
+		if hasattr(self, "_icon_cache"):
+			self._icon_cache[cache_key] = icon
+		return icon
 
 
 class ComponentsListWidget(QListWidget):

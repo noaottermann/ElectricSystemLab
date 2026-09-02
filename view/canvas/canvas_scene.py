@@ -471,15 +471,6 @@ class CircuitScene(QGraphicsScene):
             node_count = len(nodes)
             edge_count = len(component_wires)
 
-            B = np.zeros((node_count, edge_count))
-            for e_idx, wire in enumerate(component_wires):
-                idx_a = node_index.get(wire.node_a)
-                idx_b = node_index.get(wire.node_b)
-                if idx_a is None or idx_b is None:
-                    continue
-                B[idx_a, e_idx] = 1.0
-                B[idx_b, e_idx] = -1.0
-
             b = np.zeros(node_count)
             for node, idx in node_index.items():
                 total = 0.0
@@ -496,15 +487,35 @@ class CircuitScene(QGraphicsScene):
                     wire_current[wire.id] = 0.0
                 continue
 
-            bb_t = B @ B.T
-            bb_t_inv = np.linalg.pinv(bb_t)
-            currents = B.T @ (bb_t_inv @ b)
+            # Cas optimisé : 1 seul fil entre 2 nœuds (cas le plus fréquent)
+            if edge_count == 1:
+                wire = component_wires[0]
+                idx_a = node_index.get(wire.node_a)
+                wire_val = float(b[idx_a]) if idx_a is not None else float(-b[0])
+                wire_current[wire.id] = wire_val if abs(wire_val) >= 1e-9 else 0.0
+                continue
+
+            # Matrice d'incidence nœuds-branches
+            B = np.zeros((node_count, edge_count))
+            for e_idx, wire in enumerate(component_wires):
+                idx_a = node_index.get(wire.node_a)
+                idx_b = node_index.get(wire.node_b)
+                if idx_a is not None:
+                    B[idx_a, e_idx] = 1.0
+                if idx_b is not None:
+                    B[idx_b, e_idx] = -1.0
+
+            # Résolution optimale des moindres carrés (minimum-norm solution B @ i = b)
+            try:
+                currents, _, _, _ = np.linalg.lstsq(B, b, rcond=None)
+            except np.linalg.LinAlgError:
+                bb_t = B @ B.T
+                bb_t_inv = np.linalg.pinv(bb_t)
+                currents = B.T @ (bb_t_inv @ b)
 
             for e_idx, wire in enumerate(component_wires):
                 value = float(currents[e_idx])
-                if abs(value) < 1e-9:
-                    value = 0.0
-                wire_current[wire.id] = value
+                wire_current[wire.id] = value if abs(value) >= 1e-9 else 0.0
 
         return wire_current
     def has_clipboard_content(self) -> bool:
