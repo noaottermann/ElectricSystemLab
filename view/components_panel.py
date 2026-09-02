@@ -22,13 +22,28 @@ from utils.translator import Translator
 from model.components import (
 	Ammeter,
 	Capacitor,
+	Comparator,
 	CurrentControlledCurrentSource,
 	CurrentControlledVoltageSource,
 	CurrentSource,
 	Diode,
+	Fuse,
 	Ground,
 	Inductor,
+	LED,
+	LogicGate,
+	LogicGateAND,
+	LogicGateNAND,
+	LogicGateNOR,
+	LogicGateNOT,
+	LogicGateOR,
+	LogicGateXOR,
+	MOSFET,
+	MOSFET_NMOS,
+	MOSFET_PMOS,
 	OpAmp,
+	Potentiometer,
+	PulseVoltageSource,
 	Resistor,
 	Switch,
 	Transformer,
@@ -37,6 +52,7 @@ from model.components import (
 	VoltageControlledCurrentSource,
 	VoltageControlledVoltageSource,
 	VoltageSource,
+	ZenerDiode,
 )
 from model.node import Node
 from model.wire import Wire
@@ -324,6 +340,12 @@ class ComponentsPanel(QWidget):
 				"color": "#c1666b",
 			},
 			{
+				"key": "logic",
+				"label_key": "components_category_logic",
+				"icon": "categories/analog_ics.png",
+				"color": "#3d5a80",
+			},
+			{
 				"key": "electromechanical",
 				"label_key": "components_category_electromechanical",
 				"icon": "categories/electromechanical.png",
@@ -359,6 +381,11 @@ class ComponentsPanel(QWidget):
 					"icon": "components/source_dc.png",
 				},
 				{
+					"id": "pulse_source",
+					"label_key": "components_item_pulse_source",
+					"icon": "components/source_ac.png",
+				},
+				{
 					"id": "current_source",
 					"label_key": "components_item_current_source",
 					"icon": "components/current_source_dc.png",
@@ -391,6 +418,11 @@ class ComponentsPanel(QWidget):
 					"icon": "components/resistor.png",
 				},
 				{
+					"id": "potentiometer",
+					"label_key": "components_item_potentiometer",
+					"icon": "components/resistor.png",
+				},
+				{
 					"id": "capacitor",
 					"label_key": "components_item_capacitor",
 					"icon": "components/capacitor.png",
@@ -405,6 +437,11 @@ class ComponentsPanel(QWidget):
 					"label_key": "components_item_transformer",
 					"icon": "components/transformer.png",
 				},
+				{
+					"id": "fuse",
+					"label_key": "components_item_fuse",
+					"icon": "components/resistor.png",
+				},
 			],
 			"semiconductors": [
 				{
@@ -413,8 +450,18 @@ class ComponentsPanel(QWidget):
 					"icon": "components/diode.png",
 				},
 				{
+					"id": "zener_diode",
+					"label_key": "components_item_zener_diode",
+					"icon": "components/diode.png",
+				},
+				{
 					"id": "transistor",
 					"label_key": "components_item_transistor",
+					"icon": "components/diode.png",
+				},
+				{
+					"id": "mosfet",
+					"label_key": "components_item_mosfet",
 					"icon": "components/diode.png",
 				},
 			],
@@ -422,6 +469,43 @@ class ComponentsPanel(QWidget):
 				{
 					"id": "opamp",
 					"label_key": "components_item_opamp",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "comparator",
+					"label_key": "components_item_comparator",
+					"icon": "components/source_vcvs.png",
+				},
+			],
+			"logic": [
+				{
+					"id": "logic_and",
+					"label_key": "components_item_logic_and",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "logic_or",
+					"label_key": "components_item_logic_or",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "logic_not",
+					"label_key": "components_item_logic_not",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "logic_nand",
+					"label_key": "components_item_logic_nand",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "logic_nor",
+					"label_key": "components_item_logic_nor",
+					"icon": "components/source_vcvs.png",
+				},
+				{
+					"id": "logic_xor",
+					"label_key": "components_item_logic_xor",
 					"icon": "components/source_vcvs.png",
 				},
 			],
@@ -597,18 +681,30 @@ class ComponentsPanel(QWidget):
 
 		component_cls = {
 			"resistor": Resistor,
+			"potentiometer": Potentiometer,
 			"capacitor": Capacitor,
 			"inductor": Inductor,
 			"transformer": Transformer,
 			"source": VoltageSource,
+			"pulse_source": PulseVoltageSource,
 			"current_source": CurrentSource,
 			"source_vccs": VoltageControlledCurrentSource,
 			"source_vcvs": VoltageControlledVoltageSource,
 			"source_cccs": CurrentControlledCurrentSource,
 			"source_ccvs": CurrentControlledVoltageSource,
 			"diode": Diode,
+			"zener_diode": ZenerDiode,
 			"transistor": Transistor,
+			"mosfet": MOSFET,
 			"opamp": OpAmp,
+			"comparator": Comparator,
+			"fuse": Fuse,
+			"logic_and": LogicGateAND,
+			"logic_or": LogicGateOR,
+			"logic_not": LogicGateNOT,
+			"logic_nand": LogicGateNAND,
+			"logic_nor": LogicGateNOR,
+			"logic_xor": LogicGateXOR,
 			"switch": Switch,
 			"voltmeter": Voltmeter,
 			"ammeter": Ammeter,
@@ -630,6 +726,8 @@ class ComponentsPanel(QWidget):
 
 		if component_cls is Transformer:
 			component = component_cls(1, node_a, node_b, node_c, node_d, 0.0, 0.0)
+		elif component_cls in (OpAmp, Comparator, Transistor, MOSFET, Potentiometer) or (issubclass(component_cls, LogicGate) and component_cls is not LogicGateNOT):
+			component = component_cls(1, node_a, node_b, node_c, 0.0, 0.0)
 		else:
 			component = component_cls(1, node_a, node_b, 0.0, 0.0)
 		if state_value and hasattr(component, "set_state"):

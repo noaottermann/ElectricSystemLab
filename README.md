@@ -4,15 +4,24 @@ Nodal est une application de simulation de circuits électriques basée sur une 
 
 ## Table des matières
 
-- [Caractéristiques](#caractéristiques)
-- [Prérequis](#prérequis)
-- [Installation](#installation)
-- [Utilisation](#utilisation)
-- [Architecture](#architecture)
-- [Structure du projet](#structure-du-projet)
-- [Développement](#développement)
-- [Tests](#tests)
-- [Licence](#licence)
+- [Nodal](#nodal)
+  - [Table des matières](#table-des-matières)
+  - [Caractéristiques](#caractéristiques)
+  - [Prérequis](#prérequis)
+  - [Installation](#installation)
+  - [Utilisation](#utilisation)
+    - [Lancement de l'application](#lancement-de-lapplication)
+    - [Interface utilisateur](#interface-utilisateur)
+    - [Workflow typique](#workflow-typique)
+  - [Documentation Complète](#documentation-complète)
+  - [Architecture](#architecture)
+  - [Structure du projet](#structure-du-projet)
+  - [Développement](#développement)
+    - [Configuration de l'environnement de développement](#configuration-de-lenvironnement-de-développement)
+    - [Conventions de code](#conventions-de-code)
+    - [Ajout de nouveaux composants](#ajout-de-nouveaux-composants)
+  - [Tests](#tests)
+  - [Licence](#licence)
 
 ## Caractéristiques
 
@@ -77,64 +86,20 @@ L'application se lancera avec un écran de démarrage et affichera la fenêtre p
 4. Lancez une simulation (DC, AC ou transitoire)
 5. Analysez les résultats via les graphiques et les données
 
+## Documentation Complète
+
+- **[Architecture Technique (ARCHITECTURE.md)](ARCHITECTURE.md)** : Conception MVC détaillée, matrices MNA et patterns.
+- **[Guide de Contribution (CONTRIBUTING.md)](CONTRIBUTING.md)** : Guide d'ajout de composants, tests et standards.
+
 ## Architecture
 
-### Modèle MVC
+L'application suit le pattern Modèle-Vue-Contrôleur (MVC) strict :
 
-L'application suit le pattern Modèle-Vue-Contrôleur (MVC) :
-
-- **Modèle** (`model/`) : Représentation abstraite du circuit et de ses composants
-- **Vue** (`view/`) : Interface graphique et visualisation
-- **Contrôleur** (`controller/`) : Logique métier et coordination entre modèle et vue
-
-### Modules principaux
-
-#### Modèle (`model/`)
-- `circuit.py` : Classe Circuit, gestion globale du circuit
-- `components.py` : Définition des dipôles disponibles
-- `dipole.py` : Classe Dipole, composant électrique de base
-- `node.py` : Classe Node, nœud du circuit
-- `wire.py` : Classe Wire, connexion entre composants
-
-#### Contrôleur (`controller/`)
-- `app_controller.py` : Contrôleur principal de l'application
-- `circuit_controller.py` : Gestion du circuit
-- `simulation_controller.py` : Orchestration des simulations
-- `file_controller.py` : Importation et exportation de circuits
-- `edit_controller.py` : Édition des composants
-
-#### Vue (`view/`)
-- `main_window.py` : Fenêtre principale
-- `canvas.py` : Zone de dessin du circuit
-- `component_item.py` : Représentation visuelle d'un dipôle
-- `node_item.py` : Représentation visuelle d'un nœud
-- `wire_item.py` : Représentation visuelle d'une connexion
-- `components_panel.py` : Panneau de sélection des composants
-- `tools_panel.py` : Panneau d'outils
-- `graphs_panel.py` : Panneau de visualisation des résultats
-- `examples_panel.py` : Panneau des exemples
-- `grid.py` : Grille de travail
-
-#### Solveur (`solver/`)
-- `base_solver.py` : Classe de base pour tous les solveurs
-- `dc_solver.py` : Solveur pour l'analyse DC
-- `ac_solver.py` : Solveur pour l'analyse AC
-- `transient_solver.py` : Solveur pour l'analyse transitoire
-- `utils.py` : Fonctions utilitaires pour les calculs
-
-#### Utilitaires (`utils/`)
-- `translator.py` : Gestion de la localisation
-- `assets.py` : Gestion des ressources (icônes, images)
-
-#### Configuration (`config/`)
-- `settings.py` : Paramètres applicatifs
-- `keybinds.py` : Liaisons clavier
-- `themes.py` : Thèmes de l'application
-
-#### Persistance (`persistence/`)
-- `serializer.py` : Sérialisation des circuits (JSON)
-- `importer.py` : Importation depuis divers formats
-- `exporter.py` : Exportation vers divers formats
+- **Modèle** (`model/`) : Physique électrique et graphe topologique agnostiques de Qt (`Component`, `Dipole`, `Circuit`, `Node`, `Wire`).
+- **Solveurs** (`solver/`) : Moteurs d'analyse nodale modifiée MNA (`DCSolver`, `ACSolver`, `TransientSolver`) avec stamping polymorphe.
+- **Contrôleur** (`controller/`) : Orchestration métier, transformations géométriques, flux de fichiers et simulations.
+- **Vue** (`view/`) : Interface PyQt5 modulaire découpée en sous-packages (`view/canvas/`, `view/main_window/`, `view/dialogs/`, `view/components_panel.py`).
+- **Persistance** (`persistence/`) : Sérialisation JSON et exportateurs CSV.
 
 ## Structure du projet
 
@@ -142,64 +107,24 @@ L'application suit le pattern Modèle-Vue-Contrôleur (MVC) :
 Nodal/
 ├── main.py                  # Point d'entrée de l'application
 ├── requirements.txt         # Dépendances Python
-├── LICENSE                  # Licence MIT
-├── README.md               # Ce fichier
-├── model/                  # Couche modèle
-│   ├── circuit.py
-│   ├── components.py
-│   ├── dipole.py
-│   ├── node.py
-│   └── wire.py
-├── controller/             # Couche contrôleur
-│   ├── app_controller.py
-│   ├── circuit_controller.py
-│   ├── simulation_controller.py
-│   ├── file_controller.py
-│   └── edit_controller.py
-├── view/                   # Couche vue
-│   ├── main_window.py
-│   ├── canvas.py
-│   ├── component_item.py
-│   ├── node_item.py
-│   ├── wire_item.py
-│   ├── components_panel.py
-│   ├── tools_panel.py
-│   ├── graphs_panel.py
-│   ├── examples_panel.py
-│   ├── grid.py
-│   └── splash_screen.py
-├── solver/                 # Moteurs de simulation
-│   ├── base_solver.py
-│   ├── dc_solver.py
-│   ├── ac_solver.py
-│   ├── transient_solver.py
-│   ├── stamping.py
-│   ├── stamping_registry.py
-│   └── utils.py
-├── persistence/            # Sérialisation et persistance des circuits
-│   ├── serializer.py
-│   ├── importer.py
-│   └── exporter.py
-├── assets/                 # Ressources graphiques
-│   ├── categories/
-│   ├── components/
-│   ├── panels/
-│   ├── simulation/
-│   ├── toolbar/
-│   └── gen_icons_all.py
-├── locales/                # Fichiers de traduction
-│   ├── fr.json
-│   └── en.json
-└── tests/                  # Tests unitaires
-    ├── test_circuit.py
-    ├── test_model.py
-    ├── test_solver.py
-    ├── test_io.py
-    ├── test_simulation_controller.py
-    ├── test_graph_panel_utils.py
-    ├── test_view_components_panel.py
-    ├── test_graphics_button.py
-    └── test_interactive_graphs.py
+├── pyproject.toml           # Configuration Pytest & MyPy
+├── AI_AGENT_GUIDE.md        # Guide exhaustif pour IA & développeurs
+├── ARCHITECTURE.md          # Documentation technique détaillée
+├── CONTRIBUTING.md          # Guide pour les contributeurs
+├── README.md                # Présentation générale
+├── config/                  # Configuration & constantes physiques
+├── model/                   # Modèle de données & composants
+├── controller/              # Contrôleurs MVC & services
+├── solver/                  # Moteurs de simulation MNA
+├── persistence/             # Sérialisation JSON & exports
+├── utils/                   # Localisation i18n & gestion d'assets
+├── view/                    # Interface graphique modulaire PyQt5
+│   ├── canvas/              # Canevas graphique (scène, vue, snap, undo)
+│   ├── main_window/         # Fenêtre principale, barres d'outils, menus
+│   ├── dialogs/             # Boîtes de dialogue de paramétrage
+│   └── components_panel.py  # Palette de composants avec cache d'icônes
+├── locales/                 # Fichiers de traduction (fr, en)
+└── tests/                   # Suite de tests unitaires et d'intégration
 ```
 
 ## Développement

@@ -43,6 +43,7 @@ from view.component_item import ComponentItem, create_component_item
 from view.wire_item import WireItem
 from view.node_item import NodeItem
 from view.components_panel import ComponentsListWidget
+from view.canvas.canvas_editing import EditingManager
 
 class CircuitView(QGraphicsView):
     """Vue graphique qui affiche la scene du circuit"""
@@ -1241,30 +1242,7 @@ class CircuitScene(QGraphicsScene):
             self.start_wire_drawing(grid_x, grid_y)
             event.accept()
             return True
-        if self.current_tool in [
-            "resistor",
-            "source",
-            "current_source",
-            "source_dc",
-            "source_ac",
-            "current_source_dc",
-            "current_source_ac",
-            "source_vccs",
-            "source_vcvs",
-            "source_cccs",
-            "source_ccvs",
-            "capacitor",
-            "inductor",
-            "diode",
-            "transformer",
-            "transistor",
-            "opamp",
-            "led",
-            "switch",
-            "voltmeter",
-            "ammeter",
-            "ground",
-        ]:
+        if self.current_tool in EditingManager.TOOL_TO_CLASS:
             self.add_component_at(self.current_tool, grid_x, grid_y)
             event.accept()
             return True
@@ -1447,111 +1425,10 @@ class CircuitScene(QGraphicsScene):
     def add_component_at(self, tool_type: str, x: float, y: float) -> None:
         """Cree un composant a la position donnee."""
         self._push_undo_snapshot()
-
-        node_a = None
-        node_b = None
-        node_c = None
-        node_d = None
-        if tool_type == "ground":
-            node_a = self.model.create_node(x, y, is_ground=True)
-        else:
-            node_a = self.model.create_node(x - 30, y)
-            node_b = self.model.create_node(x + 30, y)
-            if tool_type == "transformer":
-                node_c = self.model.create_node(x - 30, y + 20)
-                node_d = self.model.create_node(x + 30, y + 20)
-        
-        dipole = None
-        d_id = self.model.get_next_dipole_id()
-
-        def _default_control_id() -> int:
-            if self.model is None or not getattr(self.model, "dipoles", None):
-                return 0
-            existing_ids = sorted(self.model.dipoles.keys())
-            return int(existing_ids[0]) if existing_ids else 0
-
-        # Creation du modele
-        if tool_type == "resistor":
-            dipole = Resistor(d_id, node_a, node_b, x, y, name=f"R{d_id}")
-        elif tool_type == "source":
-            dipole = VoltageSource(d_id, node_a, node_b, x, y, name=f"V{d_id}")
-        elif tool_type == "current_source":
-            dipole = CurrentSource(d_id, node_a, node_b, x, y, name=f"I{d_id}")
-        elif tool_type == "source_dc":
-            dipole = VoltageSourceDC(d_id, node_a, node_b, x, y, name=f"V{d_id}")
-        elif tool_type == "source_ac":
-            dipole = VoltageSourceAC(d_id, node_a, node_b, x, y, name=f"V{d_id}")
-        elif tool_type == "current_source_dc":
-            dipole = CurrentSourceDC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
-        elif tool_type == "current_source_ac":
-            dipole = CurrentSourceAC(d_id, node_a, node_b, x, y, name=f"I{d_id}")
-        elif tool_type == "transformer":
-            dipole = Transformer(d_id, node_a, node_b, node_c, node_d, x, y, name=f"T{d_id}")
-        elif tool_type == "transistor":
-            dipole = Transistor(d_id, node_a, node_b, x, y, name=f"Q{d_id}")
-        elif tool_type == "opamp":
-            dipole = OpAmp(d_id, node_a, node_b, x, y, name=f"A{d_id}")
-        elif tool_type == "voltmeter":
-            dipole = Voltmeter(d_id, node_a, node_b, x, y, name=f"V{d_id}")
-        elif tool_type == "ammeter":
-            dipole = Ammeter(d_id, node_a, node_b, x, y, name=f"A{d_id}")
-        elif tool_type == "ground":
-            dipole = Ground(d_id, node_a, None, x, y)
-        elif tool_type == "source_vccs":
-            dipole = VoltageControlledCurrentSource(
-                d_id,
-                node_a,
-                node_b,
-                x,
-                y,
-                name=f"G{d_id}",
-                control_dipole_id=_default_control_id(),
-            )
-        elif tool_type == "source_cccs":
-            dipole = CurrentControlledCurrentSource(
-                d_id,
-                node_a,
-                node_b,
-                x,
-                y,
-                name=f"F{d_id}",
-                control_dipole_id=_default_control_id(),
-            )
-        elif tool_type == "source_vcvs":
-            dipole = VoltageControlledVoltageSource(
-                d_id,
-                node_a,
-                node_b,
-                x,
-                y,
-                name=f"E{d_id}",
-                control_dipole_id=_default_control_id(),
-            )
-        elif tool_type == "source_ccvs":
-            dipole = CurrentControlledVoltageSource(
-                d_id,
-                node_a,
-                node_b,
-                x,
-                y,
-                name=f"H{d_id}",
-                control_dipole_id=_default_control_id(),
-            )
-        elif tool_type == "capacitor":
-            dipole = Capacitor(d_id, node_a, node_b, x, y, name=f"C{d_id}")
-        elif tool_type == "inductor":
-            dipole = Inductor(d_id, node_a, node_b, x, y, name=f"L{d_id}")
-        elif tool_type == "diode":
-            dipole = Diode(d_id, node_a, node_b, x, y, name=f"D{d_id}")
-        elif tool_type == "led":
-            dipole = LED(d_id, node_a, node_b, x, y, name=f"LED{d_id}")
-        elif tool_type == "switch":
-            dipole = Switch(d_id, node_a, node_b, x, y, name=f"SW{d_id}")
-
-        if dipole:
-            self.model.add_dipole(dipole)
-
-            item = create_component_item(dipole)
+        mgr = EditingManager(self.model)
+        component = mgr.create_component_by_tool(tool_type, x, y)
+        if component is not None:
+            item = create_component_item(component)
             self.addItem(item)
 
     def handle_component_move(self, component_item: ComponentItem) -> None:
@@ -1563,13 +1440,13 @@ class CircuitScene(QGraphicsScene):
         self._smart_connect_component_to_nearby_dipole_nodes(component_item)
         
         # Collecte les identifiants des noeuds du composant deplace
-        node_ids = {component_item.component.node_a.id, component_item.component.node_b.id}
+        node_ids = {node.id for node in getattr(component_item.component, "nodes", []) if node is not None}
         
         # Rafraichit les fils connectes a ces noeuds
         for item in self.items():
             if isinstance(item, WireItem):
                 wire = item.wire
-                if wire.node_a.id in node_ids or wire.node_b.id in node_ids:
+                if (wire.node_a and wire.node_a.id in node_ids) or (wire.node_b and wire.node_b.id in node_ids):
                     item.refresh_geometry()
 
         self._merge_overlaps_and_refresh()
@@ -2160,23 +2037,35 @@ class CircuitScene(QGraphicsScene):
         
         # Positions des noeuds depuis le centre et la rotation du composant
         cx, cy = new_pos.x(), new_pos.y()
-        offset = 30
         rad = math.radians(rotation)
-        dx = offset * math.cos(rad)
-        dy = offset * math.sin(rad)
-        
-        # Met a jour le modele en temps reel
-        component_model.node_a.position = (cx - dx, cy - dy)
-        component_model.node_b.position = (cx + dx, cy + dy)
+        cos_r = math.cos(rad)
+        sin_r = math.sin(rad)
+
+        if hasattr(component_model, "get_terminal_offsets"):
+            offsets = component_model.get_terminal_offsets()
+        else:
+            offsets = [(-30.0, 0.0), (30.0, 0.0)]
+
+        node_ids = set()
+        for idx, node in enumerate(getattr(component_model, "nodes", [])):
+            if node is None:
+                continue
+            node_ids.add(node.id)
+            if idx < len(offsets):
+                lx, ly = offsets[idx]
+            else:
+                lx, ly = 0.0, 0.0
+            rx = lx * cos_r - ly * sin_r
+            ry = lx * sin_r + ly * cos_r
+            node.position = (cx + rx, cy + ry)
+
         component_model.position = (cx, cy)
 
         # Rafraichit les fils connectes
-        node_ids = {component_model.node_a.id, component_model.node_b.id}
-        
         for item in self.items():
             if isinstance(item, WireItem): 
                 wire = item.wire
-                if wire.node_a.id in node_ids or wire.node_b.id in node_ids:
+                if (wire.node_a and wire.node_a.id in node_ids) or (wire.node_b and wire.node_b.id in node_ids):
                     item.refresh_geometry()
 
     def _detach_component_from_shared_nodes(self, component_model) -> None:

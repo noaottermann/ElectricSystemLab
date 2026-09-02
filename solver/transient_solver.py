@@ -16,6 +16,7 @@ from model.components import (
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
+    Fuse,
     Inductor,
     LED,
     Resistor,
@@ -282,3 +283,5 @@ class TransientSolver(BaseSolver):
                 capacitor_prev_voltage[dipole.id] = float(dipole.voltage)
             elif isinstance(dipole, Inductor):
                 inductor_prev_current[dipole.id] = float(dipole.current)
+            elif isinstance(dipole, Fuse):
+                dipole.update_thermal_energy(float(dipole.current), time_step)

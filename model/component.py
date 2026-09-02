@@ -119,3 +119,25 @@ class Component(ABC):
     def set_state(self, value: str) -> None:
         """Définit l'état actif."""
         pass
+
+    def get_terminal_offsets(self) -> list[tuple[float, float]]:
+        """Retourne les positions relatives (dx, dy) de chaque borne par rapport au centre."""
+        if len(self.nodes) == 1:
+            return [(0.0, 0.0)]
+        return [(-30.0, 0.0), (30.0, 0.0)]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], nodes_dict: dict[int, Any]) -> Component:
+        """Reconstruit un composant à partir d'un dictionnaire sérialisé."""
+        node_keys = ["node_a_id", "node_b_id", "node_c_id", "node_d_id", "node_e_id"]
+        nodes = []
+        for key in node_keys:
+            if key in data:
+                nid = data[key]
+                nodes.append(nodes_dict.get(nid) if nid is not None else None)
+
+        x, y = data.get("position", (0.0, 0.0))
+        rotation = float(data.get("rotation", 0.0))
+        instance = cls(data["id"], *nodes, x=x, y=y, rotation=rotation)
+        instance.set_params(data.get("params", {}))
+        return instance

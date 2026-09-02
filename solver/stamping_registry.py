@@ -34,6 +34,7 @@ def _register_stamping_methods() -> None:
         (comp.VoltageSource, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
         (comp.VoltageSourceDC, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
         (comp.VoltageSourceAC, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
+        (comp.PulseVoltageSource, stamping.stamp_pulse_voltage_source_dc, stamping.stamp_pulse_voltage_source_ac, stamping.stamp_pulse_voltage_source_transient),
 
         # Sources de courant
         (comp.CurrentSource, stamping.stamp_current_source_dc, stamping.stamp_current_source_ac, stamping.stamp_current_source_transient),
@@ -46,15 +47,33 @@ def _register_stamping_methods() -> None:
         (comp.VoltageControlledVoltageSource, stamping.stamp_vcvs_dc, stamping.stamp_vcvs_ac, stamping.stamp_vcvs_transient),
         (comp.CurrentControlledVoltageSource, stamping.stamp_ccvs_dc, stamping.stamp_ccvs_ac, stamping.stamp_ccvs_transient),
 
-        # Non linéaires
+        # Non linéaires / Semi-conducteurs
         (comp.Diode, stamping.stamp_diode_dc, stamping.stamp_diode_ac, stamping.stamp_diode_transient),
+        (comp.ZenerDiode, stamping.stamp_zener_diode_dc, stamping.stamp_zener_diode_ac, stamping.stamp_zener_diode_transient),
         (comp.LED, stamping.stamp_diode_dc, stamping.stamp_diode_ac, stamping.stamp_diode_transient),
+        (comp.Transistor, stamping.stamp_transistor_dc, stamping.stamp_transistor_ac, stamping.stamp_transistor_transient),
+        (comp.MOSFET, stamping.stamp_mosfet_dc, stamping.stamp_mosfet_ac, stamping.stamp_mosfet_transient),
+        (comp.MOSFET_NMOS, stamping.stamp_mosfet_dc, stamping.stamp_mosfet_ac, stamping.stamp_mosfet_transient),
+        (comp.MOSFET_PMOS, stamping.stamp_mosfet_dc, stamping.stamp_mosfet_ac, stamping.stamp_mosfet_transient),
 
-        # Autres composants / symboles
+        # Composants actifs et intégrés
+        (comp.OpAmp, stamping.stamp_opamp_dc, stamping.stamp_opamp_ac, stamping.stamp_opamp_transient),
+        (comp.Comparator, stamping.stamp_comparator_dc, stamping.stamp_comparator_ac, stamping.stamp_comparator_transient),
+        (comp.Transformer, stamping.stamp_transformer_dc, stamping.stamp_transformer_ac, stamping.stamp_transformer_transient),
+        (comp.Potentiometer, stamping.stamp_potentiometer_dc, stamping.stamp_potentiometer_ac, stamping.stamp_potentiometer_transient),
+
+        # Logique & Protection
+        (comp.LogicGate, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateAND, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateOR, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateNOT, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateNAND, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateNOR, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.LogicGateXOR, stamping.stamp_logic_gate_dc, stamping.stamp_logic_gate_ac, stamping.stamp_logic_gate_transient),
+        (comp.Fuse, stamping.stamp_fuse_dc, stamping.stamp_fuse_ac, stamping.stamp_fuse_transient),
+
+        # Symboles
         (comp.Ground, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
-        (comp.OpAmp, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
-        (comp.Transformer, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
-        (comp.Transistor, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
     ]
 
     for comp_class, dc_fn, ac_fn, transient_fn in registry:

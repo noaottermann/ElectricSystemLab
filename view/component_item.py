@@ -7,22 +7,37 @@ from PyQt5.QtWidgets import QApplication, QGraphicsItem, QStyle
 from utils.translator import Translator
 
 from model.components import (
+    Ammeter,
     Capacitor,
+    Comparator,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
     CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
+    Fuse,
+    Ground,
     Inductor,
     LED,
+    LogicGate,
+    MOSFET,
+    MOSFET_NMOS,
+    MOSFET_PMOS,
+    OpAmp,
+    Potentiometer,
+    PulseVoltageSource,
     Resistor,
     Switch,
+    Transformer,
+    Transistor,
     VoltageControlledCurrentSource,
     VoltageControlledVoltageSource,
     VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
+    Voltmeter,
+    ZenerDiode,
 )
 
 class ComponentItem(QGraphicsItem):
@@ -215,8 +230,9 @@ class ComponentItem(QGraphicsItem):
         self._draw_voltage_indicator(painter)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor("#1f2937"))
-        painter.drawEllipse(QPointF(-30, 0), 2, 2)
-        painter.drawEllipse(QPointF(30, 0), 2, 2)
+        offsets = getattr(self.component, "get_terminal_offsets", lambda: [(-30.0, 0.0), (30.0, 0.0)])()
+        for ox, oy in offsets:
+            painter.drawEllipse(QPointF(ox, oy), 2.5, 2.5)
 
 
     def draw_labels(self, painter: QPainter) -> None:
@@ -618,10 +634,430 @@ class SwitchItem(ComponentItem):
             self._flash_timer.stop()
         self.update()
 
+class ZenerDiodeItem(DiodeItem):
+    """Item graphique pour une diode Zener."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une diode Zener avec cathode en Z."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -12, 0)
+        painter.drawLine(12, 0, 30, 0)
+
+        triangle = QPainterPath()
+        triangle.moveTo(-12, -10)
+        triangle.lineTo(6, 0)
+        triangle.lineTo(-12, 10)
+        triangle.closeSubpath()
+        painter.drawPath(triangle)
+
+        # Cathode en Z
+        painter.drawLine(8, -12, 8, 12)
+        painter.drawLine(4, -12, 8, -12)
+        painter.drawLine(8, 12, 12, 12)
+
+    def get_value_text(self) -> str:
+        vz = getattr(self.component, "zener_voltage", 5.1)
+        return f"Vz={vz}V"
+
+
+class PotentiometerItem(ComponentItem):
+    """Item graphique pour un potentiomètre."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un potentiomètre."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawLine(-30, 0, -18, 0)
+        painter.drawLine(18, 0, 30, 0)
+        painter.drawRect(QRectF(-18, -8, 36, 16))
+
+        # Curseur fléché vers le haut
+        painter.drawLine(0, -20, 0, -8)
+        arrow = QPainterPath()
+        arrow.moveTo(-4, -12)
+        arrow.lineTo(0, -8)
+        arrow.lineTo(4, -12)
+        painter.drawPath(arrow)
+
+    def get_value_text(self) -> str:
+        res = getattr(self.component, "resistance", 10000.0)
+        ratio = getattr(self.component, "slider_ratio", 0.5)
+        return f"{res:.3g}Ω ({int(ratio*100)}%)"
+
+
+class OpAmpItem(ComponentItem):
+    """Item graphique pour un amplificateur opérationnel (AOP)."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un AOP."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Triangle
+        tri = QPainterPath()
+        tri.moveTo(-20, -22)
+        tri.lineTo(-20, 22)
+        tri.lineTo(20, 0)
+        tri.closeSubpath()
+        painter.drawPath(tri)
+
+        # Lignes d'entrée et sortie
+        painter.drawLine(-30, -12, -20, -12)
+        painter.drawLine(-30, 12, -20, 12)
+        painter.drawLine(20, 0, 30, 0)
+
+        # Signes + et -
+        painter.setPen(self._pen_light())
+        # Entrée + en haut
+        painter.drawLine(-17, -12, -11, -12)
+        painter.drawLine(-14, -15, -14, -9)
+        # Entrée - en bas
+        painter.drawLine(-17, 12, -11, 12)
+
+    def get_value_text(self) -> str:
+        return "OpAmp"
+
+
+class TransformerItem(ComponentItem):
+    """Item graphique pour un transformateur."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un transformateur."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Lignes externes
+        painter.drawLine(-30, -15, -18, -15)
+        painter.drawLine(-30, 15, -18, 15)
+        painter.drawLine(18, -15, 30, -15)
+        painter.drawLine(18, 15, 30, 15)
+
+        # Enroulement primaire (gauche)
+        for i in range(3):
+            y = -15 + i * 10
+            painter.drawArc(-18, y, 10, 10, -90 * 16, 180 * 16)
+
+        # Enroulement secondaire (droite)
+        for i in range(3):
+            y = -15 + i * 10
+            painter.drawArc(8, y, 10, 10, 90 * 16, 180 * 16)
+
+        # Barres de noyau central
+        painter.setPen(self._pen_light())
+        painter.drawLine(-2, -18, -2, 18)
+        painter.drawLine(2, -18, 2, 18)
+
+    def get_value_text(self) -> str:
+        ratio = getattr(self.component, "ratio", 1.0)
+        return f"1:{ratio:.3g}"
+
+
+class TransistorItem(ComponentItem):
+    """Item graphique pour un transistor BJT."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un transistor BJT (NPN ou PNP)."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Cercle
+        painter.drawEllipse(QPointF(0, 0), 20, 20)
+
+        # Ligne et barre de base
+        painter.drawLine(-30, 0, -8, 0)
+        painter.drawLine(-8, -12, -8, 12)
+
+        # Collecteur et Émetteur
+        painter.drawLine(-8, -6, 14, -22)
+        painter.drawLine(-8, 6, 14, 22)
+
+        # Flèche émetteur
+        is_pnp = str(getattr(self.component, "transistor_type", "NPN")).upper() == "PNP"
+        arrow = QPainterPath()
+        if not is_pnp:
+            # Flèche sortante NPN
+            arrow.moveTo(6, 14)
+            arrow.lineTo(13, 21)
+            arrow.lineTo(7, 21)
+        else:
+            # Flèche entrante PNP
+            arrow.moveTo(-2, 10)
+            arrow.lineTo(-7, 6)
+            arrow.lineTo(-7, 13)
+        painter.drawPath(arrow)
+
+    def get_value_text(self) -> str:
+        t_type = getattr(self.component, "transistor_type", "NPN")
+        beta = getattr(self.component, "beta", 100.0)
+        return f"{t_type} (β={int(beta)})"
+
+
+class MosfetItem(ComponentItem):
+    """Item graphique pour un transistor MOSFET."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un transistor MOSFET."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Cercle
+        painter.drawEllipse(QPointF(0, 0), 20, 20)
+
+        # Grille
+        painter.drawLine(-30, 0, -10, 0)
+        painter.drawLine(-10, -14, -10, 14)
+
+        # Canal segmenté
+        painter.drawLine(-5, -14, -5, -6)
+        painter.drawLine(-5, -3, -5, 3)
+        painter.drawLine(-5, 6, -5, 14)
+
+        # Drain et Source
+        painter.drawLine(-5, -10, 14, -22)
+        painter.drawLine(-5, 10, 14, 22)
+
+        # Flèche de substrat
+        is_pmos = str(getattr(self.component, "mosfet_type", "NMOS")).upper() == "PMOS"
+        arrow = QPainterPath()
+        if not is_pmos:
+            # Flèche pointant vers l'intérieur pour NMOS
+            arrow.moveTo(2, 0)
+            arrow.lineTo(-4, 0)
+            arrow.lineTo(-1, -3)
+            arrow.moveTo(-4, 0)
+            arrow.lineTo(-1, 3)
+        else:
+            # Flèche pointant vers l'extérieur pour PMOS
+            arrow.moveTo(-4, 0)
+            arrow.lineTo(2, 0)
+            arrow.lineTo(-1, -3)
+            arrow.moveTo(2, 0)
+            arrow.lineTo(-1, 3)
+        painter.drawPath(arrow)
+
+    def get_value_text(self) -> str:
+        return getattr(self.component, "mosfet_type", "NMOS")
+
+
+class ComparatorItem(ComponentItem):
+    """Item graphique pour un comparateur de tension analogique."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un comparateur avec hystérésis."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Triangle
+        tri = QPainterPath()
+        tri.moveTo(-20, -22)
+        tri.lineTo(-20, 22)
+        tri.lineTo(20, 0)
+        tri.closeSubpath()
+        painter.drawPath(tri)
+
+        painter.drawLine(-30, -12, -20, -12)
+        painter.drawLine(-30, 12, -20, 12)
+        painter.drawLine(20, 0, 30, 0)
+
+        # Symbole d'hystérésis Schmitt
+        painter.setPen(self._pen_light())
+        hys = QPainterPath()
+        hys.moveTo(-6, 5)
+        hys.lineTo(2, 5)
+        hys.lineTo(2, -5)
+        hys.lineTo(-2, -5)
+        hys.lineTo(-2, 5)
+        painter.drawPath(hys)
+
+    def get_value_text(self) -> str:
+        return "Comp"
+
+
+class PulseVoltageSourceItem(ComponentItem):
+    """Item graphique pour une source de tension impulsionnelle / horloge."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'une source impulsionnelle."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawEllipse(QPointF(0, 0), 18, 18)
+        painter.drawLine(-30, 0, -18, 0)
+        painter.drawLine(18, 0, 30, 0)
+
+        # Signal créneau
+        pulse = QPainterPath()
+        pulse.moveTo(-10, 5)
+        pulse.lineTo(-4, 5)
+        pulse.lineTo(-4, -5)
+        pulse.lineTo(4, -5)
+        pulse.lineTo(4, 5)
+        pulse.lineTo(10, 5)
+        painter.drawPath(pulse)
+
+    def get_value_text(self) -> str:
+        vp = getattr(self.component, "v_pulsed", 5.0)
+        t_period = getattr(self.component, "period", 1e-3)
+        return f"{vp}V / {t_period*1e3:.2g}ms"
+
+
+class LogicGateItem(ComponentItem):
+    """Item graphique pour une porte logique combinatoire (AND, OR, NOT, NAND, NOR, XOR)."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole IEEE standard de la porte logique."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        gtype = str(getattr(self.component, "gate_type", "AND")).upper()
+
+        if gtype == "NOT":
+            painter.drawLine(-30, 0, -15, 0)
+            tri = QPainterPath()
+            tri.moveTo(-15, -12)
+            tri.lineTo(-15, 12)
+            tri.lineTo(10, 0)
+            tri.closeSubpath()
+            painter.drawPath(tri)
+            painter.drawEllipse(QPointF(13, 0), 3, 3)
+            painter.drawLine(16, 0, 30, 0)
+        elif gtype in ("AND", "NAND"):
+            painter.drawLine(-30, -10, -15, -10)
+            painter.drawLine(-30, 10, -15, 10)
+            path = QPainterPath()
+            path.moveTo(-15, -14)
+            path.lineTo(0, -14)
+            path.arcTo(QRectF(-14, -14, 28, 28), 90, -180)
+            path.lineTo(-15, 14)
+            path.closeSubpath()
+            painter.drawPath(path)
+            if gtype == "NAND":
+                painter.drawEllipse(QPointF(17, 0), 3, 3)
+                painter.drawLine(20, 0, 30, 0)
+            else:
+                painter.drawLine(14, 0, 30, 0)
+        elif gtype in ("OR", "NOR", "XOR"):
+            painter.drawLine(-30, -10, -15, -10)
+            painter.drawLine(-30, 10, -15, 10)
+            if gtype == "XOR":
+                xor_arc = QPainterPath()
+                xor_arc.moveTo(-20, -14)
+                xor_arc.quadTo(-14, 0, -20, 14)
+                painter.drawPath(xor_arc)
+
+            path = QPainterPath()
+            path.moveTo(-15, -14)
+            path.quadTo(5, -14, 15, 0)
+            path.quadTo(5, 14, -15, 14)
+            path.quadTo(-8, 0, -15, -14)
+            painter.drawPath(path)
+
+            if gtype == "NOR":
+                painter.drawEllipse(QPointF(18, 0), 3, 3)
+                painter.drawLine(21, 0, 30, 0)
+            else:
+                painter.drawLine(15, 0, 30, 0)
+
+    def get_value_text(self) -> str:
+        return getattr(self.component, "gate_type", "AND")
+
+
+class FuseItem(ComponentItem):
+    """Item graphique pour un fusible."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole d'un fusible."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawRect(QRectF(-18, -8, 36, 16))
+        painter.drawLine(-30, 0, -18, 0)
+        painter.drawLine(18, 0, 30, 0)
+
+        is_blown = bool(getattr(self.component, "blown", False))
+        if is_blown:
+            painter.setPen(QPen(QColor("#dc2626"), 2))
+            painter.drawLine(-12, -4, -2, 4)
+            painter.drawLine(2, -4, 12, 4)
+        else:
+            painter.setPen(self._pen_light())
+            painter.drawLine(-18, 0, 18, 0)
+
+    def get_value_text(self) -> str:
+        inom = getattr(self.component, "i_nominal", 1.0)
+        blown = getattr(self.component, "blown", False)
+        return f"{inom}A (Fondu)" if blown else f"{inom}A"
+
+
+class GroundItem(ComponentItem):
+    """Item graphique pour le symbole de masse (Ground)."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de masse normalisé."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        # Ligne de connexion verticale
+        painter.drawLine(0, -15, 0, 0)
+
+        # 3 barres horizontales décroissantes
+        painter.drawLine(-14, 0, 14, 0)
+        painter.drawLine(-9, 5, 9, 5)
+        painter.drawLine(-4, 10, 4, 10)
+
+    def get_value_text(self) -> str:
+        return "GND"
+
+
+class VoltmeterItem(ComponentItem):
+    """Item graphique pour un voltmètre."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole du voltmètre."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawEllipse(QPointF(0, 0), 16, 16)
+        painter.drawLine(-30, 0, -16, 0)
+        painter.drawLine(16, 0, 30, 0)
+
+        painter.setFont(QFont("Arial", 11, QFont.Bold))
+        painter.drawText(QRectF(-16, -16, 32, 32), Qt.AlignCenter, "V")
+
+    def get_value_text(self) -> str:
+        v = float(getattr(self.component, "voltage", 0.0))
+        return f"{v:.3g} V"
+
+
+class AmmeterItem(ComponentItem):
+    """Item graphique pour un ampèremètre."""
+
+    def draw_symbol(self, painter: QPainter) -> None:
+        """Dessine le symbole de l'ampèremètre."""
+        painter.setPen(self._pen())
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawEllipse(QPointF(0, 0), 16, 16)
+        painter.drawLine(-30, 0, -16, 0)
+        painter.drawLine(16, 0, 30, 0)
+
+        painter.setFont(QFont("Arial", 11, QFont.Bold))
+        painter.drawText(QRectF(-16, -16, 32, 32), Qt.AlignCenter, "A")
+
+    def get_value_text(self) -> str:
+        i = float(getattr(self.component, "current", 0.0))
+        return f"{i:.3g} A"
+
+
 def create_component_item(component_model) -> ComponentItem:
-    """Retourne l'element graphique adapte a un objet modele."""
+    """Retourne l'élément graphique adapté à un objet modèle."""
     if isinstance(component_model, Resistor):
         return ResistorItem(component_model)
+    elif isinstance(component_model, PulseVoltageSource):
+        return PulseVoltageSourceItem(component_model)
     elif isinstance(component_model, (VoltageSource, VoltageSourceDC, VoltageSourceAC)):
         return VoltageSourceItem(component_model)
     elif isinstance(component_model, (CurrentSource, CurrentSourceDC, CurrentSourceAC)):
@@ -636,10 +1072,33 @@ def create_component_item(component_model) -> ComponentItem:
         return InductorItem(component_model)
     elif isinstance(component_model, LED):
         return LedItem(component_model)
+    elif isinstance(component_model, ZenerDiode):
+        return ZenerDiodeItem(component_model)
     elif isinstance(component_model, Diode):
         return DiodeItem(component_model)
     elif isinstance(component_model, Switch):
         return SwitchItem(component_model)
+    elif isinstance(component_model, Potentiometer):
+        return PotentiometerItem(component_model)
+    elif isinstance(component_model, OpAmp):
+        return OpAmpItem(component_model)
+    elif isinstance(component_model, Comparator):
+        return ComparatorItem(component_model)
+    elif isinstance(component_model, Transformer):
+        return TransformerItem(component_model)
+    elif isinstance(component_model, Transistor):
+        return TransistorItem(component_model)
+    elif isinstance(component_model, (MOSFET, MOSFET_NMOS, MOSFET_PMOS)):
+        return MosfetItem(component_model)
+    elif isinstance(component_model, LogicGate):
+        return LogicGateItem(component_model)
+    elif isinstance(component_model, Fuse):
+        return FuseItem(component_model)
+    elif isinstance(component_model, Ground):
+        return GroundItem(component_model)
+    elif isinstance(component_model, Voltmeter):
+        return VoltmeterItem(component_model)
+    elif isinstance(component_model, Ammeter):
+        return AmmeterItem(component_model)
     else:
-        # Repli pour les composants inconnus
         return ComponentItem(component_model)

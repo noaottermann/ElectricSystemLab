@@ -31,23 +31,39 @@ from controller.edit_controller import EditController
 from controller.file_controller import FileController
 from controller.simulation_controller import SimulationController
 from controller.ui_callbacks import MessageType
+from model.component import Component
 from model.components import (
+    Ammeter,
     Capacitor,
+    Comparator,
     CurrentControlledCurrentSource,
     CurrentControlledVoltageSource,
     CurrentSource,
     CurrentSourceAC,
     CurrentSourceDC,
     Diode,
+    Fuse,
+    Ground,
     Inductor,
     LED,
+    LogicGate,
+    MOSFET,
+    MOSFET_NMOS,
+    MOSFET_PMOS,
+    OpAmp,
+    Potentiometer,
+    PulseVoltageSource,
     Resistor,
     Switch,
-    VoltageControlledVoltageSource,
+    Transformer,
+    Transistor,
     VoltageControlledCurrentSource,
+    VoltageControlledVoltageSource,
     VoltageSource,
     VoltageSourceAC,
     VoltageSourceDC,
+    Voltmeter,
+    ZenerDiode,
 )
 from model.dipole import Dipole
 from utils.translator import Translator
@@ -457,7 +473,7 @@ class MainWindow(QMainWindow):
             self.toolbar_delete_action.setVisible(has_deletable)
 
     def _get_selected_dipole_items(self) -> list:
-        """Retourne les items selectionnes qui correspondent a des dipoles."""
+        """Retourne les items selectionnes qui correspondent a des composants."""
         if not hasattr(self, "scene"):
             return []
         try:
@@ -466,17 +482,21 @@ class MainWindow(QMainWindow):
             return []
         return [
             item for item in selected_items
-            if hasattr(item, "component") and isinstance(item.component, Dipole)
+            if hasattr(item, "component") and isinstance(item.component, (Component, Dipole))
         ]
 
-    def _get_edit_value_config(self, component: Dipole) -> tuple[str, str] | None:
-        """Retourne la cle parametre et l'unite principale pour un dipole."""
+    def _get_edit_value_config(self, component: any) -> tuple[str, str] | None:
+        """Retourne la cle parametre et l'unite principale pour un composant."""
         if isinstance(component, Resistor):
+            return "resistance", "Ohm"
+        if isinstance(component, Potentiometer):
             return "resistance", "Ohm"
         if isinstance(component, Capacitor):
             return "capacitance", "F"
         if isinstance(component, Inductor):
             return "inductance", "H"
+        if isinstance(component, ZenerDiode):
+            return "zener_voltage", "V"
         if isinstance(component, VoltageControlledCurrentSource):
             return "transconductance", "S"
         if isinstance(component, CurrentControlledCurrentSource):
@@ -487,6 +507,22 @@ class MainWindow(QMainWindow):
             return "transresistance", "Ohm"
         if isinstance(component, (Diode, LED)):
             return "saturation_current", "A"
+        if isinstance(component, Transistor):
+            return "beta", ""
+        if isinstance(component, OpAmp):
+            return "gain", ""
+        if isinstance(component, Comparator):
+            return "v_sat_pos", "V"
+        if isinstance(component, Transformer):
+            return "ratio", ""
+        if isinstance(component, (MOSFET, MOSFET_NMOS, MOSFET_PMOS)):
+            return "v_threshold", "V"
+        if isinstance(component, Fuse):
+            return "i_nominal", "A"
+        if isinstance(component, PulseVoltageSource):
+            return "v_pulsed", "V"
+        if isinstance(component, LogicGate):
+            return "v_high", "V"
         return None
 
     def _get_component_state_options(self, component: Dipole) -> list[tuple[str, str]]:

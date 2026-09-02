@@ -68,6 +68,18 @@ class StampingContext:
 			return None
 		return self.group_to_idx.get(group_id)
 
+	def get_node_voltage(self, node) -> float:
+		"""Retourne le potentiel estimé pour un nœud."""
+		if node is None:
+			return 0.0
+		idx = self.get_matrix_index(node)
+		if idx is None:
+			return 0.0
+		if idx < len(self.state_vector):
+			val = self.state_vector[idx]
+			return float(val.real if isinstance(val, complex) else val)
+		return float(getattr(node, "potential", 0.0))
+
 	def stamp_conductance(self, idx_a: Optional[int], idx_b: Optional[int], conductance) -> None:
 		"""Estampille une conductance dans la matrice."""
 		if idx_a is not None:
@@ -170,6 +182,7 @@ class BaseSolver:
 			VoltageSource,
 			VoltageSourceDC,
 			VoltageSourceAC,
+			PulseVoltageSource,
 			VoltageControlledVoltageSource,
 			CurrentControlledVoltageSource,
 		)
@@ -182,6 +195,7 @@ class BaseSolver:
 					VoltageSource,
 					VoltageSourceDC,
 					VoltageSourceAC,
+					PulseVoltageSource,
 					VoltageControlledVoltageSource,
 					CurrentControlledVoltageSource,
 				),
@@ -298,7 +312,8 @@ class BaseSolver:
 			return complex(val) if isinstance(val, (complex, np.complexfloating)) else float(val)
 
 		# 2. Résistances et dipôles linéaires passifs
-		if isinstance(control, (Resistor, Switch, Ammeter, Voltmeter)):
+		from model.components import Fuse, ZenerDiode
+		if isinstance(control, (Resistor, Switch, Ammeter, Voltmeter, Fuse, ZenerDiode)):
 			v_a = self._node_voltage_from_state(control.node_a, node_groups, group_to_idx, ground_group_id, state_vector)
 			v_b = self._node_voltage_from_state(control.node_b, node_groups, group_to_idx, ground_group_id, state_vector)
 			r = float(getattr(control, "resistance", 0.0))
