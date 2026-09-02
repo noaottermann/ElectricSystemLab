@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from project_io import serializer, importer, exporter
+from persistence import serializer, importer, exporter
 
 if TYPE_CHECKING:
     from model.circuit import Circuit

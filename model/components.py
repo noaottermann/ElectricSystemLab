@@ -1,6 +1,7 @@
 import math
 from typing import Any
 
+from .component import Component
 from .dipole import Dipole, StatefulDipole
 
 
@@ -705,22 +706,69 @@ class Ground(Dipole):
         super().disconnect()
 
 
-class OpAmp(Dipole):
-    """AOP ideal simplifie pour l'interface."""
+class OpAmp(Component):
+    """AOP idéal avec bornes in+, in-, out."""
 
     def __init__(
         self,
         dipole_id: int,
-        node_a,
-        node_b,
+        node_a=None,
+        node_b=None,
+        node_c=None,
         x: float = 0.0,
         y: float = 0.0,
         rotation: float = 0.0,
         name: str = "OpAmp",
         gain: float = 1e5,
     ) -> None:
-        super().__init__(dipole_id, "OpAmp", node_a, node_b, x, y, rotation)
+        super().__init__(dipole_id, "OpAmp", node_a, node_b, node_c, x=x, y=y, rotation=rotation)
         self.gain = float(gain)
+
+    @property
+    def node_a(self):
+        return self.nodes[0] if len(self.nodes) > 0 else None
+
+    @node_a.setter
+    def node_a(self, value):
+        if len(self.nodes) > 0:
+            self.nodes[0] = value
+        else:
+            self.nodes.append(value)
+
+    @property
+    def node_b(self):
+        return self.nodes[1] if len(self.nodes) > 1 else None
+
+    @node_b.setter
+    def node_b(self, value):
+        if len(self.nodes) > 1:
+            self.nodes[1] = value
+        elif len(self.nodes) == 1:
+            self.nodes.append(value)
+        else:
+            self.nodes.extend([None, value])
+
+    @property
+    def node_c(self):
+        return self.nodes[2] if len(self.nodes) > 2 else None
+
+    @node_c.setter
+    def node_c(self, value):
+        while len(self.nodes) < 3:
+            self.nodes.append(None)
+        self.nodes[2] = value
+
+    @property
+    def node_in_plus(self):
+        return self.node_a
+
+    @property
+    def node_in_minus(self):
+        return self.node_b
+
+    @property
+    def node_out(self):
+        return self.node_c
 
     def get_params(self) -> dict[str, float]:
         return {"gain": self.gain}
@@ -729,14 +777,14 @@ class OpAmp(Dipole):
         self.gain = _get_float_param(params, "gain", 1e5)
 
 
-class Transformer(Dipole):
-    """Transformateur ideal simplifie."""
+class Transformer(Component):
+    """Transformateur idéal à 4 bornes (primaire et secondaire)."""
 
     def __init__(
         self,
         dipole_id: int,
-        node_a,
-        node_b,
+        node_a=None,
+        node_b=None,
         node_c=None,
         node_d=None,
         x: float = 0.0,
@@ -745,10 +793,52 @@ class Transformer(Dipole):
         name: str = "Transformer",
         ratio: float = 1.0,
     ) -> None:
-        super().__init__(dipole_id, "Transformer", node_a, node_b, x, y, rotation)
-        self.node_c = node_c
-        self.node_d = node_d
+        super().__init__(dipole_id, "Transformer", node_a, node_b, node_c, node_d, x=x, y=y, rotation=rotation)
         self.ratio = float(ratio)
+
+    @property
+    def node_a(self):
+        return self.nodes[0] if len(self.nodes) > 0 else None
+
+    @node_a.setter
+    def node_a(self, value):
+        if len(self.nodes) > 0:
+            self.nodes[0] = value
+        else:
+            self.nodes.append(value)
+
+    @property
+    def node_b(self):
+        return self.nodes[1] if len(self.nodes) > 1 else None
+
+    @node_b.setter
+    def node_b(self, value):
+        if len(self.nodes) > 1:
+            self.nodes[1] = value
+        elif len(self.nodes) == 1:
+            self.nodes.append(value)
+        else:
+            self.nodes.extend([None, value])
+
+    @property
+    def node_c(self):
+        return self.nodes[2] if len(self.nodes) > 2 else None
+
+    @node_c.setter
+    def node_c(self, value):
+        while len(self.nodes) < 3:
+            self.nodes.append(None)
+        self.nodes[2] = value
+
+    @property
+    def node_d(self):
+        return self.nodes[3] if len(self.nodes) > 3 else None
+
+    @node_d.setter
+    def node_d(self, value):
+        while len(self.nodes) < 4:
+            self.nodes.append(None)
+        self.nodes[3] = value
 
     def get_params(self) -> dict[str, float]:
         return {"ratio": self.ratio}
@@ -757,22 +847,69 @@ class Transformer(Dipole):
         self.ratio = _get_float_param(params, "ratio", 1.0)
 
 
-class Transistor(Dipole):
-    """Transistor ideal simplifie."""
+class Transistor(Component):
+    """Transistor idéal simplifié (collecteur, base, émetteur)."""
 
     def __init__(
         self,
         dipole_id: int,
-        node_a,
-        node_b,
+        node_a=None,
+        node_b=None,
+        node_c=None,
         x: float = 0.0,
         y: float = 0.0,
         rotation: float = 0.0,
         name: str = "Transistor",
         beta: float = 100.0,
     ) -> None:
-        super().__init__(dipole_id, "Transistor", node_a, node_b, x, y, rotation)
+        super().__init__(dipole_id, "Transistor", node_a, node_b, node_c, x=x, y=y, rotation=rotation)
         self.beta = float(beta)
+
+    @property
+    def node_a(self):
+        return self.nodes[0] if len(self.nodes) > 0 else None
+
+    @node_a.setter
+    def node_a(self, value):
+        if len(self.nodes) > 0:
+            self.nodes[0] = value
+        else:
+            self.nodes.append(value)
+
+    @property
+    def node_b(self):
+        return self.nodes[1] if len(self.nodes) > 1 else None
+
+    @node_b.setter
+    def node_b(self, value):
+        if len(self.nodes) > 1:
+            self.nodes[1] = value
+        elif len(self.nodes) == 1:
+            self.nodes.append(value)
+        else:
+            self.nodes.extend([None, value])
+
+    @property
+    def node_c(self):
+        return self.nodes[2] if len(self.nodes) > 2 else None
+
+    @node_c.setter
+    def node_c(self, value):
+        while len(self.nodes) < 3:
+            self.nodes.append(None)
+        self.nodes[2] = value
+
+    @property
+    def node_collector(self):
+        return self.node_a
+
+    @property
+    def node_base(self):
+        return self.node_b
+
+    @property
+    def node_emitter(self):
+        return self.node_c
 
     def get_params(self) -> dict[str, float]:
         return {"beta": self.beta}
@@ -808,8 +945,8 @@ def _populate_component_registry() -> None:
         "Transistor",
     ]:
         component_class = globals().get(component_name)
-        if isinstance(component_class, type) and issubclass(component_class, Dipole):
-            if component_class not in (Dipole, StatefulDipole):
+        if isinstance(component_class, type) and issubclass(component_class, Component):
+            if component_class not in (Component, Dipole, StatefulDipole):
                 register_component(component_name, component_class)
 
 

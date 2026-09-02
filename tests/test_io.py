@@ -5,7 +5,7 @@ from pathlib import Path
 
 from model.circuit import Circuit
 from model.components import Resistor, VoltageSourceDC
-from project_io import serializer, importer, exporter
+from persistence import serializer, importer, exporter
 
 
 serialize_circuit = serializer.serialize_circuit

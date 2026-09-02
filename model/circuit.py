@@ -48,9 +48,7 @@ class Circuit:
         # Supprimer tous les dipôles connectés à ce nœud
         dipoles_to_remove = [
             dipole_id for dipole_id, dipole in self.dipoles.items()
-            if dipole.node_a is node or dipole.node_b is node
-               or (hasattr(dipole, 'node_c') and dipole.node_c is node)
-               or (hasattr(dipole, 'node_d') and dipole.node_d is node)
+            if any(n is node for n in getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)]))
         ]
         for dipole_id in dipoles_to_remove:
             self.remove_dipole(dipole_id)
@@ -64,14 +62,10 @@ class Circuit:
             node.connected_dipoles = []
 
         for dipole in self.dipoles.values():
-            if dipole.node_a is not None and dipole.node_a.id in self.nodes:
-                dipole.node_a.add_connection(dipole)
-            if dipole.node_b is not None and dipole.node_b.id in self.nodes:
-                dipole.node_b.add_connection(dipole)
-            if hasattr(dipole, "node_c") and dipole.node_c is not None and dipole.node_c.id in self.nodes:
-                dipole.node_c.add_connection(dipole)
-            if hasattr(dipole, "node_d") and dipole.node_d is not None and dipole.node_d.id in self.nodes:
-                dipole.node_d.add_connection(dipole)
+            nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
+            for node in nodes:
+                if node is not None and node.id in self.nodes:
+                    node.add_connection(dipole)
 
     def _merge_node_into_keeper(self, keeper: Optional[Node], node_to_merge: Optional[Node]) -> bool:
         """Fusionne un noeud dans un noeud commun et met a jour les references."""
@@ -82,18 +76,14 @@ class Circuit:
 
         # Met a jour les references sur les dipoles
         for dipole in self.dipoles.values():
-            if dipole.node_a is node_to_merge:
-                dipole.node_a = keeper
-                changed = True
-            if dipole.node_b is node_to_merge:
-                dipole.node_b = keeper
-                changed = True
-            if hasattr(dipole, "node_c") and dipole.node_c is node_to_merge:
-                dipole.node_c = keeper
-                changed = True
-            if hasattr(dipole, "node_d") and dipole.node_d is node_to_merge:
-                dipole.node_d = keeper
-                changed = True
+            if hasattr(dipole, "replace_node"):
+                if dipole.replace_node(node_to_merge, keeper):
+                    changed = True
+            else:
+                for attr in ("node_a", "node_b", "node_c", "node_d"):
+                    if hasattr(dipole, attr) and getattr(dipole, attr) is node_to_merge:
+                        setattr(dipole, attr, keeper)
+                        changed = True
 
         # Met a jour les references sur les fils
         for wire in self.wires.values():
@@ -168,14 +158,10 @@ class Circuit:
         # Priorité aux noeuds des dipôles
         dipole_nodes = set()
         for dipole in self.dipoles.values():
-            if dipole.node_a is not None:
-                dipole_nodes.add(dipole.node_a)
-            if dipole.node_b is not None:
-                dipole_nodes.add(dipole.node_b)
-            if hasattr(dipole, "node_c") and dipole.node_c is not None:
-                dipole_nodes.add(dipole.node_c)
-            if hasattr(dipole, "node_d") and dipole.node_d is not None:
-                dipole_nodes.add(dipole.node_d)
+            nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
+            for node in nodes:
+                if node is not None:
+                    dipole_nodes.add(node)
 
         # Noeuds de dipôles
         for node in dipole_nodes:
@@ -214,15 +200,11 @@ class Circuit:
     # Gestion des dipoles
 
     def add_dipole(self, dipole: object) -> None:
-        """Ajoute un dipole au circuit en verifiant ses noeuds."""
-        if dipole.node_a and dipole.node_a.id not in self.nodes:
-            raise ValueError(f"Le Node A ({dipole.node_a.id}) n'existe pas dans ce circuit.")
-        if dipole.node_b and dipole.node_b.id not in self.nodes:
-            raise ValueError(f"Le Node B ({dipole.node_b.id}) n'existe pas dans ce circuit.")
-        if hasattr(dipole, "node_c") and dipole.node_c and dipole.node_c.id not in self.nodes:
-            raise ValueError(f"Le Node C ({dipole.node_c.id}) n'existe pas dans ce circuit.")
-        if hasattr(dipole, "node_d") and dipole.node_d and dipole.node_d.id not in self.nodes:
-            raise ValueError(f"Le Node D ({dipole.node_d.id}) n'existe pas dans ce circuit.")
+        """Ajoute un composant/dipole au circuit en verifiant ses noeuds."""
+        nodes = getattr(dipole, "nodes", [getattr(dipole, "node_a", None), getattr(dipole, "node_b", None)])
+        for node in nodes:
+            if node is not None and node.id not in self.nodes:
+                raise ValueError(f"Le Node ({node.id}) n'existe pas dans ce circuit.")
         self.dipoles[dipole.id] = dipole
         if dipole.id >= self._next_dipole_id:
             self._next_dipole_id = dipole.id + 1

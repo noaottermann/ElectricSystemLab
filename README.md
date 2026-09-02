@@ -131,8 +131,8 @@ L'application suit le pattern Modèle-Vue-Contrôleur (MVC) :
 - `keybinds.py` : Liaisons clavier
 - `themes.py` : Thèmes de l'application
 
-#### Sérialisation (`io/`)
-- `serializer.py` : Sérialisation des circuits
+#### Persistance (`persistence/`)
+- `serializer.py` : Sérialisation des circuits (JSON)
 - `importer.py` : Importation depuis divers formats
 - `exporter.py` : Exportation vers divers formats
 
@@ -173,15 +173,10 @@ Nodal/
 │   ├── dc_solver.py
 │   ├── ac_solver.py
 │   ├── transient_solver.py
+│   ├── stamping.py
+│   ├── stamping_registry.py
 │   └── utils.py
-├── utils/                  # Utilitaires généraux
-│   ├── translator.py
-│   └── assets.py
-├── config/                 # Configuration
-│   ├── settings.py
-│   ├── keybinds.py
-│   └── themes.py
-├── io/                     # Importation/Exportation
+├── persistence/            # Sérialisation et persistance des circuits
 │   ├── serializer.py
 │   ├── importer.py
 │   └── exporter.py
