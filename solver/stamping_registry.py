@@ -1,48 +1,94 @@
 """
-Module pour configurer les méthodes de stamping polymorphe sur les composants.
+Module pour configurer et attacher les méthodes de stamping polymorphes sur les classes de composants.
 
-Attache les méthodes stamp_dc() et stamp_ac() à chaque classe de composant,
-utilisant le pattern Strategy pour diriger vers les bonnes implémentations.
+Attache automatiquement les méthodes stamp_dc(), stamp_ac() et stamp_transient()
+à chaque classe de composant selon le pattern Strategy / Polymorphisme.
 """
 
 from __future__ import annotations
 
+import logging
+from typing import Optional
 
-def _register_stamping_methods():
-    """Enregistre les méthodes de stamping sur toutes les classes de composant."""
-    from model import components as comp_module
+logger = logging.getLogger(__name__)
+
+
+def _register_stamping_methods() -> None:
+    """Enregistre et attache les méthodes de stamping sur toutes les classes de composants."""
+    from model import components as comp
     from solver import stamping
-    
-    # Mapping classe -> (method_dc, method_ac)
-    stamping_map = {
-        comp_module.Resistor: (stamping.stamp_resistor_dc, stamping.stamp_resistor_dc),
-        comp_module.Switch: (stamping.stamp_resistor_dc, stamping.stamp_resistor_dc),  # Même traitement que résistance
-        comp_module.Ammeter: (stamping.stamp_resistor_dc, stamping.stamp_resistor_dc),
-        comp_module.Voltmeter: (stamping.stamp_resistor_dc, stamping.stamp_resistor_dc),
-        
-        comp_module.Capacitor: (lambda c, ctx: None, stamping.stamp_capacitor_ac),
-        comp_module.Inductor: (lambda c, ctx: None, stamping.stamp_inductor_ac),
-        
-        comp_module.VoltageSource: (stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac),
-        comp_module.VoltageSourceDC: (stamping.stamp_voltage_source_dc, lambda c, ctx: None),
-        comp_module.VoltageSourceAC: (lambda c, ctx: None, stamping.stamp_voltage_source_ac),
-        
-        comp_module.CurrentSource: (stamping.stamp_current_source_dc, stamping.stamp_current_source_ac),
-        comp_module.CurrentSourceDC: (stamping.stamp_current_source_dc, lambda c, ctx: None),
-        comp_module.CurrentSourceAC: (lambda c, ctx: None, stamping.stamp_current_source_ac),
-        
-        comp_module.VoltageControlledCurrentSource: (stamping.stamp_vccs_dc, stamping.stamp_vccs_dc),
-        comp_module.CurrentControlledCurrentSource: (stamping.stamp_cccs_dc, stamping.stamp_cccs_dc),
-        comp_module.VoltageControlledVoltageSource: (stamping.stamp_vcvs_dc, stamping.stamp_vcvs_dc),
-        comp_module.CurrentControlledVoltageSource: (stamping.stamp_ccvs_dc, stamping.stamp_ccvs_dc),
-        
-        comp_module.Diode: (stamping.stamp_diode_dc, lambda c, ctx: None),  # LED non supportée en AC
-    }
-    
-    for cls, (method_dc, method_ac) in stamping_map.items():
-        cls.stamp_dc = method_dc
-        cls.stamp_ac = method_ac
+
+    # Mapping: classe -> (methode_dc, methode_ac, methode_transient)
+    registry: list[tuple[type, object, object, object]] = [
+        # Passifs linéaires
+        (comp.Resistor, stamping.stamp_resistor_dc, stamping.stamp_resistor_ac, stamping.stamp_resistor_transient),
+        (comp.Switch, stamping.stamp_resistor_dc, stamping.stamp_resistor_ac, stamping.stamp_resistor_transient),
+        (comp.Ammeter, stamping.stamp_resistor_dc, stamping.stamp_resistor_ac, stamping.stamp_resistor_transient),
+        (comp.Voltmeter, stamping.stamp_resistor_dc, stamping.stamp_resistor_ac, stamping.stamp_resistor_transient),
+
+        # Éléments réactifs / dynamiques
+        (comp.Capacitor, stamping.stamp_capacitor_dc, stamping.stamp_capacitor_ac, stamping.stamp_capacitor_transient),
+        (comp.Inductor, stamping.stamp_inductor_dc, stamping.stamp_inductor_ac, stamping.stamp_inductor_transient),
+
+        # Sources de tension
+        (comp.VoltageSource, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
+        (comp.VoltageSourceDC, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
+        (comp.VoltageSourceAC, stamping.stamp_voltage_source_dc, stamping.stamp_voltage_source_ac, stamping.stamp_voltage_source_transient),
+
+        # Sources de courant
+        (comp.CurrentSource, stamping.stamp_current_source_dc, stamping.stamp_current_source_ac, stamping.stamp_current_source_transient),
+        (comp.CurrentSourceDC, stamping.stamp_current_source_dc, stamping.stamp_current_source_ac, stamping.stamp_current_source_transient),
+        (comp.CurrentSourceAC, stamping.stamp_current_source_dc, stamping.stamp_current_source_ac, stamping.stamp_current_source_transient),
+
+        # Sources commandées
+        (comp.VoltageControlledCurrentSource, stamping.stamp_vccs_dc, stamping.stamp_vccs_ac, stamping.stamp_vccs_transient),
+        (comp.CurrentControlledCurrentSource, stamping.stamp_cccs_dc, stamping.stamp_cccs_ac, stamping.stamp_cccs_transient),
+        (comp.VoltageControlledVoltageSource, stamping.stamp_vcvs_dc, stamping.stamp_vcvs_ac, stamping.stamp_vcvs_transient),
+        (comp.CurrentControlledVoltageSource, stamping.stamp_ccvs_dc, stamping.stamp_ccvs_ac, stamping.stamp_ccvs_transient),
+
+        # Non linéaires
+        (comp.Diode, stamping.stamp_diode_dc, stamping.stamp_diode_ac, stamping.stamp_diode_transient),
+        (comp.LED, stamping.stamp_diode_dc, stamping.stamp_diode_ac, stamping.stamp_diode_transient),
+
+        # Autres composants / symboles
+        (comp.Ground, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
+        (comp.OpAmp, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
+        (comp.Transformer, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
+        (comp.Transistor, stamping.stamp_noop, stamping.stamp_noop, stamping.stamp_noop),
+    ]
+
+    for comp_class, dc_fn, ac_fn, transient_fn in registry:
+        if dc_fn is not None:
+            comp_class.stamp_dc = dc_fn
+            logger.debug("Enregistre stamp_dc pour %s", comp_class.__name__)
+        if ac_fn is not None:
+            comp_class.stamp_ac = ac_fn
+            logger.debug("Enregistre stamp_ac pour %s", comp_class.__name__)
+        if transient_fn is not None:
+            comp_class.stamp_transient = transient_fn
+            logger.debug("Enregistre stamp_transient pour %s", comp_class.__name__)
 
 
-# Appel automatique lors de l'import
+def validate_registry() -> bool:
+    """
+    Vérifie que tous les composants enregistrés dans le catalogue possèdent
+    les méthodes polymorphes stamp_dc, stamp_ac et stamp_transient.
+    """
+    from model.components import get_component_registry
+
+    all_valid = True
+    for comp_name, comp_class in get_component_registry().items():
+        if not hasattr(comp_class, "stamp_dc"):
+            logger.warning("%s n'a pas de methode stamp_dc", comp_name)
+            all_valid = False
+        if not hasattr(comp_class, "stamp_ac"):
+            logger.warning("%s n'a pas de methode stamp_ac", comp_name)
+            all_valid = False
+        if not hasattr(comp_class, "stamp_transient"):
+            logger.warning("%s n'a pas de methode stamp_transient", comp_name)
+            all_valid = False
+    return all_valid
+
+
+# Enregistrement automatique à l'importation
 _register_stamping_methods()

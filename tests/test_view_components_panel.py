@@ -6,10 +6,12 @@ from unittest.mock import patch
 from view.components_panel import ComponentsPanel
 
 
+import sys
+
 def _get_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
-        app = QApplication([])
+        app = QApplication(sys.argv)
     return app
 
 

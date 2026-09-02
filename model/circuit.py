@@ -37,7 +37,7 @@ class Circuit:
 
         node = self.nodes[node_id]
 
-        # 1. Supprimer tous les fils connectés à ce nœud
+        # Supprimer tous les fils connectés à ce nœud
         wires_to_remove = [
             wire_id for wire_id, wire in self.wires.items()
             if wire.node_a is node or wire.node_b is node
@@ -45,7 +45,7 @@ class Circuit:
         for wire_id in wires_to_remove:
             self.remove_wire(wire_id)
 
-        # 2. Supprimer tous les dipôles connectés à ce nœud
+        # Supprimer tous les dipôles connectés à ce nœud
         dipoles_to_remove = [
             dipole_id for dipole_id, dipole in self.dipoles.items()
             if dipole.node_a is node or dipole.node_b is node
@@ -55,7 +55,7 @@ class Circuit:
         for dipole_id in dipoles_to_remove:
             self.remove_dipole(dipole_id)
 
-        # 3. Maintenant on peut supprimer le nœud en toute sécurité
+        # Maintenant on peut supprimer le nœud en toute sécurité
         del self.nodes[node_id]
 
     def _rebuild_node_connections(self) -> None:
@@ -80,7 +80,7 @@ class Circuit:
 
         changed = False
 
-        # Met a jour les references sur les dipoles.
+        # Met a jour les references sur les dipoles
         for dipole in self.dipoles.values():
             if dipole.node_a is node_to_merge:
                 dipole.node_a = keeper
@@ -95,7 +95,7 @@ class Circuit:
                 dipole.node_d = keeper
                 changed = True
 
-        # Met a jour les references sur les fils.
+        # Met a jour les references sur les fils
         for wire in self.wires.values():
             if wire.node_a is node_to_merge:
                 wire.node_a = keeper

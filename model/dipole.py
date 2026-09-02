@@ -122,6 +122,16 @@ class StatefulDipole(Dipole):
         self._state = str(state)
         self._state_options = state_options or []
 
+    @property
+    def state(self) -> str:
+        """Retourne l'état actif du dipôle."""
+        return self._state
+
+    @state.setter
+    def state(self, value: str) -> None:
+        """Définit l'état actif du dipôle."""
+        self.set_state(value)
+
     def get_state(self) -> Optional[str]:
         return self._state
 

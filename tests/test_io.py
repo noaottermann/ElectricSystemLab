@@ -84,7 +84,7 @@ class TestIO(unittest.TestCase):
 				}
 			}
 
-			_io_modules["exporter"].export_simulation_results_to_file(results, path)
+			exporter.export_simulation_results_to_file(results, path)
 
 			exported = json.loads(path.read_text(encoding="utf-8"))
 			self.assertEqual(exported["type"], "simulation_results")
@@ -99,7 +99,7 @@ class TestIO(unittest.TestCase):
 				"dipole_currents": {2: [0.0, 0.5, 1.0]},
 			}
 
-			_io_modules["exporter"].export_transient_results_to_csv(results, path)
+			exporter.export_transient_results_to_csv(results, path)
 
 			content = path.read_text(encoding="utf-8").splitlines()
 			self.assertGreaterEqual(len(content), 2)
